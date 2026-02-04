@@ -117,6 +117,13 @@ For more details, see README.md and docs/QUICKSTART.md.
 - ✅ `sync.branch` controls protected-branch workflow; `flush-debounce` controls auto-export batching.
 - ✅ Actor resolution order: `--actor` → `BD_ACTOR` → `BEADS_ACTOR` → `git config user.name` → `$USER`.
 
+### CLI Reference (Quick)
+
+- ✅ Basics: `bd info --json`, `bd ready --json`, `bd list --json`, `bd show <id> --json`.
+- ✅ Updates: `bd create "Title" -t task -p 2 -d "Desc" --json`, `bd update <id> --status in_progress --json`, `bd close <id> --reason "Done" --json`.
+- ✅ Dependencies: `bd dep add <child> <parent> --type discovered-from`, or `bd create ... --deps discovered-from:<parent> --json`.
+- ✅ Global flags (prefix before command): `--json`, `--no-daemon`, `--no-auto-flush`, `--no-auto-import`, `--sandbox`, `--allow-stale`.
+
 <!-- END BEADS INTEGRATION -->
 
 
