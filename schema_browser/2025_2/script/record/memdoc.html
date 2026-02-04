@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__memdoc','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__memdoc','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Memorized Transaction Definition</H1>
+    <H3>Internal ID: memdoc</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_action">
+                <td class="rt_fname">action</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Action</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Choose one of three options in the Action dropdown list:
+
+    * Choose Template Only if you want to create a memorized transaction that will be used as a template, but will not create any actual transactions.
+    * Choose Reminder if you want to be reminded when this transaction is due so that you can view and edit it before you save it.
+    * Choose Automatic if you want this transaction to automatically post. For information about this option, see the Help Center article titled &quot;Automatic Memorized Transactions.&quot;</td>
+            </tr>
+                <tr id="field_allowpostinginclosedperiod">
+                <td class="rt_fname">allowpostinginclosedperiod</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Allow Posting in Locked Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Allow Posting in Locked Period box to enable the transaction to post to an accounting period for which transactions are locked. You must have the Override Period Restrictions permission to check this box.
+
+When this box is checked, memorized transactions can post in locked periods even if the user who initiates the transaction does not have the Override Period Restrictions permission. Transactions can never be posted in closed periods. If the posting date for a memorized transaction is in a period that has been closed, it is posted to the next open period. For more information, see the Help Center article titled &quot;Accounting Period Management.&quot;</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_indefinite">
+                <td class="rt_fname">indefinite</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Indefinite</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the total number of transactions which should be created in the Number Remaining field. If you do not want to set a limit on the number of transactions created, clear the field and check the Indefinite box.</td>
+            </tr>
+                <tr id="field_inprogress">
+                <td class="rt_fname">inprogress</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Being Processed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_internalid">
+                <td class="rt_fname">internalid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Inactive box to prevent the memorized transaction from creating any more transactions.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of the memorized transaction. By default, this is populated with the payee, vendor, customer, or project name you selected when entering your memorized transaction.
+
+The name you enter appears in the list of memorized transactions but does not affect the name you entered on the original transaction.</td>
+            </tr>
+                <tr id="field_nextdate">
+                <td class="rt_fname">nextdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Next Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter or pick the next date you want this transaction to occur.
+
+If you want this transaction to occur automatically, you must enter a next date here.
+
+If you do not enter a next date, the transaction will not post automatically.</td>
+            </tr>
+                <tr id="field_nexttrandate">
+                <td class="rt_fname">nexttrandate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Next Transaction Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you checked the Override Transaction Date box, in the Next Date field, enter the next date you want the transaction to be generated, and enter the date you want the transaction to post in the Next Transaction Date field.</td>
+            </tr>
+                <tr id="field_numberremaining">
+                <td class="rt_fname">numberremaining</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Number Remaining</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the total number of transactions which should be created in the Number Remaining field. If you do not want to set a limit on the number of transactions created, clear the field and check the Indefinite box.</td>
+            </tr>
+                <tr id="field_origbinactive">
+                <td class="rt_fname">origbinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_overridetransactiondate">
+                <td class="rt_fname">overridetransactiondate</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Override Transaction Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Override Transaction Date box if you do not want the transaction to post on the creation date. Then you must do the following:
+    * In the Next Date field in the Recurring subtab, enter the next date you want the transaction to be generated.
+    * If you want this transaction to automatically occur, you must enter a next date here. If you do not enter a next date, the transaction will not automatically post.
+    * In the Next Transaction Date field beside Next Date, enter the date you want the transaction to post.
+For example, today's date is 7/15. You want the first transaction to be generated on 7/16 and to post on 7/20. Check the Override Transaction Date box and enter 7/16 in the Next Date field and 7/20 in the Next Transaction Date field beside Next Date.</td>
+            </tr>
+                <tr id="field_repeatevery">
+                <td class="rt_fname">repeatevery</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Repeat Every</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the number of times in a time period a transaction will be created.</td>
+            </tr>
+                <tr id="field_timeperiod">
+                <td class="rt_fname">timeperiod</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Time Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Time Period over which transactions will be created.</td>
+            </tr>
+                <tr id="field_transactiontemplate">
+                <td class="rt_fname">transactiontemplate</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Memorized Transaction Template</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_transactiontype">
+                <td class="rt_fname">transactiontype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Transaction Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The transaction type which will be memorized. It is populated based on the type of transaction you entered the Memorized Transaction form from. You cannot directly edit this field.</td>
+            </tr>
+                <tr id="field_updateaddresses">
+                <td class="rt_fname">updateaddresses</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Update Addresses</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if you prefer that each memorized transaction uses the email, fax, and street address that is current as of the date it is created.
+ 
+Clear this box to use the email, fax, and street address that is current as of the date it is first memorized.</td>
+            </tr>
+                <tr id="field_updateprices">
+                <td class="rt_fname">updateprices</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Update Prices</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if you prefer that each memorized transaction uses sales pricing for items that is current as of the date it is created.
+ 
+Clear this box to use sales pricing that is current as of the date it is first memorized.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_customdates_">customdates - Custom Dates</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_customdates_customdateid">
+                        <td class="rt_sname">customdateid</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Custom Date Id</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_customdates_memdoc">
+                        <td class="rt_sname">memdoc</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Memorized Transaction Definition</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_customdates_nextdate">
+                        <td class="rt_sname">nextdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Next Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_customdates_nexttrandate">
+                        <td class="rt_sname">nexttrandate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Next Transaction Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_transaction">
+                    <td class="rt_jid">transaction</td>
+                    <td class="rt_jlabel">Transaction</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_user">
+                    <td class="rt_jid">user</td>
+                    <td class="rt_jlabel">User</td>
+                    <td class="rt_jname">Employee</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_action">
+                    <td class="rt_iname">action</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Action</td>
+                </tr>
+                    <tr id="filter_allowpostinginclosedperiod">
+                    <td class="rt_iname">allowpostinginclosedperiod</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Allow posting in locked period</td>
+                </tr>
+                    <tr id="filter_amount">
+                    <td class="rt_iname">amount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Amount</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_hasremaining">
+                    <td class="rt_iname">hasremaining</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Has Remaining</td>
+                </tr>
+                    <tr id="filter_indefinite">
+                    <td class="rt_iname">indefinite</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Indefinite</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nextdate">
+                    <td class="rt_iname">nextdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Next Date</td>
+                </tr>
+                    <tr id="filter_nexttrandate">
+                    <td class="rt_iname">nexttrandate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Next Transaction Date</td>
+                </tr>
+                    <tr id="filter_numberremaining">
+                    <td class="rt_iname">numberremaining</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Number Remaining</td>
+                </tr>
+                    <tr id="filter_overridetransactiondate">
+                    <td class="rt_iname">overridetransactiondate</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Override Transaction Date</td>
+                </tr>
+                    <tr id="filter_repeatevery">
+                    <td class="rt_iname">repeatevery</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Repeat Every</td>
+                </tr>
+                    <tr id="filter_timeperiod">
+                    <td class="rt_iname">timeperiod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Time Period</td>
+                </tr>
+                    <tr id="filter_transactiontype">
+                    <td class="rt_iname">transactiontype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Transaction Type</td>
+                </tr>
+                    <tr id="filter_updateaddresses">
+                    <td class="rt_iname">updateaddresses</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Update Addresses</td>
+                </tr>
+                    <tr id="filter_updateprices">
+                    <td class="rt_iname">updateprices</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Update Prices</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_action">
+                    <td class="rt_cname">action</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Action</td>
+                </tr>
+                    <tr id="column_allowpostinginclosedperiod">
+                    <td class="rt_cname">allowpostinginclosedperiod</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Allow Posting In Locked Period</td>
+                </tr>
+                    <tr id="column_amount">
+                    <td class="rt_cname">amount</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Amount</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_indefinite">
+                    <td class="rt_cname">indefinite</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Indefinite</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_nextdate">
+                    <td class="rt_cname">nextdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Next Date</td>
+                </tr>
+                    <tr id="column_nexttrandate">
+                    <td class="rt_cname">nexttrandate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Transaction Date</td>
+                </tr>
+                    <tr id="column_numberremaining">
+                    <td class="rt_cname">numberremaining</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Number Remaining</td>
+                </tr>
+                    <tr id="column_overridetransactiondate">
+                    <td class="rt_cname">overridetransactiondate</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Override Transaction Date</td>
+                </tr>
+                    <tr id="column_repeatevery">
+                    <td class="rt_cname">repeatevery</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Repeat Every</td>
+                </tr>
+                    <tr id="column_timeperiod">
+                    <td class="rt_cname">timeperiod</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Time Period</td>
+                </tr>
+                    <tr id="column_transactiontype">
+                    <td class="rt_cname">transactiontype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Transaction Type</td>
+                </tr>
+                    <tr id="column_updateaddresses">
+                    <td class="rt_cname">updateaddresses</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Update Addresses</td>
+                </tr>
+                    <tr id="column_updateprices">
+                    <td class="rt_cname">updateprices</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Update Prices</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

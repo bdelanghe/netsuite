@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__address','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__address','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Address</H1>
+
+
+    Namespace: <a href="../../schema/record/address.html?mode=package">urn:common.platform.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">addr1</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address 1</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the address the way it should appear on forms. For employees, customers, partners, and vendors, what you enter here autofills on forms if this address is marked default for Shipping or Billing.
+
+Enter up to 50 characters.
+
+This field is required for the Online Bill Pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addr2</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address 2</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an optional second address line the way it should appear on forms. For employees, customers, partners, and vendors, what you enter here autofills on forms if this address is marked default for Shipping or Billing.
+
+Enter up to 50 characters.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addr3</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address 3</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addressee</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Addressee</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the name of the entity that should appear on the shipping label here.
+
+This name appears on the shipping label below what you enter in the Attention field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addrPhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the phone number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addrText</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The values entered in the other address fields are displayed here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">attention</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Attention</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the name of the person to whom a shipment is addressed, as it should appear on shipping labels.
+
+This field is required for UPS Integration.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">city</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">City</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the city the way it should appear on all forms except checks.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">country</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the country to be used for the address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">internalId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">override</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to disable the free-form address text field. When this field is disabled, text entered in the other address fields does not display in the Address text field.
+
+Clear this box to allow text entered in the address component fields to appear in the free-form address text field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">state</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">State/Province</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter your company's state or province the way it should appear on all forms except checks.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">zip</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Zip</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the postal code the way it should appear on all forms except checks.</td>
+                </tr>
+        </table>
+
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/addresssearchbasic.html?mode=package">AddressSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/addresssearchrowbasic.html?mode=package">AddressSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

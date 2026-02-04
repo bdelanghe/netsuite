@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__originatinglead','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__originatinglead','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Originating Lead</H1>
+    <H3>Internal ID: originatinglead</H3>
+        <H3>Search Join only</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+
+
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_msesubsidiary">
+                    <td class="rt_jid">msesubsidiary</td>
+                    <td class="rt_jlabel">Subsidiary</td>
+                    <td class="rt_jname">Subsidiary</td>
+                </tr>
+                    <tr id="join_originatinglead">
+                    <td class="rt_jid">originatinglead</td>
+                    <td class="rt_jlabel">Originating Lead</td>
+                    <td class="rt_jname">Lead</td>
+                </tr>
+                    <tr id="join_pricing">
+                    <td class="rt_jid">pricing</td>
+                    <td class="rt_jlabel">Pricing</td>
+                    <td class="rt_jname">Pricing</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_accountnumber">
+                    <td class="rt_iname">accountnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Account</td>
+                </tr>
+                    <tr id="filter_address">
+                    <td class="rt_iname">address</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Address</td>
+                </tr>
+                    <tr id="filter_addressee">
+                    <td class="rt_iname">addressee</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Addressee</td>
+                </tr>
+                    <tr id="filter_addresslabel">
+                    <td class="rt_iname">addresslabel</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Address Label</td>
+                </tr>
+                    <tr id="filter_addressphone">
+                    <td class="rt_iname">addressphone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Address Phone</td>
+                </tr>
+                    <tr id="filter_attention">
+                    <td class="rt_iname">attention</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Attention</td>
+                </tr>
+                    <tr id="filter_availableoffline">
+                    <td class="rt_iname">availableoffline</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Always Available Offline</td>
+                </tr>
+                    <tr id="filter_balance">
+                    <td class="rt_iname">balance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Balance</td>
+                </tr>
+                    <tr id="filter_billaddress">
+                    <td class="rt_iname">billaddress</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Billing Address</td>
+                </tr>
+                    <tr id="filter_billingratecard">
+                    <td class="rt_iname">billingratecard</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Rate Card</td>
+                </tr>
+                    <tr id="filter_billingschedule">
+                    <td class="rt_iname">billingschedule</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Schedule</td>
+                </tr>
+                    <tr id="filter_billingtransactionform">
+                    <td class="rt_iname">billingtransactionform</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Transaction Form</td>
+                </tr>
+                    <tr id="filter_billingtransactiontype">
+                    <td class="rt_iname">billingtransactiontype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Transaction Type</td>
+                </tr>
+                    <tr id="filter_boughtamount">
+                    <td class="rt_iname">boughtamount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Total Amount Purchased</td>
+                </tr>
+                    <tr id="filter_boughtdate">
+                    <td class="rt_iname">boughtdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Purchase Dates</td>
+                </tr>
+                    <tr id="filter_bounced">
+                    <td class="rt_iname">bounced</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Hard Bounced</td>
+                </tr>
+                    <tr id="filter_buyingreason">
+                    <td class="rt_iname">buyingreason</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Buying Reason</td>
+                </tr>
+                    <tr id="filter_buyingtimeframe">
+                    <td class="rt_iname">buyingtimeframe</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Buying Time Frame</td>
+                </tr>
+                    <tr id="filter_campaignevent">
+                    <td class="rt_iname">campaignevent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Campaign Event</td>
+                </tr>
+                    <tr id="filter_category">
+                    <td class="rt_iname">category</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Category</td>
+                </tr>
+                    <tr id="filter_cccustomercode">
+                    <td class="rt_iname">cccustomercode</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">CC Customer Code</td>
+                </tr>
+                    <tr id="filter_ccdefault">
+                    <td class="rt_iname">ccdefault</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Default Credit Card</td>
+                </tr>
+                    <tr id="filter_ccexpdate">
+                    <td class="rt_iname">ccexpdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">CC Expire Date</td>
+                </tr>
+                    <tr id="filter_ccholdername">
+                    <td class="rt_iname">ccholdername</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Credit Cardholder Name</td>
+                </tr>
+                    <tr id="filter_ccnumber">
+                    <td class="rt_iname">ccnumber</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Credit Card Number</td>
+                </tr>
+                    <tr id="filter_ccstate">
+                    <td class="rt_iname">ccstate</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Credit Card State</td>
+                </tr>
+                    <tr id="filter_ccstatefrom">
+                    <td class="rt_iname">ccstatefrom</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Credit Card State From</td>
+                </tr>
+                    <tr id="filter_cctype">
+                    <td class="rt_iname">cctype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Credit Card Type</td>
+                </tr>
+                    <tr id="filter_city">
+                    <td class="rt_iname">city</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">City</td>
+                </tr>
+                    <tr id="filter_comments">
+                    <td class="rt_iname">comments</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Comments</td>
+                </tr>
+                    <tr id="filter_companyname">
+                    <td class="rt_iname">companyname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Company Name</td>
+                </tr>
+                    <tr id="filter_consolbalance">
+                    <td class="rt_iname">consolbalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Balance</td>
+                </tr>
+                    <tr id="filter_consoldaysoverdue">
+                    <td class="rt_iname">consoldaysoverdue</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Consolidated Days Overdue</td>
+                </tr>
+                    <tr id="filter_consoldepositbalance">
+                    <td class="rt_iname">consoldepositbalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Deposit Balance</td>
+                </tr>
+                    <tr id="filter_consoloverduebalance">
+                    <td class="rt_iname">consoloverduebalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Overdue Balance</td>
+                </tr>
+                    <tr id="filter_consolunbilledorders">
+                    <td class="rt_iname">consolunbilledorders</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Unbilled Orders</td>
+                </tr>
+                    <tr id="filter_contact">
+                    <td class="rt_iname">contact</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Contact</td>
+                </tr>
+                    <tr id="filter_contribution">
+                    <td class="rt_iname">contribution</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Contribution %</td>
+                </tr>
+                    <tr id="filter_conversiondate">
+                    <td class="rt_iname">conversiondate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Conversion Date</td>
+                </tr>
+                    <tr id="filter_country">
+                    <td class="rt_iname">country</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Country</td>
+                </tr>
+                    <tr id="filter_county">
+                    <td class="rt_iname">county</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">County/State</td>
+                </tr>
+                    <tr id="filter_credithold">
+                    <td class="rt_iname">credithold</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Credit Hold</td>
+                </tr>
+                    <tr id="filter_creditholdoverride">
+                    <td class="rt_iname">creditholdoverride</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Override Credit Hold Off</td>
+                </tr>
+                    <tr id="filter_creditlimit">
+                    <td class="rt_iname">creditlimit</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Credit Limit</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Primary Currency</td>
+                </tr>
+                    <tr id="filter_custstage">
+                    <td class="rt_iname">custstage</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Parent Stage</td>
+                </tr>
+                    <tr id="filter_custstatus">
+                    <td class="rt_iname">custstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Parent Status</td>
+                </tr>
+                    <tr id="filter_dateclosed">
+                    <td class="rt_iname">dateclosed</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Closed</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_daysoverdue">
+                    <td class="rt_iname">daysoverdue</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Days Overdue</td>
+                </tr>
+                    <tr id="filter_defaultorderpriority">
+                    <td class="rt_iname">defaultorderpriority</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Default Order Priority</td>
+                </tr>
+                    <tr id="filter_depositbalance">
+                    <td class="rt_iname">depositbalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Deposit Balance</td>
+                </tr>
+                    <tr id="filter_draccount">
+                    <td class="rt_iname">draccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Deferred Revenue Reclassification Account</td>
+                </tr>
+                    <tr id="filter_email">
+                    <td class="rt_iname">email</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Email</td>
+                </tr>
+                    <tr id="filter_emailpreference">
+                    <td class="rt_iname">emailpreference</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Email Preference</td>
+                </tr>
+                    <tr id="filter_emailtransactions">
+                    <td class="rt_iname">emailtransactions</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Email Transactions</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">End Date</td>
+                </tr>
+                    <tr id="filter_entityid">
+                    <td class="rt_iname">entityid</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name/ID</td>
+                </tr>
+                    <tr id="filter_entitystatus">
+                    <td class="rt_iname">entitystatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_estimatedbudget">
+                    <td class="rt_iname">estimatedbudget</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Budget</td>
+                </tr>
+                    <tr id="filter_explicitconversion">
+                    <td class="rt_iname">explicitconversion</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Explicit Conversion</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fax">
+                    <td class="rt_iname">fax</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Fax</td>
+                </tr>
+                    <tr id="filter_faxtransactions">
+                    <td class="rt_iname">faxtransactions</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Fax Transactions</td>
+                </tr>
+                    <tr id="filter_firstname">
+                    <td class="rt_iname">firstname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">First Name</td>
+                </tr>
+                    <tr id="filter_firstorderdate">
+                    <td class="rt_iname">firstorderdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date of First Order</td>
+                </tr>
+                    <tr id="filter_firstsaledate">
+                    <td class="rt_iname">firstsaledate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date of First Sale</td>
+                </tr>
+                    <tr id="filter_fxaccount">
+                    <td class="rt_iname">fxaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Foreign Currency Adjustment Revenue Account</td>
+                </tr>
+                    <tr id="filter_fxbalance">
+                    <td class="rt_iname">fxbalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Balance (Foreign Currency)</td>
+                </tr>
+                    <tr id="filter_fxconsolbalance">
+                    <td class="rt_iname">fxconsolbalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Balance (Foreign Currency)</td>
+                </tr>
+                    <tr id="filter_fxconsolunbilledorders">
+                    <td class="rt_iname">fxconsolunbilledorders</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Consolidated Unbilled Orders (Foreign Currency)</td>
+                </tr>
+                    <tr id="filter_fxunbilledorders">
+                    <td class="rt_iname">fxunbilledorders</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unbilled Orders (Foreign Currency)</td>
+                </tr>
+                    <tr id="filter_giveaccess">
+                    <td class="rt_iname">giveaccess</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Login Access</td>
+                </tr>
+                    <tr id="filter_globalsubscriptionstatus">
+                    <td class="rt_iname">globalsubscriptionstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Global Subscription Status</td>
+                </tr>
+                    <tr id="filter_group">
+                    <td class="rt_iname">group</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Group</td>
+                </tr>
+                    <tr id="filter_grouppricinglevel">
+                    <td class="rt_iname">grouppricinglevel</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Group Pricing Level</td>
+                </tr>
+                    <tr id="filter_hasduplicates">
+                    <td class="rt_iname">hasduplicates</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Duplicate</td>
+                </tr>
+                    <tr id="filter_image">
+                    <td class="rt_iname">image</td>
+                    <td class="rt_itype">image</td>
+                    <td class="rt_ilabel">Image</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isbudgetapproved">
+                    <td class="rt_iname">isbudgetapproved</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Budget Approved</td>
+                </tr>
+                    <tr id="filter_isdefaultbilling">
+                    <td class="rt_iname">isdefaultbilling</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Default Billing Address</td>
+                </tr>
+                    <tr id="filter_isdefaultshipping">
+                    <td class="rt_iname">isdefaultshipping</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Default Shipping Address</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_isitemcorrelated">
+                    <td class="rt_iname">isitemcorrelated</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Upsell Item Correlated</td>
+                </tr>
+                    <tr id="filter_isjob">
+                    <td class="rt_iname">isjob</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Job</td>
+                </tr>
+                    <tr id="filter_isperson">
+                    <td class="rt_iname">isperson</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Individual</td>
+                </tr>
+                    <tr id="filter_isreportedlead">
+                    <td class="rt_iname">isreportedlead</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Included in Lead Reports</td>
+                </tr>
+                    <tr id="filter_isshipaddress">
+                    <td class="rt_iname">isshipaddress</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Residential Address</td>
+                </tr>
+                    <tr id="filter_itemcorrelation">
+                    <td class="rt_iname">itemcorrelation</td>
+                    <td class="rt_itype">percent</td>
+                    <td class="rt_ilabel">Upsell Item Correlation</td>
+                </tr>
+                    <tr id="filter_itempricinglevel">
+                    <td class="rt_iname">itempricinglevel</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item Pricing Level</td>
+                </tr>
+                    <tr id="filter_itempricingunitprice">
+                    <td class="rt_iname">itempricingunitprice</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Item Pricing Unit Price</td>
+                </tr>
+                    <tr id="filter_itemsbought">
+                    <td class="rt_iname">itemsbought</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Items Purchased</td>
+                </tr>
+                    <tr id="filter_itemsordered">
+                    <td class="rt_iname">itemsordered</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Items Ordered</td>
+                </tr>
+                    <tr id="filter_jobenddate">
+                    <td class="rt_iname">jobenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Actual End Date</td>
+                </tr>
+                    <tr id="filter_jobestcost">
+                    <td class="rt_iname">jobestcost</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Cost</td>
+                </tr>
+                    <tr id="filter_jobestenddate">
+                    <td class="rt_iname">jobestenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Projected End Date</td>
+                </tr>
+                    <tr id="filter_jobestrevenue">
+                    <td class="rt_iname">jobestrevenue</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Revenue</td>
+                </tr>
+                    <tr id="filter_jobpctcomplete">
+                    <td class="rt_iname">jobpctcomplete</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Percent Complete</td>
+                </tr>
+                    <tr id="filter_jobstartdate">
+                    <td class="rt_iname">jobstartdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_jobstatus">
+                    <td class="rt_iname">jobstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Job Status</td>
+                </tr>
+                    <tr id="filter_jobtype">
+                    <td class="rt_iname">jobtype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Job Type</td>
+                </tr>
+                    <tr id="filter_language">
+                    <td class="rt_iname">language</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Language</td>
+                </tr>
+                    <tr id="filter_lastmodifieddate">
+                    <td class="rt_iname">lastmodifieddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Last Modified</td>
+                </tr>
+                    <tr id="filter_lastname">
+                    <td class="rt_iname">lastname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Last Name</td>
+                </tr>
+                    <tr id="filter_lastorderdate">
+                    <td class="rt_iname">lastorderdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date of Last Order</td>
+                </tr>
+                    <tr id="filter_lastsaledate">
+                    <td class="rt_iname">lastsaledate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date of Last Sale</td>
+                </tr>
+                    <tr id="filter_leaddate">
+                    <td class="rt_iname">leaddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Lead Date</td>
+                </tr>
+                    <tr id="filter_leadsource">
+                    <td class="rt_iname">leadsource</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Lead Source</td>
+                </tr>
+                    <tr id="filter_level">
+                    <td class="rt_iname">level</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Level</td>
+                </tr>
+                    <tr id="filter_manualcredithold">
+                    <td class="rt_iname">manualcredithold</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Override Credit Hold On</td>
+                </tr>
+                    <tr id="filter_merchantaccount">
+                    <td class="rt_iname">merchantaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Credit Card Processor</td>
+                </tr>
+                    <tr id="filter_middlename">
+                    <td class="rt_iname">middlename</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Middle Name</td>
+                </tr>
+                    <tr id="filter_monthlyclosing">
+                    <td class="rt_iname">monthlyclosing</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Monthly Closing Date</td>
+                </tr>
+                    <tr id="filter_negativenumberformat">
+                    <td class="rt_iname">negativenumberformat</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Negative Number Format</td>
+                </tr>
+                    <tr id="filter_numberformat">
+                    <td class="rt_iname">numberformat</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Number Format</td>
+                </tr>
+                    <tr id="filter_oncredithold">
+                    <td class="rt_iname">oncredithold</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">On Credit Hold</td>
+                </tr>
+                    <tr id="filter_onlineformcampaignevent">
+                    <td class="rt_iname">onlineformcampaignevent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Online Form History - Campaign Event</td>
+                </tr>
+                    <tr id="filter_onlineformdate">
+                    <td class="rt_iname">onlineformdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Online Form History - Form Date</td>
+                </tr>
+                    <tr id="filter_onlineformleadsource">
+                    <td class="rt_iname">onlineformleadsource</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Online Form History - Lead Source</td>
+                </tr>
+                    <tr id="filter_onlineformname">
+                    <td class="rt_iname">onlineformname</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Online Form History - Form Name</td>
+                </tr>
+                    <tr id="filter_orderedamount">
+                    <td class="rt_iname">orderedamount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Total Amount Ordered</td>
+                </tr>
+                    <tr id="filter_ordereddate">
+                    <td class="rt_iname">ordereddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Order Dates</td>
+                </tr>
+                    <tr id="filter_otherrelationships">
+                    <td class="rt_iname">otherrelationships</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Other Relationships</td>
+                </tr>
+                    <tr id="filter_overduebalance">
+                    <td class="rt_iname">overduebalance</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Overdue Balance</td>
+                </tr>
+                    <tr id="filter_parent">
+                    <td class="rt_iname">parent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sub of</td>
+                </tr>
+                    <tr id="filter_parentitemsbought">
+                    <td class="rt_iname">parentitemsbought</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Items or Sub-Items Purchased</td>
+                </tr>
+                    <tr id="filter_parentitemsordered">
+                    <td class="rt_iname">parentitemsordered</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Items or Sub-Items Ordered</td>
+                </tr>
+                    <tr id="filter_partner">
+                    <td class="rt_iname">partner</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Partner</td>
+                </tr>
+                    <tr id="filter_partnercontribution">
+                    <td class="rt_iname">partnercontribution</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Partner Contribution %</td>
+                </tr>
+                    <tr id="filter_partnerrole">
+                    <td class="rt_iname">partnerrole</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Partner Role</td>
+                </tr>
+                    <tr id="filter_partnerteammember">
+                    <td class="rt_iname">partnerteammember</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Partner Team Member</td>
+                </tr>
+                    <tr id="filter_pec">
+                    <td class="rt_iname">pec</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">PEC</td>
+                </tr>
+                    <tr id="filter_permission">
+                    <td class="rt_iname">permission</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Permission</td>
+                </tr>
+                    <tr id="filter_phone">
+                    <td class="rt_iname">phone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Phone</td>
+                </tr>
+                    <tr id="filter_phoneticname">
+                    <td class="rt_iname">phoneticname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Phonetic Name</td>
+                </tr>
+                    <tr id="filter_pricelevel">
+                    <td class="rt_iname">pricelevel</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Price Level</td>
+                </tr>
+                    <tr id="filter_pricinggroup">
+                    <td class="rt_iname">pricinggroup</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Pricing Group</td>
+                </tr>
+                    <tr id="filter_pricingitem">
+                    <td class="rt_iname">pricingitem</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Pricing Item</td>
+                </tr>
+                    <tr id="filter_printtransactions">
+                    <td class="rt_iname">printtransactions</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Print Transactions</td>
+                </tr>
+                    <tr id="filter_prospectdate">
+                    <td class="rt_iname">prospectdate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Prospect Date</td>
+                </tr>
+                    <tr id="filter_pstexempt">
+                    <td class="rt_iname">pstexempt</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">PST Exempt</td>
+                </tr>
+                    <tr id="filter_receivablesaccount">
+                    <td class="rt_iname">receivablesaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Default Receivables Account</td>
+                </tr>
+                    <tr id="filter_reminderdate">
+                    <td class="rt_iname">reminderdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Renewal Reminder Date</td>
+                </tr>
+                    <tr id="filter_representingsubsidiary">
+                    <td class="rt_iname">representingsubsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Represents Subsidiary</td>
+                </tr>
+                    <tr id="filter_resalenumber">
+                    <td class="rt_iname">resalenumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Resale Number</td>
+                </tr>
+                    <tr id="filter_role">
+                    <td class="rt_iname">role</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Role</td>
+                </tr>
+                    <tr id="filter_salesreadiness">
+                    <td class="rt_iname">salesreadiness</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sales Readiness</td>
+                </tr>
+                    <tr id="filter_salesrep">
+                    <td class="rt_iname">salesrep</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sales Rep</td>
+                </tr>
+                    <tr id="filter_salesteammember">
+                    <td class="rt_iname">salesteammember</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sales Team Member</td>
+                </tr>
+                    <tr id="filter_salesteamrole">
+                    <td class="rt_iname">salesteamrole</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sales Team Role</td>
+                </tr>
+                    <tr id="filter_salutation">
+                    <td class="rt_iname">salutation</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Mr./Mrs...</td>
+                </tr>
+                    <tr id="filter_shipaddress">
+                    <td class="rt_iname">shipaddress</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Shipping Address</td>
+                </tr>
+                    <tr id="filter_shipcomplete">
+                    <td class="rt_iname">shipcomplete</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Ship Complete</td>
+                </tr>
+                    <tr id="filter_shippingcarrier">
+                    <td class="rt_iname">shippingcarrier</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Carrier</td>
+                </tr>
+                    <tr id="filter_shippingitem">
+                    <td class="rt_iname">shippingitem</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Item</td>
+                </tr>
+                    <tr id="filter_stage">
+                    <td class="rt_iname">stage</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Stage</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_state">
+                    <td class="rt_iname">state</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">State/Province (Deprecated)</td>
+                </tr>
+                    <tr id="filter_subscription">
+                    <td class="rt_iname">subscription</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subscription</td>
+                </tr>
+                    <tr id="filter_subscriptiondate">
+                    <td class="rt_iname">subscriptiondate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Subscription Date</td>
+                </tr>
+                    <tr id="filter_subscriptionstatus">
+                    <td class="rt_iname">subscriptionstatus</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Subscription Status</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+                    <tr id="filter_taxable">
+                    <td class="rt_iname">taxable</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Taxable</td>
+                </tr>
+                    <tr id="filter_terms">
+                    <td class="rt_iname">terms</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Terms</td>
+                </tr>
+                    <tr id="filter_territory">
+                    <td class="rt_iname">territory</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Territory</td>
+                </tr>
+                    <tr id="filter_title">
+                    <td class="rt_iname">title</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Job Title</td>
+                </tr>
+                    <tr id="filter_type">
+                    <td class="rt_iname">type</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Primary Type (Deprecated)</td>
+                </tr>
+                    <tr id="filter_unbilledorders">
+                    <td class="rt_iname">unbilledorders</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unbilled Orders</td>
+                </tr>
+                    <tr id="filter_url">
+                    <td class="rt_iname">url</td>
+                    <td class="rt_itype">url</td>
+                    <td class="rt_ilabel">Web Address</td>
+                </tr>
+                    <tr id="filter_vatregnumber">
+                    <td class="rt_iname">vatregnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Tax Number</td>
+                </tr>
+                    <tr id="filter_weblead">
+                    <td class="rt_iname">weblead</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Web Lead</td>
+                </tr>
+                    <tr id="filter_zipcode">
+                    <td class="rt_iname">zipcode</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Zip</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accountnumber">
+                    <td class="rt_cname">accountnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account</td>
+                </tr>
+                    <tr id="column_address">
+                    <td class="rt_cname">address</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address</td>
+                </tr>
+                    <tr id="column_address1">
+                    <td class="rt_cname">address1</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 1</td>
+                </tr>
+                    <tr id="column_address2">
+                    <td class="rt_cname">address2</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 2</td>
+                </tr>
+                    <tr id="column_address3">
+                    <td class="rt_cname">address3</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 3</td>
+                </tr>
+                    <tr id="column_addressee">
+                    <td class="rt_cname">addressee</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Addressee</td>
+                </tr>
+                    <tr id="column_addressinternalid">
+                    <td class="rt_cname">addressinternalid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Address Internal ID</td>
+                </tr>
+                    <tr id="column_addresslabel">
+                    <td class="rt_cname">addresslabel</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address Label</td>
+                </tr>
+                    <tr id="column_addressphone">
+                    <td class="rt_cname">addressphone</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address Phone</td>
+                </tr>
+                    <tr id="column_altcontact">
+                    <td class="rt_cname">altcontact</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Alt. Contact</td>
+                </tr>
+                    <tr id="column_altemail">
+                    <td class="rt_cname">altemail</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Alt. Email</td>
+                </tr>
+                    <tr id="column_altname">
+                    <td class="rt_cname">altname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_altphone">
+                    <td class="rt_cname">altphone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Office Phone</td>
+                </tr>
+                    <tr id="column_attention">
+                    <td class="rt_cname">attention</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Attention</td>
+                </tr>
+                    <tr id="column_availableoffline">
+                    <td class="rt_cname">availableoffline</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Always Available Offline</td>
+                </tr>
+                    <tr id="column_balance">
+                    <td class="rt_cname">balance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Balance</td>
+                </tr>
+                    <tr id="column_billaddress">
+                    <td class="rt_cname">billaddress</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Address</td>
+                </tr>
+                    <tr id="column_billaddress1">
+                    <td class="rt_cname">billaddress1</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Address 1</td>
+                </tr>
+                    <tr id="column_billaddress2">
+                    <td class="rt_cname">billaddress2</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Address 2</td>
+                </tr>
+                    <tr id="column_billaddress3">
+                    <td class="rt_cname">billaddress3</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Address 3</td>
+                </tr>
+                    <tr id="column_billaddressee">
+                    <td class="rt_cname">billaddressee</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Addressee</td>
+                </tr>
+                    <tr id="column_billattention">
+                    <td class="rt_cname">billattention</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Attention</td>
+                </tr>
+                    <tr id="column_billcity">
+                    <td class="rt_cname">billcity</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing City</td>
+                </tr>
+                    <tr id="column_billcountry">
+                    <td class="rt_cname">billcountry</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Country</td>
+                </tr>
+                    <tr id="column_billcountrycode">
+                    <td class="rt_cname">billcountrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Country Code</td>
+                </tr>
+                    <tr id="column_billingratecard">
+                    <td class="rt_cname">billingratecard</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Rate Card</td>
+                </tr>
+                    <tr id="column_billingschedule">
+                    <td class="rt_cname">billingschedule</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Schedule</td>
+                </tr>
+                    <tr id="column_billingtransactionform">
+                    <td class="rt_cname">billingtransactionform</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Transaction Form</td>
+                </tr>
+                    <tr id="column_billingtransactiontype">
+                    <td class="rt_cname">billingtransactiontype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Transaction Type</td>
+                </tr>
+                    <tr id="column_billphone">
+                    <td class="rt_cname">billphone</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Phone</td>
+                </tr>
+                    <tr id="column_billstate">
+                    <td class="rt_cname">billstate</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing State/Province</td>
+                </tr>
+                    <tr id="column_billzipcode">
+                    <td class="rt_cname">billzipcode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Zip</td>
+                </tr>
+                    <tr id="column_bounced">
+                    <td class="rt_cname">bounced</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Hard Bounced</td>
+                </tr>
+                    <tr id="column_buyingreason">
+                    <td class="rt_cname">buyingreason</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Buying Reason</td>
+                </tr>
+                    <tr id="column_buyingtimeframe">
+                    <td class="rt_cname">buyingtimeframe</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Buying Time Frame</td>
+                </tr>
+                    <tr id="column_campaignevent">
+                    <td class="rt_cname">campaignevent</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Campaign Event</td>
+                </tr>
+                    <tr id="column_category">
+                    <td class="rt_cname">category</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Category</td>
+                </tr>
+                    <tr id="column_cccustomercode">
+                    <td class="rt_cname">cccustomercode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">CC Customer Code</td>
+                </tr>
+                    <tr id="column_ccdefault">
+                    <td class="rt_cname">ccdefault</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Default Credit Card</td>
+                </tr>
+                    <tr id="column_ccexpdate">
+                    <td class="rt_cname">ccexpdate</td>
+                    <td class="rt_ctype">mmyydate</td>
+                    <td class="rt_clabel">CC Expire Date</td>
+                </tr>
+                    <tr id="column_ccholdername">
+                    <td class="rt_cname">ccholdername</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Credit Cardholder Name</td>
+                </tr>
+                    <tr id="column_ccinternalid">
+                    <td class="rt_cname">ccinternalid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Credit Card Internal ID</td>
+                </tr>
+                    <tr id="column_ccnumber">
+                    <td class="rt_cname">ccnumber</td>
+                    <td class="rt_ctype">ccnumber</td>
+                    <td class="rt_clabel">Credit Card Number</td>
+                </tr>
+                    <tr id="column_ccstate">
+                    <td class="rt_cname">ccstate</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Credit Card State</td>
+                </tr>
+                    <tr id="column_ccstatefrom">
+                    <td class="rt_cname">ccstatefrom</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Credit Card State From</td>
+                </tr>
+                    <tr id="column_cctype">
+                    <td class="rt_cname">cctype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Credit Card Type</td>
+                </tr>
+                    <tr id="column_city">
+                    <td class="rt_cname">city</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">City</td>
+                </tr>
+                    <tr id="column_comments">
+                    <td class="rt_cname">comments</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Comments</td>
+                </tr>
+                    <tr id="column_companyname">
+                    <td class="rt_cname">companyname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Company Name</td>
+                </tr>
+                    <tr id="column_consolbalance">
+                    <td class="rt_cname">consolbalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Balance</td>
+                </tr>
+                    <tr id="column_consoldaysoverdue">
+                    <td class="rt_cname">consoldaysoverdue</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Consolidated Days Overdue</td>
+                </tr>
+                    <tr id="column_consoldepositbalance">
+                    <td class="rt_cname">consoldepositbalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Deposit Balance</td>
+                </tr>
+                    <tr id="column_consoloverduebalance">
+                    <td class="rt_cname">consoloverduebalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Overdue Balance</td>
+                </tr>
+                    <tr id="column_consolunbilledorders">
+                    <td class="rt_cname">consolunbilledorders</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Unbilled Orders</td>
+                </tr>
+                    <tr id="column_contact">
+                    <td class="rt_cname">contact</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Primary Contact</td>
+                </tr>
+                    <tr id="column_contribution">
+                    <td class="rt_cname">contribution</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Contribution %</td>
+                </tr>
+                    <tr id="column_contributionprimary">
+                    <td class="rt_cname">contributionprimary</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Primary Sales Rep Contribution %</td>
+                </tr>
+                    <tr id="column_conversiondate">
+                    <td class="rt_cname">conversiondate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Conversion Date</td>
+                </tr>
+                    <tr id="column_country">
+                    <td class="rt_cname">country</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Country</td>
+                </tr>
+                    <tr id="column_countrycode">
+                    <td class="rt_cname">countrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Country Code</td>
+                </tr>
+                    <tr id="column_credithold">
+                    <td class="rt_cname">credithold</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Credit Hold</td>
+                </tr>
+                    <tr id="column_creditholdoverride">
+                    <td class="rt_cname">creditholdoverride</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Override Credit Hold Off</td>
+                </tr>
+                    <tr id="column_creditlimit">
+                    <td class="rt_cname">creditlimit</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Credit Limit</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Primary Currency</td>
+                </tr>
+                    <tr id="column_dateclosed">
+                    <td class="rt_cname">dateclosed</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Closed</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_daysoverdue">
+                    <td class="rt_cname">daysoverdue</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Days Overdue</td>
+                </tr>
+                    <tr id="column_defaultorderpriority">
+                    <td class="rt_cname">defaultorderpriority</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Default Order Priority</td>
+                </tr>
+                    <tr id="column_depositbalance">
+                    <td class="rt_cname">depositbalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Deposit Balance </td>
+                </tr>
+                    <tr id="column_draccount">
+                    <td class="rt_cname">draccount</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Deferred Revenue Reclassification Account</td>
+                </tr>
+                    <tr id="column_email">
+                    <td class="rt_cname">email</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Email</td>
+                </tr>
+                    <tr id="column_emailpreference">
+                    <td class="rt_cname">emailpreference</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Email Preference</td>
+                </tr>
+                    <tr id="column_emailtransactions">
+                    <td class="rt_cname">emailtransactions</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Email Transactions</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">End Date</td>
+                </tr>
+                    <tr id="column_entityid">
+                    <td class="rt_cname">entityid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_entitynumber">
+                    <td class="rt_cname">entitynumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Number</td>
+                </tr>
+                    <tr id="column_entitystatus">
+                    <td class="rt_cname">entitystatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_estimatedbudget">
+                    <td class="rt_cname">estimatedbudget</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Budget</td>
+                </tr>
+                    <tr id="column_explicitconversion">
+                    <td class="rt_cname">explicitconversion</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Explicit Conversion</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fax">
+                    <td class="rt_cname">fax</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Fax</td>
+                </tr>
+                    <tr id="column_faxtransactions">
+                    <td class="rt_cname">faxtransactions</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Fax Transactions</td>
+                </tr>
+                    <tr id="column_firstname">
+                    <td class="rt_cname">firstname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">First Name</td>
+                </tr>
+                    <tr id="column_firstorderdate">
+                    <td class="rt_cname">firstorderdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date of First Order</td>
+                </tr>
+                    <tr id="column_firstsaledate">
+                    <td class="rt_cname">firstsaledate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date of First Sale</td>
+                </tr>
+                    <tr id="column_fxaccount">
+                    <td class="rt_cname">fxaccount</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Foreign Currency Adjustment Revenue Account</td>
+                </tr>
+                    <tr id="column_fxbalance">
+                    <td class="rt_cname">fxbalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Balance (Foreign Currency)</td>
+                </tr>
+                    <tr id="column_fxconsolbalance">
+                    <td class="rt_cname">fxconsolbalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Balance (Foreign Currency)</td>
+                </tr>
+                    <tr id="column_fxconsolunbilledorders">
+                    <td class="rt_cname">fxconsolunbilledorders</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Consolidated Unbilled Orders (Foreign Currency)</td>
+                </tr>
+                    <tr id="column_fxunbilledorders">
+                    <td class="rt_cname">fxunbilledorders</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unbilled Orders (Foreign Currency)</td>
+                </tr>
+                    <tr id="column_giveaccess">
+                    <td class="rt_cname">giveaccess</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Login Access</td>
+                </tr>
+                    <tr id="column_globalsubscriptionstatus">
+                    <td class="rt_cname">globalsubscriptionstatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Global Subscription Status</td>
+                </tr>
+                    <tr id="column_grouppricinglevel">
+                    <td class="rt_cname">grouppricinglevel</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Group Pricing Level</td>
+                </tr>
+                    <tr id="column_hasduplicates">
+                    <td class="rt_cname">hasduplicates</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Duplicate</td>
+                </tr>
+                    <tr id="column_homephone">
+                    <td class="rt_cname">homephone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Home Phone</td>
+                </tr>
+                    <tr id="column_image">
+                    <td class="rt_cname">image</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Image</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isbudgetapproved">
+                    <td class="rt_cname">isbudgetapproved</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Budget Approved</td>
+                </tr>
+                    <tr id="column_isdefaultbilling">
+                    <td class="rt_cname">isdefaultbilling</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Default Billing Address</td>
+                </tr>
+                    <tr id="column_isdefaultshipping">
+                    <td class="rt_cname">isdefaultshipping</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Default Shipping Address</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_isitemcorrelated">
+                    <td class="rt_cname">isitemcorrelated</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Upsell Item Correlated</td>
+                </tr>
+                    <tr id="column_isperson">
+                    <td class="rt_cname">isperson</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Individual</td>
+                </tr>
+                    <tr id="column_isshipaddress">
+                    <td class="rt_cname">isshipaddress</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Residential Address</td>
+                </tr>
+                    <tr id="column_itemcorrelation">
+                    <td class="rt_cname">itemcorrelation</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Upsell Item Correlation</td>
+                </tr>
+                    <tr id="column_itempricinglevel">
+                    <td class="rt_cname">itempricinglevel</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Item Pricing Level</td>
+                </tr>
+                    <tr id="column_itempricingunitprice">
+                    <td class="rt_cname">itempricingunitprice</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Item Pricing Unit Price</td>
+                </tr>
+                    <tr id="column_jobenddate">
+                    <td class="rt_cname">jobenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Job Actual End</td>
+                </tr>
+                    <tr id="column_jobprojectedend">
+                    <td class="rt_cname">jobprojectedend</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Job Projected End</td>
+                </tr>
+                    <tr id="column_jobstartdate">
+                    <td class="rt_cname">jobstartdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Job Start</td>
+                </tr>
+                    <tr id="column_jobtype">
+                    <td class="rt_cname">jobtype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Job Type</td>
+                </tr>
+                    <tr id="column_language">
+                    <td class="rt_cname">language</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Language</td>
+                </tr>
+                    <tr id="column_lastmodifieddate">
+                    <td class="rt_cname">lastmodifieddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Modified</td>
+                </tr>
+                    <tr id="column_lastname">
+                    <td class="rt_cname">lastname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Last Name</td>
+                </tr>
+                    <tr id="column_lastorderdate">
+                    <td class="rt_cname">lastorderdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date of Last Order</td>
+                </tr>
+                    <tr id="column_lastsaledate">
+                    <td class="rt_cname">lastsaledate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date of Last Sale</td>
+                </tr>
+                    <tr id="column_lastviewed">
+                    <td class="rt_cname">lastviewed</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Viewed</td>
+                </tr>
+                    <tr id="column_leaddate">
+                    <td class="rt_cname">leaddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Lead Date</td>
+                </tr>
+                    <tr id="column_leadsource">
+                    <td class="rt_cname">leadsource</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Lead Source</td>
+                </tr>
+                    <tr id="column_level">
+                    <td class="rt_cname">level</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Level</td>
+                </tr>
+                    <tr id="column_manualcredithold">
+                    <td class="rt_cname">manualcredithold</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Override Credit Hold On</td>
+                </tr>
+                    <tr id="column_middlename">
+                    <td class="rt_cname">middlename</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Middle Name</td>
+                </tr>
+                    <tr id="column_mobilephone">
+                    <td class="rt_cname">mobilephone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Mobile Phone</td>
+                </tr>
+                    <tr id="column_monthlyclosing">
+                    <td class="rt_cname">monthlyclosing</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Monthly Closing Date</td>
+                </tr>
+                    <tr id="column_negativenumberformat">
+                    <td class="rt_cname">negativenumberformat</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Negative Number Format</td>
+                </tr>
+                    <tr id="column_numberformat">
+                    <td class="rt_cname">numberformat</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Number Format</td>
+                </tr>
+                    <tr id="column_oncredithold">
+                    <td class="rt_cname">oncredithold</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">On Credit Hold</td>
+                </tr>
+                    <tr id="column_onlineformcampaignevent">
+                    <td class="rt_cname">onlineformcampaignevent</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Online Form History - Campaign Event</td>
+                </tr>
+                    <tr id="column_onlineformdate">
+                    <td class="rt_cname">onlineformdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Online Form History - Date</td>
+                </tr>
+                    <tr id="column_onlineformleadsource">
+                    <td class="rt_cname">onlineformleadsource</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Online Form History - Lead Source</td>
+                </tr>
+                    <tr id="column_onlineformname">
+                    <td class="rt_cname">onlineformname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Online Form History - Form Name</td>
+                </tr>
+                    <tr id="column_overduebalance">
+                    <td class="rt_cname">overduebalance</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Overdue Balance</td>
+                </tr>
+                    <tr id="column_parent">
+                    <td class="rt_cname">parent</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Top Level Parent</td>
+                </tr>
+                    <tr id="column_partner">
+                    <td class="rt_cname">partner</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Partner</td>
+                </tr>
+                    <tr id="column_partnercontribution">
+                    <td class="rt_cname">partnercontribution</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Partner Contribution %</td>
+                </tr>
+                    <tr id="column_partnerrole">
+                    <td class="rt_cname">partnerrole</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Partner Role</td>
+                </tr>
+                    <tr id="column_partnerteammember">
+                    <td class="rt_cname">partnerteammember</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Partner Team Member</td>
+                </tr>
+                    <tr id="column_pec">
+                    <td class="rt_cname">pec</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">PEC</td>
+                </tr>
+                    <tr id="column_permission">
+                    <td class="rt_cname">permission</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Permission</td>
+                </tr>
+                    <tr id="column_phone">
+                    <td class="rt_cname">phone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Phone</td>
+                </tr>
+                    <tr id="column_phoneticname">
+                    <td class="rt_cname">phoneticname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Phonetic Name</td>
+                </tr>
+                    <tr id="column_prefccprocessor">
+                    <td class="rt_cname">prefccprocessor</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Credit Card Processor</td>
+                </tr>
+                    <tr id="column_pricelevel">
+                    <td class="rt_cname">pricelevel</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Price Level</td>
+                </tr>
+                    <tr id="column_pricinggroup">
+                    <td class="rt_cname">pricinggroup</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Pricing Group</td>
+                </tr>
+                    <tr id="column_pricingitem">
+                    <td class="rt_cname">pricingitem</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Pricing Item</td>
+                </tr>
+                    <tr id="column_printtransactions">
+                    <td class="rt_cname">printtransactions</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Print Transactions</td>
+                </tr>
+                    <tr id="column_prospectdate">
+                    <td class="rt_cname">prospectdate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Prospect Date</td>
+                </tr>
+                    <tr id="column_receivablesaccount">
+                    <td class="rt_cname">receivablesaccount</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Default Receivables Account</td>
+                </tr>
+                    <tr id="column_reminderdays">
+                    <td class="rt_cname">reminderdays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Reminder Days</td>
+                </tr>
+                    <tr id="column_representingsubsidiary">
+                    <td class="rt_cname">representingsubsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Represents Subsidiary</td>
+                </tr>
+                    <tr id="column_resalenumber">
+                    <td class="rt_cname">resalenumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Resale Number</td>
+                </tr>
+                    <tr id="column_role">
+                    <td class="rt_cname">role</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Role</td>
+                </tr>
+                    <tr id="column_salesreadiness">
+                    <td class="rt_cname">salesreadiness</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Sales Readiness</td>
+                </tr>
+                    <tr id="column_salesrep">
+                    <td class="rt_cname">salesrep</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Sales Rep</td>
+                </tr>
+                    <tr id="column_salesteammember">
+                    <td class="rt_cname">salesteammember</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Sales Team Member</td>
+                </tr>
+                    <tr id="column_salesteamrole">
+                    <td class="rt_cname">salesteamrole</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Sales Team Role</td>
+                </tr>
+                    <tr id="column_salutation">
+                    <td class="rt_cname">salutation</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Mr./Mrs...</td>
+                </tr>
+                    <tr id="column_shipaddress">
+                    <td class="rt_cname">shipaddress</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Address</td>
+                </tr>
+                    <tr id="column_shipaddress1">
+                    <td class="rt_cname">shipaddress1</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Address 1</td>
+                </tr>
+                    <tr id="column_shipaddress2">
+                    <td class="rt_cname">shipaddress2</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Address 2</td>
+                </tr>
+                    <tr id="column_shipaddress3">
+                    <td class="rt_cname">shipaddress3</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Address 3</td>
+                </tr>
+                    <tr id="column_shipaddressee">
+                    <td class="rt_cname">shipaddressee</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Addressee</td>
+                </tr>
+                    <tr id="column_shipattention">
+                    <td class="rt_cname">shipattention</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Attention</td>
+                </tr>
+                    <tr id="column_shipcity">
+                    <td class="rt_cname">shipcity</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping City</td>
+                </tr>
+                    <tr id="column_shipcomplete">
+                    <td class="rt_cname">shipcomplete</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Ship Complete</td>
+                </tr>
+                    <tr id="column_shipcountry">
+                    <td class="rt_cname">shipcountry</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Shipping Country</td>
+                </tr>
+                    <tr id="column_shipcountrycode">
+                    <td class="rt_cname">shipcountrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Country Code</td>
+                </tr>
+                    <tr id="column_shipphone">
+                    <td class="rt_cname">shipphone</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Phone</td>
+                </tr>
+                    <tr id="column_shippingcarrier">
+                    <td class="rt_cname">shippingcarrier</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Shipping Carrier</td>
+                </tr>
+                    <tr id="column_shippingitem">
+                    <td class="rt_cname">shippingitem</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Shipping Item</td>
+                </tr>
+                    <tr id="column_shipstate">
+                    <td class="rt_cname">shipstate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping State/Province</td>
+                </tr>
+                    <tr id="column_shipzip">
+                    <td class="rt_cname">shipzip</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Zip</td>
+                </tr>
+                    <tr id="column_stage">
+                    <td class="rt_cname">stage</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Stage</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_state">
+                    <td class="rt_cname">state</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province</td>
+                </tr>
+                    <tr id="column_statedisplayname">
+                    <td class="rt_cname">statedisplayname</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province Display Name</td>
+                </tr>
+                    <tr id="column_subscription">
+                    <td class="rt_cname">subscription</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription</td>
+                </tr>
+                    <tr id="column_subscriptiondate">
+                    <td class="rt_cname">subscriptiondate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Subscription Date</td>
+                </tr>
+                    <tr id="column_subscriptionstatus">
+                    <td class="rt_cname">subscriptionstatus</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Subscription Status</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+                    <tr id="column_subsidiarynohierarchy">
+                    <td class="rt_cname">subsidiarynohierarchy</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary (no hierarchy)</td>
+                </tr>
+                    <tr id="column_taxable">
+                    <td class="rt_cname">taxable</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Taxable</td>
+                </tr>
+                    <tr id="column_taxitem">
+                    <td class="rt_cname">taxitem</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Tax Item</td>
+                </tr>
+                    <tr id="column_terms">
+                    <td class="rt_cname">terms</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Terms</td>
+                </tr>
+                    <tr id="column_territory">
+                    <td class="rt_cname">territory</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Territory</td>
+                </tr>
+                    <tr id="column_title">
+                    <td class="rt_cname">title</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Job Title</td>
+                </tr>
+                    <tr id="column_type">
+                    <td class="rt_cname">type</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Primary Type (Deprecated)</td>
+                </tr>
+                    <tr id="column_unbilledorders">
+                    <td class="rt_cname">unbilledorders</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unbilled Orders</td>
+                </tr>
+                    <tr id="column_url">
+                    <td class="rt_cname">url</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Web Address</td>
+                </tr>
+                    <tr id="column_vatregnumber">
+                    <td class="rt_cname">vatregnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Tax Number</td>
+                </tr>
+                    <tr id="column_weblead">
+                    <td class="rt_cname">weblead</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Web Lead</td>
+                </tr>
+                    <tr id="column_zipcode">
+                    <td class="rt_cname">zipcode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Zip Code</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

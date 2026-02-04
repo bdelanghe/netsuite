@@ -1,0 +1,2823 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__transactionsearchbasic','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__transactionsearchbasic','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TransactionSearchBasic</H1>
+    Namespace: urn:common.platform.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">account</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/accounttype.html?mode=package">AccountType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Account Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">acctCorpCardExp</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Account for Corporate Card Expenses</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">actualProductionEndDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Actual Production End Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">actualProductionStartDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Actual Production Start Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">actualShipDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Actual Ship/Receipt Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altSalesAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Alt.Sales)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altSalesNetAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Alt.Sales Net)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">amount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">amountPaid</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount Paid</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">amountRemaining</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount Remaining</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">amountUnbilled</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount Unbilled</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">anyLineItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item On Any Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToForeignAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Link Amount (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToIsFxVariance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Is Foreign Currency Variance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToLinkAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Link Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToLinkType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionlinktype.html?mode=package">TransactionLinkType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Link Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingForeignAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Link Amount (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingIsFxVariance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Is Foreign Currency Variance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingLinkAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Link Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingLinkType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionlinktype.html?mode=package">TransactionLinkType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Link Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">approvalStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionapprovalstatus.html?mode=package">TransactionApprovalStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Approval Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">authCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Auth. Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">autoCalculateLag</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Auto-calculate Lag</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">avsStreetMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">AVS Street Match</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">avsZipMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">AVS Zip Match</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billable</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAttention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Attention</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCountry</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/country.html?mode=package">Country</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCounty</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing County/State</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billedDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Billed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Schedule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billVarianceStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionbillvariancestatus.html?mode=package">TransactionBillVarianceStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Bill Variance Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billZip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Zip</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Bin Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binNumberQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Bin Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bomQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">BOM Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bookSpecificTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Book Specific Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buildEntireAssembly</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Mark Sub-assemblies Phantom</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buildVariance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Build Variance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">built</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Built</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">canHaveStackablePromotions</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Can Stack Promotions</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">catchUpPeriod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Catch Up Period</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccCustomerCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">CC Customer Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccExpireDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">CC Expire Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Credit Cardholder Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Credit Card Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">chargeType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionchargetype.html?mode=package">TransactionChargeType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Charge Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">class</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Class</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cleared</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cleared</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">closed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Closed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">closeDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Closed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cogs</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">COGS Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">commissionEffectiveDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Commission Effective Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">commit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/salesorderitemcommitinventory.html?mode=package">SalesOrderItemCommitInventory</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Commit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">componentYield</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Component Yield</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">confirmationNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Confirmation Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contribution</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Contribution %</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costComponentAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Component Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costComponentCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Component Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costComponentItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Component Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costComponentQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Component Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costComponentStandardCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Component Standard Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costEstimate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Extended Cost (Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costEstimateRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Unit Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costEstimateType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/itemcostestimatetype.html?mode=package">ItemCostEstimateType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Cost Estimate Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">createdBy</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Created By</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">createdFrom</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Created From</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">creditAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Credit)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cscMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/cscmatchcode.html?mode=package">CscMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">CSC Match</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">currency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Currency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customerSubOf</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Customer Sub of</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customFieldList</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcustomfieldlist.html?mode=package">SearchCustomFieldList</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customForm</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Custom Form</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customGL</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Custom GL</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">custType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Customer Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dateCreated</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Created</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">daysOpen</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Days Open</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">daysOverdue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Days Overdue</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">debitAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Debit)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deferredRevenue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Deferred)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deferRevRec</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Hold Revenue Recognition</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">department</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Department</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">depositDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Deposited/Refunded</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">depositTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Deposit/Refund Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">drAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Deferred Revenue Reclassification Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dueDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Due Date/Receive By</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">email</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Email</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">employee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Employee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">endDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">End Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entityStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Estimate/Opportunity Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">estGrossProfit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit (Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">estGrossProfitPct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit Percent (Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">exchangeRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Exchange Rate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">excludeCommission</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Exclude Commissions</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">excludeFromRateRequest</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Exclude Item from Rate Request</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expectedCloseDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expected Close Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expectedReceiptDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expected Receipt Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">External ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalIdString</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">External ID (Text)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">finChrg</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Finance Charge</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">firmed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Firmed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">forecastType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/forecasttype.html?mode=package">ForecastType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Forecast Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fulfillingTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fulfilling/Receiving Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Foreign Currency Adjustment Revenue Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxCostEstimate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Extended Cost (Line) (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxCostEstimateRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Unit Cost (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxEstGrossProfit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit (Line) (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxTranCostEstimate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Extended Cost (Transaction) (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxVsoeAllocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Allocation (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxVsoeAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Amount (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxVsoePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Price (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoAvailabelToCharge</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoAvailableToRefund</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoAvsStreetMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoAvsZipMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoBuyerAccountAge</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoBuyerIp</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoChargeAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoChargebackAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoConfirmedChargedTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoConfirmedRefundedTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoCreditcardNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoCscMatch</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/cscmatchcode.html?mode=package">CscMatchCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoFinancialState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoFulfillmentState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoOrderId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoOrderTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoPromotionAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoPromotionName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoRefundAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoShippingTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gcoStateChangedDetail</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertificate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Gift Certificate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">grossAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Gross)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">includeInForecast</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Include in Forecast</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">incoterm</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Incoterm</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">intercoStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/intercostatus.html?mode=package">IntercoStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Intercompany Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">intercoTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Paired Intercompany Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalIdNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Internal ID (Number)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">inventoryLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Inventory Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">inventorySubsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Inventory Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">inVsoeBundle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">In VSOE Bundle</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isAllocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Allocation</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isBackflush</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Backflush</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isGcoChargeback</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isGcoChargeConfirmed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isGcoPaymentGuaranteed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isGcoRefundConfirmed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInsideDelivery</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Inside Delivery</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInsidePickup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Inside Pickup</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isIntercompanyAdjustment</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Intercompany Adjustment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInTransitPayment</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is In-Transit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isMultiShipTo</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Multi Ship To</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isPayPalMeth</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is PayPal Payment Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isReversal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Reversal</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isRevRecTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Amortization/Revenue Recognition</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isScrap</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Scrap</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isShipAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Residential Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isTransferPriceCosting</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Use Item Cost as Transfer Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isVsoeAlloc</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Allocation Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isWip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">WIP</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">item</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemFulfillmentChoice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/salesorderitemfulfillmentchoice.html?mode=package">SalesOrderItemFulfillmentChoice</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fulfillment Choice (Line Level)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemRevision</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item Revision</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemSubOf</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item Sub of</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">landedCostPerLine</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Landed Cost per Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastModifiedDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Last Modified</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">leadSource</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Lead Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lineUniqueKey</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Line Unique Key</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">location</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationAutoAssigned</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Location Auto Assigned</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">mainLine</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Main Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">mainName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Main Line Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturingRouting</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Manufacturing Routing</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">matchBillToReceipt</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Match Bill To Receipt</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">memo</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Memo</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">memoMain</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Memo (Main)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">memorized</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Memorized</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">merchantAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Credit Card Processor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">message</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Message</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">multiSubsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Intercompany</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nameText</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Name (Text)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">netAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Net)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextApprover</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Next Approver</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextBillDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Next Bill Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nexus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Nexus</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">noAutoAssignLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Do Not Auto Assign Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nonReimbursable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Non-reimbursable</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">number</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Document Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">oneTimeTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">One Time Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">opportunity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Opportunity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">orderAllocationStrategy</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Order Allocation Strategy</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">orderPriority</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Order Priority</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">otherRefNum</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchtextnumberfield.html?mode=package">SearchTextNumberField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">PO/Check Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">otherRefNumNonDeposit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchtextnumberfield.html?mode=package">SearchTextNumberField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">PO/Check Number (Non-Deposit Only)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">overheadParentItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Material Overhead Parent Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">overrideInstallments</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Override Installments</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">packageCount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Package Count</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paidTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Paid Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">parent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partner</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Partner</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerContribution</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Partner Contribution %</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerRole</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Partner Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerTeamMember</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Partner Team Member</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payingTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Paying Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentApproved</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Approved</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventHoldReason</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionpaymenteventholdreason.html?mode=package">TransactionPaymentEventHoldReason</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Hold Reason</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventPurchaseCardUsed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Purchase Card Used</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventPurchaseDataSent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Purchase Data Sent</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventResult</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionpaymenteventresult.html?mode=package">TransactionPaymentEventResult</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Result</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentEventType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionpaymenteventtype.html?mode=package">TransactionPaymentEventType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Event Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentHold</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Hold</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentOption</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Option</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payPalPending</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Pending PayPal Authorization</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payPalStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">PayPal Payment Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payPalTranId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">PayPal Transaction ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pnRefNum</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">P/N Ref</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">poAsText</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">PO/Check ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">policyViolated</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Policy Violated</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">posting</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Posting</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">postingPeriod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Period</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">postingPeriodRelative</td>
+                    <td class="sst_ftype"><a href="../../schema/enum/postingperioddate.html?mode=package">PostingPeriodDate</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">priceLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Price Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">printedPickingTicket</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Printed Picking Ticket</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">probability</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Probability</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">projectedAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Projected Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">projectTask</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Project Task</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">promoCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Promotion</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrder</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Purchase Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityBilled</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Billed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityCommitted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Committed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityPacked</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Packed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityPicked</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Picked</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityRevCommitted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Rev. Committed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityShipRecv</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quantity Shipped/Received/Picked Up</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recognizedRevenue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Recognized)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recordType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Record Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recurAnnuallyTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Annually Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recurMonthlyTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Monthly Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recurQuarterlyTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Quarterly Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recurringBill</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Recurring Bill</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">recurWeeklyTotal</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Weekly Total</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">refNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Reference Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">requestedDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Supply Required By Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revCommitStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/revenuecommitstatus.html?mode=package">RevenueCommitStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev. Commit. Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revCommittingStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Revenue Committing Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revCommittingTransaction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Revenue Committing Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revenueStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/revenuestatus.html?mode=package">RevenueStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Revenue Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reversalDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Reversal Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reversalNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Reversal Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecEndDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev. Rec. End Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecOnRevCommitment</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev. Rec. On Rev. Commitment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecStartDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev. Rec. Start Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecTermInMonths</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev. Rec. Term in Months</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesEffectiveDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Effective Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesOrder</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesRep</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Rep</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesTeamMember</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Team Member</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesTeamRole</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Team Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">schedulingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/workorderschedulingmethod.html?mode=package">WorkOrderSchedulingMethod</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Scheduling Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Serial/Lot Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumberCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Serial/Lot Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumberCostAdjustment</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Serial/Lot Cost Adjustment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumberQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Serial/Lot Number Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumbers</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Serial/Lot Numbers</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAttention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Name (Deprecated)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCarrier</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/shippingcarrier.html?mode=package">ShippingCarrier</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Carrier</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipComplete</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ship Complete</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCountry</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/country.html?mode=package">Country</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCounty</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping County/State</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ship Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipGroup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ship Group</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ship Via</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipping</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipRecvStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fulfillment/Receipt Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipRecvStatusLine</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fulfillment/Receipt Status (Line Level)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipTo</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ship To</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipZip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Zip</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">source</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/source.html?mode=package">Source</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">startDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Start Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">statistical</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Statistical</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">status</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionstatus.html?mode=package">TransactionStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subscription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subscription</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subscriptionLine</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subscription Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiaryTaxRegNum</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subsidiary Tax Registration Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxLine</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Line</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxPeriod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Period</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxPeriodRelative</td>
+                    <td class="sst_ftype"><a href="../../schema/enum/postingperioddate.html?mode=package">PostingPeriodDate</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxPointDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Point Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terms</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Terms</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">termsOfSale</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/itemfulfillmenttermsofsalefedex.html?mode=package">ItemFulfillmentTermsOfSaleFedEx</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Terms Of Sale</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">title</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Title</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">toBeEmailed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">To Be Emailed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">toBePrinted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">To Be Printed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">toSubsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">To Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">totalAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Amount (Transaction Total)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">trackingNumbers</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tracking Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranCostEstimate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Extended Cost (Transaction)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranEstGrossProfit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit (Transaction)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranEstGrossProfitPct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit Percent (Transaction)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranFxEstGrossProfit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Est. Gross Profit (Transaction) (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Document Number/ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranIsVsoeBundle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Is Allocation Bundle</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transactionDiscount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction discount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transactionLineType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactionlinetype.html?mode=package">TransactionLineType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Line Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transactionNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transaction Number (Text)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">To Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferOrderQuantityCommitted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transfer Order Quantity Committed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferOrderQuantityPacked</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transfer Order Quantity Packed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferOrderQuantityPicked</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transfer Order Quantity Picked</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferOrderQuantityReceived</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transfer Order Quantity Received</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferOrderQuantityShipped</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Transfer Order Quantity Fulfilled</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">type</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/transactiontype.html?mode=package">TransactionType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Units</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unitCostOverride</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Unit Cost Override</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unitsType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">UOM Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Vendor Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">visibleToCustomer</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Available In Customer Center</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">voided</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Voided</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeAllocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Allocation</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeDeferral</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/vsoedeferral.html?mode=package">VsoeDeferral</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Deferral</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeDelivered</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Delivered</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoePermitDiscount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/vsoepermitdiscount.html?mode=package">VsoePermitDiscount</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Permit Discount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">VSOE Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">webSite</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Web Site</td>
+            </tr>
+    </table>
+
+
+    <H2>Related Record(s)</H2>
+    <table class="jtable">
+        <tr><th class="sst_slabel">Name</th></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/assemblybuild.html?mode=package">AssemblyBuild</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/assemblyunbuild.html?mode=package">AssemblyUnbuild</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/bintransfer.html?mode=package">BinTransfer</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/binworksheet.html?mode=package">BinWorksheet</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/cashrefund.html?mode=package">CashRefund</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/cashsale.html?mode=package">CashSale</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/check.html?mode=package">Check</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/creditmemo.html?mode=package">CreditMemo</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerdeposit.html?mode=package">CustomerDeposit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerpayment.html?mode=package">CustomerPayment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerrefund.html?mode=package">CustomerRefund</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/custompurchase.html?mode=package">CustomPurchase</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customsale.html?mode=package">CustomSale</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/deposit.html?mode=package">Deposit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/depositapplication.html?mode=package">DepositApplication</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/estimate.html?mode=package">Estimate</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/expensereport.html?mode=package">ExpenseReport</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/intercompanyjournalentry.html?mode=package">InterCompanyJournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventoryadjustment.html?mode=package">InventoryAdjustment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventorycostrevaluation.html?mode=package">InventoryCostRevaluation</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventorytransfer.html?mode=package">InventoryTransfer</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/invoice.html?mode=package">Invoice</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/itemfulfillment.html?mode=package">ItemFulfillment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/itemreceipt.html?mode=package">ItemReceipt</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/journalentry.html?mode=package">JournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/opportunity.html?mode=package">Opportunity</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/paycheckjournal.html?mode=package">PaycheckJournal</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/purchaseorder.html?mode=package">PurchaseOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/returnauthorization.html?mode=package">ReturnAuthorization</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/salesorder.html?mode=package">SalesOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/statisticaljournalentry.html?mode=package">StatisticalJournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/transferorder.html?mode=package">TransferOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorbill.html?mode=package">VendorBill</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorcredit.html?mode=package">VendorCredit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorpayment.html?mode=package">VendorPayment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorreturnauthorization.html?mode=package">VendorReturnAuthorization</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorder.html?mode=package">WorkOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorderclose.html?mode=package">WorkOrderClose</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workordercompletion.html?mode=package">WorkOrderCompletion</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorderissue.html?mode=package">WorkOrderIssue</a></td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

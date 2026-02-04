@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__term','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__term','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Term</H1>
+
+
+    Namespace: <a href="../../schema/record/term.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">dateDriven</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Driven</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If set to TRUE, you can NOT set daysUntilNetDue, discountPercent, and daysUntilExpiry. If set to FALSE, you can NOT set dayOfMonthNetDue, dueNextMonthIfWithinDays, discountPercentDateDriven, and dayDiscountExpires.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dayDiscountExpires</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day Discount Expires</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you offer a discount for early payment under date driven terms, enter the last day of the month the early payment discount is available.
+
+For example, if the early payment discount is available through the 20th of each month, enter 20 in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dayOfMonthNetDue</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day Of Month Net Due</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For date driven terms, enter the day of the month when the net amount of the invoice is due.
+
+If you enter a date that does not exist in the month the transaction is due, the last day of the month becomes the due date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">daysUntilExpiry</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Days Till Discount Expires</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For standard terms, enter the number of days the early payment discount is available.
+
+For example, if the early payment discount is available for 15 days after the bill is issued, enter 15 in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">daysUntilNetDue</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Days Till Net Due</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of days until the net amount of the bill becomes due.
+
+For example, if you are creating a term of Net 30, enter 30 in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountPercent</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">% Discount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For standard terms, enter the percentage discount if the invoice is paid early.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountPercentDateDriven</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Driven % Discount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For date driven terms, enter the percentage discount if the invoice is paid early.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dueNextMonthIfWithinDays</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Due Next Month If Within Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For date driven terms, enter the number of days before the due date that the invoice can be postponed until the next month's due date.
+
+For example, if invoices are due on the 30th of each month and you enter 5 in this field, then invoices issued between the 25th and 30th are due for payment by the 30th of the following month.
+
+For another example, Day of Month Net Due = 15 and Due Next Month if Within Days = 30
+
+Date range within 30 days:
+
+5/16-6/14 move to 7/15
+
+6/15-7/15 move to 8/15
+
+8/16-9/14 move to 10/15
+
+9/15-10/15 move to 11/15
+
+10/16-11/14 move to 12/15
+
+11/15-12/15 move to 1/5</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">installment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Installment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Installment box to use the Installment payment term. Installments are set payments made over a specified amount of time. Any shipping and tax due are included in the first installment. The remaining balance is divided over equal payments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to remove all references to this record from your account.
+
+You can reactivate the record at any time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the name for this record. This name appears in lists that include this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentagesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/termpercentageslist.html?mode=package">TermPercentagesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">preferred</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Preferred</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Terms set on customer records override terms marked as preferred here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceCount</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Count</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of payments. For example, 3.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceFrequency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/termrecurrencefrequency.html?mode=package">TermRecurrenceFrequency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Frequency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the frequency of payments. For example, Monthly. Other options include Annually, Weekly, and Daily.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">repeatEvery</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Repeat Every</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicate the repeat interval of payments. For example, if the payment occurs once every month, enter 1. If you selected Annual for the Recurrence Frequency and payments are biannual, enter 2.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">splitEvenly</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Split Evenly</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to split payments evenly across all payments. Note that the first payment will also include any tax and shipping charges in addition to the evenly divided payment.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/termsearch.html?mode=package">TermSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/termsearchadvanced.html?mode=package">TermSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/termsearchbasic.html?mode=package">TermSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/termsearchrow.html?mode=package">TermSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/termsearchrowbasic.html?mode=package">TermSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

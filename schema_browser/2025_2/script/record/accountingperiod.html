@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__accountingperiod','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__accountingperiod','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Accounting Period</H1>
+    <H3>Internal ID: accountingperiod</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_alllocked">
+                <td class="rt_fname">alllocked</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">All Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_allownonglchanges">
+                <td class="rt_fname">allownonglchanges</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Allow Non-G/L Changes</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Allows users with the Allow Non-G/L Changes permission to enter non-posting transactions to this period after it has been closed.
+
+Users who do not have the Allow Non-G/L Changes permission cannot enter non-posting transactions to a period even if the Allow Non-G/L Changes option for a period is checked.</td>
+            </tr>
+                <tr id="field_aplocked">
+                <td class="rt_fname">aplocked</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">A/P Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_arlocked">
+                <td class="rt_fname">arlocked</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">A/R Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_closed">
+                <td class="rt_fname">closed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">All Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_closedondate">
+                <td class="rt_fname">closedondate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">End Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter or pick this period's end date here.
+
+This is a required field.</td>
+            </tr>
+                <tr id="field_fiscalcalendar">
+                <td class="rt_fname">fiscalcalendar</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Fiscal Calendar</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the fiscal calendar for the accounting year.</td>
+            </tr>
+                <tr id="field_isadjust">
+                <td class="rt_fname">isadjust</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Period is Adjustment</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field identifies if an accounting period is an adjustment period. Adjustment periods are sometimes used for making adjustments at the end of a period, quarter, or year. For example, you can use adjustment periods to:
+
+    * Make special tax adjustments without impacting a base period
+    * Post year-end impairment for assets
+    * Make adjustments for management reporting
+
+You can only enter journal entries in adjustment periods. Adjustment periods do not appear in the Posting Period field on other transaction types such as invoices, vendor bills, or sales orders.</td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to inactivate this numbering sequence.</td>
+            </tr>
+                <tr id="field_isposting">
+                <td class="rt_fname">isposting</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Is Posting</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isquarter">
+                <td class="rt_fname">isquarter</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if this period is a quarter.</td>
+            </tr>
+                <tr id="field_isyear">
+                <td class="rt_fname">isyear</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if this period is a year.</td>
+            </tr>
+                <tr id="field_parent">
+                <td class="rt_fname">parent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sub-period of</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the appropriate parent period if one exists.
+
+For example, you are setting up your periods for 2022 and you've created a period called Year 2022. When you create your first quarter, you would select Year 2022 in the Sub-period of field as the parent period of this quarter.
+
+You can get results from this field through SOAP web services only when the Multiple Calendars feature is disabled. If the Multiple Calendars feature is enabled, you should use the parent field of the AccountingPeriodFiscalCalendars record type.</td>
+            </tr>
+                <tr id="field_payrolllocked">
+                <td class="rt_fname">payrolllocked</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payroll Closed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_periodname">
+                <td class="rt_fname">periodname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Period Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of the selected period. You can enter this name when you first set up the period.
+
+Period names should be unique within a fiscal calendar. Since base periods are shared across all fiscal calendars, base period names must all be unique across all periods in all fiscal calendars
+
+If you accessed the page from Transactions &gt; Management &gt; GL Audit Numbering &gt; Setup, you can select the open period.
+
+This is a required field.</td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter or pick the date this period starts here.
+
+This is a required field.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_fiscalcalendars_">fiscalcalendars - Parent Periods</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_fiscalcalendars_fiscalcalendar">
+                        <td class="rt_sname">fiscalcalendar</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Fiscal Calendar</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_fiscalcalendars_parent">
+                        <td class="rt_sname">parent</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Sub-period of</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+
+
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

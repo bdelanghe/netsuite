@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__goal','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__goal','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Goal</H1>
+    <H3>Internal ID: goal</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_details">
+                <td class="rt_fname">details</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Details</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Additional details about the goal. After a goal is approved, you cannot make changes to this field.</td>
+            </tr>
+                <tr id="field_employee">
+                <td class="rt_fname">employee</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Employee</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The employee who created the goal.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_goalstatus">
+                <td class="rt_fname">goalstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">When a new goal is created the status is automatically set to Planned. You can change the goal status after your manager has approved the goal.
+
+    * Planned - The initial status for goals that you create.
+    * In Progress - After a goal is approved and you are ready to start working on it, you can set the status to In Progress. When you set the status of a goal with a performance metric to In Progress, the Actual field is updated with the actual value of your goal.
+    * Completed - The goal is completed.
+    * Not Completed - The goal was not completed by the target completion date. If you can continue to work on the goal, update the target completion date to give yourself more time.
+    * Canceled - The goal was canceled (for example, it is no longer relevant).</td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_internalid">
+                <td class="rt_fname">internalid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When a goal is inactive, it no longer appears in lists or in searches. Only the creator of the goal (the employee) can inactivate the goal.</td>
+            </tr>
+                <tr id="field_mood">
+                <td class="rt_fname">mood</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Mood</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">A mood shows your manager how you feel about achieving your goal by the target completion date.
+
+    * Not Set - Indicates that you have not set a mood.
+    * On Track - Indicates that you feel you are on track to meeting your goal.
+    * Behind - Indicates that you feel you are currently behind, but that you may still achieve your goal.
+    * At Risk - Indicates that you feel that there is a risk that you may not achieve your goal.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of the goal. After the goal is approved, you cannot change the name.</td>
+            </tr>
+                <tr id="field_targetdate">
+                <td class="rt_fname">targetdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Target Completion Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The target date for completing the goal. If you cannot complete the goal by the original target date, you can change this date.
+
+This field is mandatory when a performance metric is selected.</td>
+            </tr>
+        </table>
+
+
+
+
+
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

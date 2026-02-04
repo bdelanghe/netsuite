@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.sales.transactions.webservices.netsuite.com__transactionstatus','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.sales.transactions.webservices.netsuite.com__transactionstatus','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TransactionStatus</H1>
+    Namespace: urn:types.sales.transactions.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">_billCancelled</td></tr>
+        <tr><td class="est_vvalue">_billOpen</td></tr>
+        <tr><td class="est_vvalue">_billPaidInFull</td></tr>
+        <tr><td class="est_vvalue">_billPaymentApproved</td></tr>
+        <tr><td class="est_vvalue">_billPaymentConfirmed</td></tr>
+        <tr><td class="est_vvalue">_billPaymentDeclined</td></tr>
+        <tr><td class="est_vvalue">_billPaymentInTransit</td></tr>
+        <tr><td class="est_vvalue">_billPaymentOnlineBillPayPendingAccountingApproval</td></tr>
+        <tr><td class="est_vvalue">_billPaymentPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_billPaymentRejected</td></tr>
+        <tr><td class="est_vvalue">_billPaymentVoided</td></tr>
+        <tr><td class="est_vvalue">_billPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_billRejected</td></tr>
+        <tr><td class="est_vvalue">_cashSaleDeposited</td></tr>
+        <tr><td class="est_vvalue">_cashSaleNotDeposited</td></tr>
+        <tr><td class="est_vvalue">_cashSaleUnapprovedPayment</td></tr>
+        <tr><td class="est_vvalue">_checkOnlineBillPayPendingAccountingApproval</td></tr>
+        <tr><td class="est_vvalue">_checkVoided</td></tr>
+        <tr><td class="est_vvalue">_commissionOverpaid</td></tr>
+        <tr><td class="est_vvalue">_commissionPaidInFull</td></tr>
+        <tr><td class="est_vvalue">_commissionPendingAccountingApproval</td></tr>
+        <tr><td class="est_vvalue">_commissionPendingPayment</td></tr>
+        <tr><td class="est_vvalue">_commissionRejectedByAccounting</td></tr>
+        <tr><td class="est_vvalue">_creditMemoFullyApplied</td></tr>
+        <tr><td class="est_vvalue">_creditMemoOpen</td></tr>
+        <tr><td class="est_vvalue">_creditMemoVoided</td></tr>
+        <tr><td class="est_vvalue">_customerDepositCancelled</td></tr>
+        <tr><td class="est_vvalue">_customerDepositDeposited</td></tr>
+        <tr><td class="est_vvalue">_customerDepositFullyApplied</td></tr>
+        <tr><td class="est_vvalue">_customerDepositNotDeposited</td></tr>
+        <tr><td class="est_vvalue">_customerDepositUnapprovedPayment</td></tr>
+        <tr><td class="est_vvalue">_customerRefundCancelled</td></tr>
+        <tr><td class="est_vvalue">_customerRefundVoided</td></tr>
+        <tr><td class="est_vvalue">_estimateClosed</td></tr>
+        <tr><td class="est_vvalue">_estimateExpired</td></tr>
+        <tr><td class="est_vvalue">_estimateOpen</td></tr>
+        <tr><td class="est_vvalue">_estimateProcessed</td></tr>
+        <tr><td class="est_vvalue">_estimateVoided</td></tr>
+        <tr><td class="est_vvalue">_expenseReportApprovedByAccounting</td></tr>
+        <tr><td class="est_vvalue">_expenseReportApprovedOverriddenByAccounting</td></tr>
+        <tr><td class="est_vvalue">_expenseReportInProgress</td></tr>
+        <tr><td class="est_vvalue">_expenseReportPaidInFull</td></tr>
+        <tr><td class="est_vvalue">_expenseReportPaymentInTransit</td></tr>
+        <tr><td class="est_vvalue">_expenseReportPendingAccountingApproval</td></tr>
+        <tr><td class="est_vvalue">_expenseReportPendingSupervisorApproval</td></tr>
+        <tr><td class="est_vvalue">_expenseReportRejectedByAccounting</td></tr>
+        <tr><td class="est_vvalue">_expenseReportRejectedBySupervisor</td></tr>
+        <tr><td class="est_vvalue">_expenseReportRejectedOverriddenByAccounting</td></tr>
+        <tr><td class="est_vvalue">_expenseReportVoided</td></tr>
+        <tr><td class="est_vvalue">_invoiceOpen</td></tr>
+        <tr><td class="est_vvalue">_invoicePaidInFull</td></tr>
+        <tr><td class="est_vvalue">_invoicePendingApproval</td></tr>
+        <tr><td class="est_vvalue">_invoiceRejected</td></tr>
+        <tr><td class="est_vvalue">_invoiceVoided</td></tr>
+        <tr><td class="est_vvalue">_itemFulfillmentPacked</td></tr>
+        <tr><td class="est_vvalue">_itemFulfillmentPicked</td></tr>
+        <tr><td class="est_vvalue">_itemFulfillmentShipped</td></tr>
+        <tr><td class="est_vvalue">_journalApprovedForPosting</td></tr>
+        <tr><td class="est_vvalue">_journalPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_journalRejected</td></tr>
+        <tr><td class="est_vvalue">_opportunityClosedLost</td></tr>
+        <tr><td class="est_vvalue">_opportunityClosedWon</td></tr>
+        <tr><td class="est_vvalue">_opportunityInProgress</td></tr>
+        <tr><td class="est_vvalue">_opportunityIssuedEstimate</td></tr>
+        <tr><td class="est_vvalue">_paycheckCommitted</td></tr>
+        <tr><td class="est_vvalue">_paycheckCreated</td></tr>
+        <tr><td class="est_vvalue">_paycheckError</td></tr>
+        <tr><td class="est_vvalue">_paycheckPendingCommitment</td></tr>
+        <tr><td class="est_vvalue">_paycheckPendingTaxCalculation</td></tr>
+        <tr><td class="est_vvalue">_paycheckPreview</td></tr>
+        <tr><td class="est_vvalue">_paycheckReversed</td></tr>
+        <tr><td class="est_vvalue">_paymentCancelled</td></tr>
+        <tr><td class="est_vvalue">_paymentDeposited</td></tr>
+        <tr><td class="est_vvalue">_paymentNotDeposited</td></tr>
+        <tr><td class="est_vvalue">_paymentUnapprovedPayment</td></tr>
+        <tr><td class="est_vvalue">_payrollLiabilityCheckVoided</td></tr>
+        <tr><td class="est_vvalue">_periodEndJournalApprovedForPosting</td></tr>
+        <tr><td class="est_vvalue">_periodEndJournalPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_periodEndJournalRejected</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderClosed</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderFullyBilled</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPartiallyReceived</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPendingBill</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPendingBillingPartiallyReceived</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPendingReceipt</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPendingSupervisorApproval</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPlanned</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderRejectedBySupervisor</td></tr>
+        <tr><td class="est_vvalue">_requisitionCancelled</td></tr>
+        <tr><td class="est_vvalue">_requisitionClosed</td></tr>
+        <tr><td class="est_vvalue">_requisitionFullyOrdered</td></tr>
+        <tr><td class="est_vvalue">_requisitionFullyReceived</td></tr>
+        <tr><td class="est_vvalue">_requisitionPartiallyOrdered</td></tr>
+        <tr><td class="est_vvalue">_requisitionPartiallyReceived</td></tr>
+        <tr><td class="est_vvalue">_requisitionPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_requisitionPendingOrder</td></tr>
+        <tr><td class="est_vvalue">_requisitionRejected</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationCancelled</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationClosed</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationPartiallyReceived</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationPendingReceipt</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationPendingRefund</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationPendingRefundPartiallyReceived</td></tr>
+        <tr><td class="est_vvalue">_returnAuthorizationRefunded</td></tr>
+        <tr><td class="est_vvalue">_salesOrderBilled</td></tr>
+        <tr><td class="est_vvalue">_salesOrderCancelled</td></tr>
+        <tr><td class="est_vvalue">_salesOrderClosed</td></tr>
+        <tr><td class="est_vvalue">_salesOrderPartiallyFulfilled</td></tr>
+        <tr><td class="est_vvalue">_salesOrderPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_salesOrderPendingBilling</td></tr>
+        <tr><td class="est_vvalue">_salesOrderPendingBillingPartiallyFulfilled</td></tr>
+        <tr><td class="est_vvalue">_salesOrderPendingFulfillment</td></tr>
+        <tr><td class="est_vvalue">_salesTaxPaymentOnlineBillPayPendingAccountingApproval</td></tr>
+        <tr><td class="est_vvalue">_salesTaxPaymentVoided</td></tr>
+        <tr><td class="est_vvalue">_statementChargeOpen</td></tr>
+        <tr><td class="est_vvalue">_statementChargePaidInFull</td></tr>
+        <tr><td class="est_vvalue">_taxLiabilityChequeVoided</td></tr>
+        <tr><td class="est_vvalue">_tegataPayableEndorsed</td></tr>
+        <tr><td class="est_vvalue">_tegataPayableIssued</td></tr>
+        <tr><td class="est_vvalue">_tegataPayablePaid</td></tr>
+        <tr><td class="est_vvalue">_tegataReceivablesCollected</td></tr>
+        <tr><td class="est_vvalue">_tegataReceivablesDiscounted</td></tr>
+        <tr><td class="est_vvalue">_tegataReceivablesEndorsed</td></tr>
+        <tr><td class="est_vvalue">_tegataReceivablesHolding</td></tr>
+        <tr><td class="est_vvalue">_tegataReceivablesVoided</td></tr>
+        <tr><td class="est_vvalue">_transferOrderClosed</td></tr>
+        <tr><td class="est_vvalue">_transferOrderPartiallyFulfilled</td></tr>
+        <tr><td class="est_vvalue">_transferOrderPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_transferOrderPendingFulfillment</td></tr>
+        <tr><td class="est_vvalue">_transferOrderPendingReceipt</td></tr>
+        <tr><td class="est_vvalue">_transferOrderPendingReceiptPartiallyFulfilled</td></tr>
+        <tr><td class="est_vvalue">_transferOrderReceived</td></tr>
+        <tr><td class="est_vvalue">_transferOrderRejected</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationCancelled</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationClosed</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationCredited</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationPartiallyReturned</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationPendingApproval</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationPendingCredit</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationPendingCreditPartiallyReturned</td></tr>
+        <tr><td class="est_vvalue">_vendorReturnAuthorizationPendingReturn</td></tr>
+        <tr><td class="est_vvalue">_workOrderBuilt</td></tr>
+        <tr><td class="est_vvalue">_workOrderCancelled</td></tr>
+        <tr><td class="est_vvalue">_workOrderClosed</td></tr>
+        <tr><td class="est_vvalue">_workOrderPartiallyBuilt</td></tr>
+        <tr><td class="est_vvalue">_workOrderPendingBuild</td></tr>
+        <tr><td class="est_vvalue">_workOrderPlanned</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

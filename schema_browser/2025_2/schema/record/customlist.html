@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__customlist','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__customlist','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CustomList</H1>
+
+
+    Namespace: <a href="../../schema/record/customlist.html?mode=package">urn:customization.setup.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">convertToCustomRecord</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to convert this list into a set of custom records. This cannot be undone.
+
+The list name becomes the name of the custom record type. The list values become custom record entries.
+
+To edit your new custom records, go to Customization &gt; Lists, Records, &amp; Fields &gt; Record Types.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customValueList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customlistcustomvaluelist.html?mode=package">CustomListCustomValueList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">description</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a description of this list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check to inactivate this list. Inactive lists do not appear on any forms or in global searches, just like a deleted list. Also, you cannot select this list from any lists on entities, items or transactions.
+
+The data and settings of inactive lists are maintained in NetSuite. If you later make a list active again, all of its data is restored, and the list appears on all of the same forms as before it was made inactive.
+
+Inactive lists do not appear on the list page unless you check the Show Inactives box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isMatrixOption</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to make this list available on matrix items.
+
+If you check this box, a unique abbreviation is mandatory for each list value.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isOrdered</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Is Ordered</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose how the items in this custom list should be ordered. You can sort them by the order in which you enter them or use alphabetical order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the name of the custom list. You should be able to easily recognize this name when selecting this custom list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Owner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the owner of this custom list. Only the owner can edit this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scriptId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Script ID</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You use the ID value when scripting to instances of the list. As a best practice, enter a name that begins with an underscore. The text you enter is prepended with the string customlist. If you do not enter a value, the system generates one. 
+
+
+If you are editing an existing custom list, note that you can change the ID value using the Change ID button at the top of the page.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">translationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customlisttranslationslist.html?mode=package">CustomListTranslationsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customlistsearch.html?mode=package">CustomListSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customlistsearchadvanced.html?mode=package">CustomListSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customlistsearchbasic.html?mode=package">CustomListSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customlistsearchrow.html?mode=package">CustomListSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customlistsearchrowbasic.html?mode=package">CustomListSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

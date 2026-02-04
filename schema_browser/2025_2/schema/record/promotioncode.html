@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__promotioncode','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__promotioncode','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>PromotionCode</H1>
+
+
+    Namespace: <a href="../../schema/record/promotioncode.html?mode=package">urn:marketing.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">applyDiscountTo</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/promotioncodeapplydiscountto.html?mode=package">PromotionCodeApplyDiscountTo</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Each Customer Can Use The Promotion</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to apply discount to first sale only or to all sales.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">code</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Coupon Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the name of the promotion code.
+
+Promotion codes can be assigned to lead, prospect, and customer records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">codePattern</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Code Pattern</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You enter code patterns using the following components in any order you choose:
+
+    * [A.#] – This adds a number of random letters in the code.
+    * [N.#] – This adds a number of random numbers in the code.
+    * [AN.#] – This adds a number of random alphanumeric characters to the code.
+    * Hard-coded alphanumeric characters. Do not enclose these in square brackets.
+    * Dashes (-)
+
+Note: The following letters and numbers cannot be used in coupon codes: 1, 0, I, L, O.
+
+For example, the code ABC-[AN.3]-[A.3]-[N.3] would generate codes like:
+
+    * ABC-J3N-FLN-647
+    * ABC-45F-KPM-958
+    * ABC-5MP-PQA-874
+
+When creating your code pattern, make sure that the pattern you give has enough variables to provide the number of unique codes you need for your promotion.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/promotioncodecurrencylist.html?mode=package">PromotionCodeCurrencyList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the custom form to use with this promotion.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">description</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the description for the promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Reference a value in a user defined discount list.
+ 
+To create new values, click Lists &gt; Accounting &gt; Items &gt; New &gt; Discount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountType</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Define whether the value entered for Rate is calculated as a percentage or as an absolute discount value.
+ 
+If the value entered is not a percent sign, the discount rate is applied as an absolute discount value. For example, 10% would result in a ten percent discount on the item whereas 10 would result in a ten dollar discount on the item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayLineDiscounts</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Display Line Discounts</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to show the promotion discount as line items in transactions. The discount will appear as a line beneath qualifying items on the transaction.
+
+You must check this box and select a percentage discount in order to show strikeout pricing on Web store orders. A flat rate promotion applies to the total order.
+
+If you clear this box, the promotion discount will be shown in the transaction total.
+
+Note: If you use line discount promotions, when you apply the promotion to a transaction, you must click Calculate to create the discount line before saving the transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the end date for this promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">excludeItems</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exclude Items</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If set to true, then this promotion code applies to all items except those you add.
+ 
+If set to false, the promotion code can only be used for the items added.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">freeShipMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a shipping method from the list that will be offered for free on eligible transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">implementation</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Implementation</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If true, inactivates the promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isPublic</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Available to all Customers</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to be able to select this promotion on transactions for any customer.
+
+If you do not check this box, only customers associated with the partners you select below are able to use this promotion.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/promotioncodeitemslist.html?mode=package">PromotionCodeItemsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">locationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">minimumOrderAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the amount that the customer must spend before the promotion code becomes valid.
+
+If you use the Multiple Currencies feature, you can set a different minimum order amount for each currency in which you do business.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the name for this promotion.
+
+Note: This is the name used for internal and reporting use only. The coupon code you want customers to use on sales transactions is entered in the Coupon Code field on the Codes subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberToGenerate</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Codes to Generate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of coupon codes you want to generate with your code pattern.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/promotioncodepartnerslist.html?mode=package">PromotionCodePartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the rate of discount for this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the start date for the promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">useType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/promotioncodeusetype.html?mode=package">PromotionCodeUseType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Coupon Code Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose whether you are entering a multiple-use coupon code that can be used any number of times by any number of customers, or single-use coupon codes that can only be used in one transaction by a single customer.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/promotioncodesearch.html?mode=package">PromotionCodeSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/promotioncodesearchadvanced.html?mode=package">PromotionCodeSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/promotioncodesearchbasic.html?mode=package">PromotionCodeSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/promotioncodesearchrow.html?mode=package">PromotionCodeSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/promotioncodesearchrowbasic.html?mode=package">PromotionCodeSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

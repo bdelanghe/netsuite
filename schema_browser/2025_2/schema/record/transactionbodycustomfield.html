@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__transactionbodycustomfield','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__transactionbodycustomfield','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TransactionBodyCustomField</H1>
+
+
+    Namespace: <a href="../../schema/record/transactionbodycustomfield.html?mode=package">urn:customization.setup.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessLevel</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customizationaccesslevel.html?mode=package">CustomizationAccessLevel</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Set the level of access you want to given to this field by default:
+
+    * Edit – The field and its contents can be viewed and changed.
+    * View – The field can be seen, but its contents cannot be changed.
+    * None – The field cannot be seen, and its contents cannot be changed.
+
+You can set the access level for specific roles, department, and subsidiaries below.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">availableToSso</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyAssemblyBuild</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to assembly builds.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyBom</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to print this field on bills of materials.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyBTegata</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to Tegata.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyCustomerPayment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box if you want to apply this field to customer payments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyDeposit</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this field to deposits.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyExpenseReport</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of expense reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyInventoryAdjustment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to inventory adjustments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyItemFulfillment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to item fulfillments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyItemFulfillmentOrder</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to make this custom field always display the value from the Sales Order on Item Fulfillments, but not allow editing on the fulfillment.
+
+Note: To enable this, the Sale and Item Fulfillment boxes, as well as the Store Value box, must also be checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyItemReceipt</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to item receipts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyItemReceiptOrder</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to make this custom field always display the value from the Purchase Order on Item Receipts, but not allow editing on the receipt.
+
+Note: To enable this, the Purchase and Item Receipt boxes, as well as the Store Value box, must also be checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyJournal</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of journal entries.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyOpportunity</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of opportunities.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyOtherTransaction</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the following other transaction types:
+    * Statement Charge
+    * Commission
+    * Partner Commission
+    * Bin Transfer
+    * Bin Put-away Worksheet
+    * Payroll Liability Check
+    * Payroll Adjustment
+    * Sales Tax Payment
+    * Tax Liability Check
+    * Currency Revaluation (Unrealized Gain/Loss)
+    * Inventory Distribution
+    * Transfer</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyPickingTicket</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to include this body field on picking tickets. The information that appears in this field is sourced from the sales transaction.
+
+You must also check the Sale box to have this field appear on sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyPrintFlag</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to print this custom field on standard forms.
+
+This field prints on the standard forms for the kind of transactions you have applied this field to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyPrintPackingSlip</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to include this body field on packing slips.
+
+The information that appears in this field is sourced from the sales transaction.
+
+You must also check the Sales box for this field to appear on sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyPrintStatement</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to have the information entered in this body field on sales transactions print on your statements as a column.
+
+You must also check the Sale box to add this field to sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyPurchase</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of purchase transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodySale</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyStore</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to display this custom field on the checkout page of your web store transactions.
+
+When you check this box, the Sale box is automatically checked because transaction body fields that appear in your web store must also appear on your sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyTransferOrder</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this custom field to the body of item transfers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bodyVendorPayment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to apply this field to vendor payments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">checkSpelling</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to enable the spell check function for this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customSegment</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultChecked</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If this custom field is a check box, check this box to have the field appear checked by default.
+
+The field can still be unchecked if it is not locked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultSelection</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">This field defines the selection list to display in the custom field by default. The choices are limited to the list selected in the List/Record field when creating this custom field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultValue</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a default value to appear in this custom field.
+
+This value can still be changed if the field is not locked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deptAccessList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfielddepartmentaccesslist.html?mode=package">CustomFieldDepartmentAccessList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">description</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a description of this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayHeight</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a height for the custom field in number of lines. The default is three lines.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customizationdisplaytype.html?mode=package">CustomizationDisplayType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Select the type of display you want this field to have:
+
+    * Normal - Can be edited. You can use this field with custom code calculations, defaulting and sourcing information.
+    * Disabled - Cannot be edited. You can use this field with custom code calculations, defaulting and sourcing information only. Any field with a display type of disabled that does not have default, sourced or custom code information will not display on forms.
+
+      Note: You cannot disable a mandatory field unless the field has a default value.
+    * Inline Text - For informational purposes only. The information in this field is the result of custom code calculation, defaulting or sourcing information only. Inline text field of the List/Record or Check Box type are not available for use with custom code. These fields are also not available for transaction column fields.
+    * Hidden - Cannot be seen on the record or transaction you apply it to. You can perform a search to display the value of this field. The information in this field is the result of custom code calculations and defaulting information. You must use custom code or set a default for this field. Note that you can also define a field as shown in its custom field definition, and then selectively hide it on a form-by-form basis.
+      In SuiteScript, only user event, scheduled, and Suitelet scripts can set the value of a custom field that has a display type of hidden.
+
+      Warning: Hiding a custom field is a display convenience only. This is not field level security. Hidden custom fields are embedded in the page output and can be viewed in the page source.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayWidth</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a width for your custom field in columns.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dynamicDefault</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customizationdynamicdefault.html?mode=package">CustomizationDynamicDefault</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Sets the preset defaulting options specific to the kind of field you are creating.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">filterList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/transactionbodycustomfieldfilterlist.html?mode=package">TransactionBodyCustomFieldFilterList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">globalSearch</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to index this custom field for global search, so that this field's values are searched for matches to global search keywords, and records with matches are returned as global search results.
+
+If this box is dimmed, ensure that Store Value is checked. If it is still grayed out, global search indexing is not supported for the selected data type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">help</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a brief explanation of the kind of information you want entered in this field.
+
+This help is available when the name of the field is clicked.
+
+You can enter HTML in this field, but be sure to begin the code with &lt;html&gt; and end it with &lt;/html&gt;.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">insertBefore</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Defines where the field is placed on records. This field lists custom fields of the same type that have already been created.
+
+You can also choose to have the custom field span the column at the top or bottom respectively. This is especially useful to add a text area field at the top or bottom of a tab or section which provides explanatory information.
+
+Note: This only affects the placement of fields on standard forms and on the placement of newly created fields. To change the arrangement of fields on a custom form, you must edit the custom form.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isFormula</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If enabled, the Default Value is set as a formula field. Formula fields use NetSuite Tags and SQL Expressions to dynamically calculate values based on field data in the system.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isMandatory</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to require this field on the transactions you applied the field to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isParent</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If you are creating a List/Record custom field, check this box to indicate that the record type selected is a parent record.
+
+This field is used to create a parent-child relationship between two record types.
+
+For more information, click see the help topic Understanding Parent-Child Relationships.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">label</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a name for this field that is meaningful to your users.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">linkText</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter the text to display instead of a URL for hyperlink fields. Users will see this text instead of the URL. Clicking the text links to the URL.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">maxLength</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a maximum number of characters for free-form text and text area custom fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">maxValue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a maximum value for decimal, integer number, and percent custom fields.
+
+The maximum amounts for percent fields can be greater than 100. If you do not enter a maximum value for a percent field, the maximum is 100.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">minValue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a minimum value for decimal, integer number, and percent custom fields.
+
+The minimum amounts for percent fields can be less than zero. If you do not enter minimum value for a percent field, the minimum is 0.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Select the owner of this field. Only the owner can edit this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parentSubtab</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">roleAccessList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldroleaccesslist.html?mode=package">CustomFieldRoleAccessList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchCompareField</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Select a Compare To field from the selected search to provide a comparison that links joined records.
+
+You can use this field in cases where you want to put the custom field on a form for a record type that is different from the summary search record type.
+
+For example, if you want to put a custom entity field showing the result of a customer record summary search on an employee custom form, you could select an employee record field whose values could be matched to the values for the search’s Available Filter field. Search results field values for all records with matching values for the Compare To field and Available Filter field would be used to calculate the value of the summary search custom field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchDefault</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Select a search with summary results, to be used to calculate a value for this custom field.
+
+This kind of field displays a rollup value for a selected search results field; this value is dynamically calculated each time a form containing the summary search field is displayed. For example, you can display the total quantity of all line items on a transaction.
+
+For more details, see Creating Custom Fields with Values Derived from Summary Search Results.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchLevel</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customizationsearchlevel.html?mode=package">CustomizationSearchLevel</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Choose the level of access you want given by default to this field on reports and search.
+
+    * Edit – The field and its contents can be viewed and changed.
+    * Run – The field can be seen, but its contents cannot be changed.
+    * None – The field cannot be seen, and its contents cannot be changed.
+
+You can set the access level for specific roles, department, and subsidiaries below.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">selectRecordType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If you chose List/Record in the Type field, select a custom list or list of records to use with this field.
+
+You must choose List/Record in the Type field before you can select a list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showInList</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to have your custom body field appear in transaction lists.
+
+The field only appears for the transaction types it is applied to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceFilterBy</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Select the field to filter by. This field must be in the record type selected as the list/record</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceFrom</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Choose the field that you want to source information from. The fields available are in the record selected in the Source List field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Choose the name of the list you want to copy information from.
+
+You must choose a source list before you can choose your source field.
+
+The field you choose must match the type you chose in the Type field. For example, if you are sourcing from a Phone Number field, you must choose Phone Number in the Type field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeValue</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">This field is checked by default, meaning that information entered is stored in the custom field.
+
+Clear this box to indicate that any changes entered not be stored in the custom field. This enables you to look at data that is stored elsewhere. If you do not store the value, changes will be discarded, so you may want to make the field read-only.
+
+If the custom field is used for criteria in duplicate detection, you cannot clear the Store Value box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subAccessList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldsubaccesslist.html?mode=package">CustomFieldSubAccessList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subtab</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Choose the subtab you want this field to appear on.
+
+You can create new subtabs in the Subtabs section of the custom record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">translationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldtranslationslist.html?mode=package">CustomFieldTranslationsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

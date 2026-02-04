@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__customrecordtype','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__customrecordtype','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CustomRecordType</H1>
+
+
+    Namespace: <a href="../../schema/record/customrecordtype.html?mode=package">urn:customization.setup.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customrecordtypeaccesstype.html?mode=package">CustomRecordTypeAccessType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Choose a permissions model from the Access Type dropdown list:
+
+    * Choose Require Custom Record Entries Permission to indicate that only users logging in with a role with permission granted to instances of the given record type can access it.
+    * Choose Use Permission List to grant access to instances of the given record type according to the permissions set up on the Permissions subtab of this page.
+    * Choose No Permission Required for internal roles to make access to instances of the given record type available to all internal roles. When you choose this option, additional configuration options for public access become available.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowAttachments</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allow Attachments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to use the file cabinet with custom record entries of this type.
+
+With the file cabinet, you can upload files and attach them to your records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowNumberingOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to be able to edit the number that is automatically generated for a record.
+
+You can edit a record's number after you save the record by editing the record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowQuickSearch</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allow Quick Search</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Allows this record type to be searched using the Quick Search portlet on dashboards.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">childrenList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypechildrenlist.html?mode=package">CustomRecordTypeChildrenList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypefieldlist.html?mode=package">CustomRecordTypeFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">description</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a description of this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">disclaimer</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">enableDle</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If you check this box, the Inline Editing switch on list pages for the custom record type is set to on, and users can directly edit records in each row.
+
+If you clear this box, the Inline Editing switch is not available on list pages for this custom record type, and users must drill down from the list to each record to edit it.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">enableMailMerge</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Enable Mail Merge</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to enable mail merge for this record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">enableNameTranslation</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to enable translation of custom record instance names so that they match the language of the NetSuite user interface.
+
+This option is disabled by default.
+
+You can enable this option for a custom record type if ALL of the following are true:
+
+    * The Multi-Language feature is enabled for the account.
+    * The Include Name Field option is enabled for the custom record type.
+    * Numbering is not enabled for the custom record type. (The Enable box on the Numbering subtab is not checked.)</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">enableNumbering</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to turn on auto-numbering for this custom record type. Custom records of this type will begin numbering with the next record created.
+
+You can check the Update box to number all currently unnumbered records.
+
+Warning: Once auto-numbering is enabled, numbers cannot be removed from records. Disabling auto-numbering after records have been numbered can only prevent future records from being numbered.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">formsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypeformslist.html?mode=package">CustomRecordTypeFormsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hierarchical</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check the box to define hierarchies among values for this custom record type. You can specify multiple levels of hierarchy among custom record values of the same record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeName</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include Name Field</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to include a required Name field on each record of this type.
+
+If you check this box, the Name field appears as the first field on the record and in the record list.
+
+If you do not check this box, your records are automatically assigned a number based on the order they are entered.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isAvailableOffline</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check to inactivate this custom record type. Inactive record types do not appear on any forms or in global searches, just like a deleted record type. Also, you cannot select this kind of record type from any lists on entities, items or transactions.
+
+The data and settings of inactive record types are maintained in NetSuite. If you later make a record type active again, all of its data is restored, and it appears on all of the same forms as before it was made inactive.
+
+Inactive record types do not appear on the list page unless you check the Show Inactives box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isNumberingUpdateable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box if you want NetSuite to assign numbers to existing records.
+
+This automatically numbers all existing records in the order they were created.
+
+Checking this box does not update any existing generated numbers. Once a number has been assigned to a record, you can only override numbers on an individual basis.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isOrdered</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Is Ordered</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this record type is a child record type, check this box to enable editing of the order in which child records display on each parent record.
+
+    * If you do not check this box, child records display in alphabetical order in both View and Edit modes. 
+    * If you check this box, in View mode, child records still display in alphabetical order. In Edit mode, child records initially display in the order in which they were entered and later, in the order in which you have set them through editing.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">linksList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypelinkslist.html?mode=package">CustomRecordTypeLinksList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">managersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypemanagerslist.html?mode=package">CustomRecordTypeManagersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberingCurrentNumber</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">This read-only field displays the number of the record type that has the highest number. In most cases, this is the number of the most recently created record type. The next value is the number that follows the value in the Current Number field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberingInit</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter the number you want to use to begin numbering.
+
+For example, enter 20 to have the first record numbered 20 and the next numbered 21.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberingMinDigits</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If appropriate, enter a value from 1 to 20 in this field. This minimum applies only to the automatically generated number, not to the characters in the prefix and suffix. To meet the minimum for generated numbers that are too short, the system prepends zeroes to the number.
+
+For example, enter 4 to have the first number appear as 0001.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberingPrefix</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter any numbers or letters you want to appear before each automatically-generated number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberingSuffix</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter any numbers or letters you want to appear after each automatically-generated number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">onlineFormsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypeonlineformslist.html?mode=package">CustomRecordTypeOnlineFormsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Owner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the owner of this record type. Only the owner can edit this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parentsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypeparentslist.html?mode=package">CustomRecordTypeParentsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">permissionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypepermissionslist.html?mode=package">CustomRecordTypePermissionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recordName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Enter a name for this custom record type that is meaningful to your users.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scriptId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Script ID</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You use the ID value when scripting to instances of the record. As a best practice, enter a name that begins with an underscore. The text you enter is prepended with the string customrecord. If you do not enter a value, the system generates one.
+
+If you are editing an existing record type, note that you can change the ID value using the Change ID button at the top of the page.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showCreationDate</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to show the creation date for each record on the record instance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showCreationDateOnList</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to show the creation date for each record on the list for this record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showId</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to display the record entry ID that is automatically assigned by NetSuite to each new record instance. The ID number also appears in your record list.
+
+ID numbers are assigned in the order that the records are created, beginning with the number one.
+
+The assignment of internal IDs to new records is sequential. However, the sequence of internal IDs does not indicate when or in which order records were added.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showLastModified</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to show the date last modified for each record on the record instance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showLastModifiedOnList</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to show the date last modified for each record on the list for that record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showNotes</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Show Notes</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to show a Notes subtab on individual record instances. This option does not control if system notes are created. To enable or disable system notes, see Enable System Notes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showOwner</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to show the owner on each record instance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showOwnerAllowChange</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box to allow the owner to be selected from a list when the record instance is entered.
+
+If you enable this option, the Owner field defaults to the current user but can be changed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showOwnerOnList</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box the show the owner of each record instance in the list for that record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sublistsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypesublistslist.html?mode=package">CustomRecordTypeSublistsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tabsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypetabslist.html?mode=package">CustomRecordTypeTabsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">translationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customrecordtypetranslationslist.html?mode=package">CustomRecordTypeTranslationsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

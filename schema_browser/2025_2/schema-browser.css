@@ -1,0 +1,191 @@
+table
+{
+    empty-cells:show;
+}
+body{
+    font-family: Verdana,Helvetica,sans-serif;
+    FONT-SIZE: 8pt;
+}
+td{
+    font-family: Verdana,Helvetica,sans-serif;
+    FONT-SIZE: 8pt;
+    padding-left:5pt;
+    padding-right:5pt;
+    word-wrap: break-word;
+}
+th{
+    font-family: Verdana,Helvetica,sans-serif;
+    FONT-SIZE: 10pt;
+    padding-left:5pt;
+    padding-right:5pt;
+}
+
+.rt_fhelp, .rst_fhelp {
+	white-space: pre-line; 
+    max-width:400px;
+    min-width:50px;
+}
+
+.rt_shelp, .ost_fhelp, .sst_fhelp{
+    max-width:400px;
+    min-width:50px;
+}
+
+.rst_aname{
+    width:100px;
+}
+.rst_atype{
+    width:100px;
+}
+
+
+#packageleftpanelmain{
+    position:absolute;
+    width:340px
+}
+
+#leftpanelmain{
+    position:absolute;
+    width:340px
+}
+
+#packagepanelmain{
+    position:absolute;
+    left:365px;
+}
+
+#panelmain{
+    position:absolute;
+    left:340px;
+}
+
+button[name="recordswitch"] {
+    width: 300px;
+    text-align: left;
+}
+button[name="recordswitch"].span {
+    width: 300px;
+
+}
+button[name="searchswitch"] {
+    width: 300px;
+    text-align: left;
+}
+button[name="searchswitch"].span {
+    width: 300px;
+}
+button[name="otherswitch"] {
+    width: 300px;
+    text-align: left;
+}
+button[name="otherswitch"].span {
+    width: 300px;
+}
+button[name="enumswitch"] {
+    width: 300px;
+    text-align: left;
+}
+button[name="enumswitch"].span {
+    width: 300px;
+}
+.custom-combobox{
+    min-width: 140px;
+}
+.custom-autocomplete-category{
+    font-weight:bold;
+}
+.selectedPackageItem{
+    text-decoration: underline;
+}
+#leftpaneltabs {
+    width: 340px;
+}
+.selectedField{
+    background: #bfac8b;
+}
+
+.selectedField  > td{
+    background: #bfac8b;
+}
+
+.ignoredField{
+    background: #bfbdc9;
+}
+
+.ignoredField > td{
+    background: #bfbdc9;
+}
+
+.newField{
+    background: #ace094;
+}
+
+.newField > td{
+    background: #ace094;
+}
+
+.betaWarning{
+    background: #aa7c81;
+    color: #ffffff;
+}
+.newIgnoredField{
+    background: #aa7c81;
+}
+.newIgnoredField > td{
+    background: #aa7c81;
+}
+
+.primaryKeyField td,
+.primaryKeyColor
+{
+    background: #FFF484;
+}
+
+.foreignKeyField td,
+.foreignKeyColor
+{
+    background: #BEFFBD;
+}
+
+.dateField td
+{
+    background: #FFC9DD;
+}
+
+.diagram
+{
+    border: 1px solid #a6c9e2;
+    padding: 4px;
+}
+
+.diagramholder
+{
+    float:left;
+    padding: 5px;
+}
+
+.th_imp
+{
+    border: 1px solid #FFC000;
+    background-color: #FCF9CF;
+    margin: 3px;
+    padding: 3px;
+    max-width: 90%;
+}
+
+.th_note
+{
+    border: 1px solid #417ED9;
+    background-color: #CFEEFC;
+    margin: 3px;
+    padding: 3px;
+    max-width: 90%;
+}
+
+.footer
+{
+    margin-top: 10px;
+    color: #CCCCCC;
+    clear: both;
+    text-align: center;
+}

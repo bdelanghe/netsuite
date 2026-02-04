@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__employee','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__employee','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Employee</H1>
+
+
+    Namespace: <a href="../../schema/record/employee.html?mode=package">urn:employees.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the account number for the employee. This account number may be used by your company, payroll service or other benefits provider. This field is required for the Online Bill Pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accruedTimeList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeeaccruedtimelist.html?mode=package">EmployeeAccruedTimeList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addressbookList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeeaddressbooklist.html?mode=package">EmployeeAddressbookList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">adpId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ADP Id</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Employee</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">To update the internal ID of the Name field to altName, in the UI go to: 1. Setup &gt; Company &gt; Auto-Generated Numbers. 2. Enable auto-generated numbers for Employees, set Enable Override to TRUE, and then click Save. When you edit existing Employee records, the internal ID for the Name field becomes altName.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">approvalLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Approval Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the amount of the largest expense report this supervisor can approve.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">approver</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Approver</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an employee record. Sets the person who approves the employees expense reports and purchase requests. If you have set a supervisor, you can NOT set an approver. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">baseWage</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Base Wage</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's base wage. Depending on the selected base wage type, enter the hourly, monthly, or yearly total.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">baseWageType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeebasewagetype.html?mode=package">EmployeeBaseWageType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Base Wage Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether the employee's base wage is calculated on an hourly, monthly, or yearly basis.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingClass</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPay</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Check this box in order to send this employee payments online.
+
+You cannot use this feature for paychecks.
+
+You must follow the set up procedures at &gt; &gt; Online Bill Pay before you can use this feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">birthDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Birth Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's date of birth.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bonusTarget</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bonus Target</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's target bonus amount as either a percentage of the employee's base wage or a specific amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bonusTargetComment</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Target Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Optionally, you can enter additional relevant information about the employee's bonus target here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bonusTargetPayFrequency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeebonustargetpayfrequency.html?mode=package">EmployeeBonusTargetPayFrequency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Target Frequency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select how often the employee is eligible for a bonus. You can choose from one time, annually, monthly, or quarterly.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bonusTargetType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeebonustargettype.html?mode=package">EmployeeBonusTargetType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Target Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether the target is a percentage or an amount.
+
+For example, if the bonus target is 10 percent, enter 10 in the Bonus Target field and select Percentage from the Target Type list. If the bonus target is a specific amount, enter the amount in the Bonus Target field and select Amount from the Target Type list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">comments</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Notes</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter other information you want to track for this employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">commissionPaymentPreference</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeecommissionpaymentpreference.html?mode=package">EmployeeCommissionPaymentPreference</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Pay Commissions Using</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select in the dropdown whether the payor for this employee's commissions always should be Payroll, always should be Accounts Payable, or should vary according to preferences set in the NetSuite system.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">companyContributionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeecompanycontributionlist.html?mode=package">EmployeeCompanyContributionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">compensationCurrency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeecompensationcurrency.html?mode=package">EmployeeCompensationCurrency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Compensation Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the currency for this employee's compensation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">concurrentWebServicesUser</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Concurrent Web Services User</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field appears only if the SOAP Web Services feature is enabled in NetSuite.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">corporateCardsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeecorporatecardslist.html?mode=package">EmployeeCorporateCardsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The currency for an employee automatically defaults to the base currency of the associated subsidiary or company. This currency must be used for transactions with this employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeecurrencylist.html?mode=package">EmployeeCurrencyList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Report Currencies</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dateCreated</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date and time at which the Employee Record was created.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deductionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeedeductionlist.html?mode=package">EmployeeDeductionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAcctCorpCardExp</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Account for Corporate Card Expenses</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the default credit card account to use for corporate card expenses on expense reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAddress</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The employee's address. You can enter this information on the Address subtab, and it will appear here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultExpenseReportCurrency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Currency For Expense Reports</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the default currency for this employee’s expense reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Departments. This field is required when Make Departments Mandatory is enabled at Setup &gt; Accounting &gt; Accounting Preferences. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">directDeposit</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Use Direct Deposit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use Direct Deposit to transfer funds to the employee's bank account. Direct Deposit transactions take place over the Internet and in real time.
+
+These transactions have immediate accounting impact on your books. Payments you transmit are withdrawn from your company's bank account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">directDepositList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeedirectdepositlist.html?mode=package">EmployeeDirectDepositList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Accounts</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">earningList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeeearninglist.html?mode=package">EmployeeEarningList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">eligibleForCommission</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Eligible for Commission</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the box to indicate this employee can be paid commission.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the employee's e-mail address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emergencyContactList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeeemergencycontactlist.html?mode=package">EmployeeEmergencyContactList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">employeeStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Employee Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Employee Related Lists &gt; Employee Status. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">employeeType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Employee Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Employee Related Lists. This value sets the type of employee for tax reporting purposes. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Entity ID</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">If the Auto box is not checked, manually enter an ID for this record.
+
+If the Auto box is checked, NetSuite assigns an ID for this record based on your settings at Setup &gt; Company &gt; Auto-Generated Numbers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ethnicity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ethnicity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the employee's ethnicity.
+
+You can create a new ethnicity category at Setup &gt; Accounting &gt; Employee Related Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expenseLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Expense Limit field, enter the amount this employee can expense without approval from a supervisor or approver.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a fax number for this record. You should enter the fax number exactly as it must be dialed. If a '1' is required to fax to this number, be sure to include it at the beginning of the number.
+
+The number you enter here automatically appears in the To Be Faxed field of transactions when you select this employee.
+
+To fax NetSuite forms, an administrator must first set up fax service at Setup &gt; Company &gt; Printing, Fax &amp; Email Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">firstName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">First Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Required for Online Bill pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">gender</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/gender.html?mode=package">Gender</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Gender</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the employee's gender.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">giveAccess</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Login Access</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to give your employee access to NetSuite. Then, set a role to customize the level of access using the EmployeeRolesList field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">globalSubscriptionStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/globalsubscriptionstatus.html?mode=package">GlobalSubscriptionStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Global Subscription Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Email recipients can have one of four subscription statuses:
+    * Confirmed Opt-In - When an email recipient has indicated that they want to receive your campaign messages, they are assigned this subscription status. Only a recipient can set his or her subscription status to Confirmed Opt-In.
+    * Soft Opt-In - Recipients with this status can receive opt-in messages that enable them to confirm whether or not they want to receive your email campaigns as well as email marketing campaigns.
+      You can set a recipient’s status to Soft Opt-In manually or through a mass update.
+    * Soft Opt-Out - Recipients with this status cannot receive campaign email messages but can receive opt-in messages.
+      You can change this subscription status to Soft Opt-In manually or through a mass update.
+    * Confirmed Opt-Out - Only the recipient can set their subscription status to Confirmed Opt-Out.
+      Recipients with this status cannot receive email campaigns or opt-in messages. Recipients with this status can only opt in again through the Employee Center or by clicking the link in a campaign message they have received prior to opting out.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hasOfflineAccess</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">If set to True, the user is granted offline access privileges. The Offline Client for Sales feature must be enabled and your account must be provisioned for Offline Client for Sales in order for this field to be settable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hcmPositionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeehcmpositionlist.html?mode=package">EmployeeHcmPositionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hireDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hire Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date this employee was hired.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">homePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Home Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter this employee's home phone number here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hrEducationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeehreducationlist.html?mode=package">EmployeeHrEducationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">image</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Image</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an image file that has already been uploaded to the account. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inheritIPRules</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inherit Allowed IP Addresses from Company</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Check this box to allow this employee NetSuite login access at the IP addresses listed at Setup &gt; Company Information.
+
+If you check this box, this employee has access to NetSuite at every company computer with access unless you specify IP address(es) in the IP Address Restriction field.
+
+If you do not check this box, you must enter an IP Address where this employee can log in in the field below, or this employee will not be able to log in to NetSuite.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">initials</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initials</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite automatically completes this field as you enter first, middle and last names.
+
+If you want to make changes to an employee's initials, enter up to three letters in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">IPAddressRule</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Extra Allowed IP Addresses</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the IP address(es) where you want this employee to have access in the following formats:
+
+   1. A dotted decimal IP address such as 123.456.78.90
+   2. A range of IP addresses entered in dotted decimal with a dash and no spaces between such as 123.45.567.8-123.45.568.9
+   3. A list of IP address separated by spaces or commas such as 123.456.78.90, 123.546.768.97, . . .
+   4. An IP address and mask, such as 209.209.48.32/255.255.0.0.
+   5. The text &quot;ALL&quot; -- allows all IP addresses
+
+You can enter up to 4000 characters.
+
+If you do not enter an IP Address here, or you leave the field empty, the rules are inherited from the Company Information page.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Is Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is false by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isJobManager</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Manager</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to mark the employee as a Project Manager. The employee will be added to Project Manager dropdown list in Primary Information of the project record. (This field is enabled when employee is marked as Project Resource.)</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isJobResource</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Resource</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set this field to TRUE so that this employee can be added as a resource on projects and tasks. Note that if this field is set to TRUE, the Work Calendar (workCalendar) field becomes a mandatory field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isSalesRep</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the employee as a Sales Rep.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isSupportRep</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Support Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the employee as a Support Rep.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">job</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a job to assign to this employee.
+
+You can create a new job at Setup &gt; HR Information System &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a description of the duties related to the job this person currently performs.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">laborCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Labor Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's hourly overhead labor rate. This rate is used to calculate the estimated cost of jobs this employee works on.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Returns the date on which the employee record was last modified.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's last name here.
+
+What you enter here automatically appears last in the Employee field. The first letter of what you enter here appears in the Initials field.
+
+This field is required for the Online Bill Pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastPaidDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Paid Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the last day this employee was paid. NetSuite automatically updates this whenever a new paycheck is generated.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastReviewDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Review Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date of this person's last salary evaluation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Company &gt; Classifications &gt; Locations. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">maritalStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Marital Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the employee's marital status.
+
+You can create a new marital status at Setup &gt; Accounting &gt; Employee Related Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">middleName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Middle Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a middle name or initial here.
+
+What you enter here automatically appears second in the Employee field. The first letter of what you enter here appears in the Initials field.
+
+Enter up to 25 characters in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mobilePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mobile Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Phone numbers can be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nextReviewDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Next Review Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date of this person's next salary evaluation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">officePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Office Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Phone numbers can be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">password</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Password</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this user has access to multiple accounts, the request will fail with an error message and no fields will be updated. The user must change their password via the link in the settings portal of the home page.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">password2</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Confirm Password</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field must match the value entered in password.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">payFrequency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeepayfrequency.html?mode=package">EmployeePayFrequency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Pay Frequency</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References a value in a system list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Phone numbers can be entered in the following formats: 999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phoneticName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Furigana</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the furigana character you want to use to sort this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderApprovalLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Approval Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Purchase Approval Limit field, enter the maximum amount an employee is allowed to approve on a purchase request when specified as an approver for an employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderApprover</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Approver</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Purchase Approver field, select the person that approves the employee’s purchase requests. If no approver is selected, the supervisor approves purchase requests.
+ 
+If a purchase approver is selected, the supervisor is no longer part of the approval hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Purchase Limit field, enter the amount this employee can purchase without approval from a supervisor or approver.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ratesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeerateslist.html?mode=package">EmployeeRatesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">releaseDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Termination/Release Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the last date of employment</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">requirePwdChange</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Require Password Change On Next Login</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If set to TRUE, the employee is required to change the default password assign on the next login attempt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rolesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeeroleslist.html?mode=package">EmployeeRolesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesRole</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Role</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Note that the Team Selling feature must be turned ON for this field to be available.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salutation</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mr./Ms...</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the employee's salutation, such as Mr. or Ms., here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendEmail</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Send New Access Notification Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If set to True, an email notification is automatically sent to this employee informing them of access privileges to NetSuite. The standard NetSuite email message also contains a link to let the user create a password. 
+
+If set to false, the Manually Assign or Change Password field must be set to True. The administrator must create the password, and tell the user  the password, and when and how to log in.
+
+For security reasons, do not send the password by email.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">socialSecurityNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Social Security Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the employee's social security number. Must be of the following format: 123-45-6789.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDateTimeOffCalc</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date for Time-Off Calculations</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the start date for the purpose of time-off calculations. The date entered here is used to calculate the number of days this employee is entitled to time-off, based on the minimum and maximum tenures set in the time-off plan. If there is no value specified in this field, this employee cannot be assigned a time-off plan.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subscriptionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/employeesubscriptionslist.html?mode=package">EmployeeSubscriptionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the subsidiary to associate with this employee. You cannot enter transactions for this employee unless a subsidiary is assigned.
+
+If you select this employee on time transactions, the transaction is associated with this subsidiary. The employee is able to access only information associated with this subsidiary.
+
+Note: Once a transaction has posted for the employee, you are not able to change the subsidiary selected on the employee record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supervisor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Supervisor</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an employee record. This employee will approve expense reports and purchase requests. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">targetUtilization</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Target Utilization</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Adjust the target utilization for this resource to reduce the available hours used for utilization calculations, and improve utilization tracking accuracy.
+
+Setting the target utilization will affect reports, which will be calculated using the updated available hours. It will not impact the resource's actual availability.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">template</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use templates to enter data for employees quickly.
+
+To set up employee record templates, go to Lists &gt; Employees &gt; Employees, and then click New Template.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terminationCategory</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeeterminationcategory.html?mode=package">EmployeeTerminationCategory</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Termination Reason Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether the termination is voluntary or involuntary. A voluntary termination indicates the employee ended their employment and an involuntary termination indicates the company ended the employment.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terminationDetails</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Termination Details</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter details of the termination.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terminationReason</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Termination Reason</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the reason for the termination. When the Termination Reason Tracking feature is enabled, NetSuite provides several default termination reasons, but you can change them or create your own.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terminationRegretted</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeeterminationregretted.html?mode=package">EmployeeTerminationRegretted</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Termination Regretted</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether or not the termination is regretted.
+
+A regretted termination indicates that the company regards the termination as a loss, meaning the employee was a high performer and an asset.
+
+A non-regretted termination indicates that the company does not see the termination as a loss. |
+
+If you do not want to track this information, select Unspecified</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeApprover</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time Approver</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Time Approver field, select the person who approves the employee’s time transactions. If no time approver is selected, the employee’s supervisor approves time entries.
+ 
+If both a supervisor and a time approver are selected, then only the time approver can approve time entries using their Employee Center role.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeOffPlan</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time-Off Plan</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the time-off plan to assign to this employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter this employee's official job title here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">usePerquest</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include in Payroll</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Include this employee in Payroll. To include an employee in Payroll, you also need to enter an address, a hire date, and a Social Security Number. For more information, see the help topic Including an Employee in Payroll.
+
+This employee will also be included in the Employee list on payroll forms and reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">useTimeData</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeeusetimedata.html?mode=package">EmployeeUseTimeData</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Compensation Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If enabled, the employee is paid for hours entered in NetSuite time transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workAssignment</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/employeeworkassignment.html?mode=package">EmployeeWorkAssignment</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Work Assignment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether to assign a job or a position to this employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workCalendar</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Work Calendar</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is mandatory if the Job Resource (isJobResource) field is set to TRUE.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workplace</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Workplace</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the workplace where this employee works.
+
+The address of this workplace will be used to define the taxes you are required to withhold and pay for this employee.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/employeesearch.html?mode=package">EmployeeSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/employeesearchadvanced.html?mode=package">EmployeeSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/employeesearchbasic.html?mode=package">EmployeeSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/employeesearchrow.html?mode=package">EmployeeSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/employeesearchrowbasic.html?mode=package">EmployeeSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

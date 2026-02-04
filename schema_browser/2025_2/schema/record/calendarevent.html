@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__calendarevent','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__calendarevent','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CalendarEvent</H1>
+
+
+    Namespace: <a href="../../schema/record/calendarevent.html?mode=package">urn:scheduling.activities.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessLevel</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/calendareventaccesslevel.html?mode=package">CalendarEventAccessLevel</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Event Access</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field has a default value of public. The values used to populate this field are _public, _private or _showAsBusy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allDayEvent</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">All Day</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field requires a true or false value and is settable only.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">attendeeList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/calendareventattendeelist.html?mode=package">CalendarEventAttendeeList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">company</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Company</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contact</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contact</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endByDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field defines the end date for recurring events. Do not set this field for one-time (non-recurring) events.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exclusionDateList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/exclusiondatelist.html?mode=package">ExclusionDateList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">frequency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/recurrencefrequency.html?mode=package">RecurrenceFrequency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the location for the event. If a value is supplied</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter any message or notes for this event.
+
+This message appears under the event title in the e-mail sent to the people invited to this event.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">noEndDate</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field allows a true or false value only.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">organizer</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Organizer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field has a default value of the current user. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Owner</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">period</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrence</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is automatically filled in with the information entered when the event was created.
+
+The event organizer can change when this event recurs by clicking Edit. Select a new option in the Repeat Every field on the Recurrence tab, and click Submit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceDow</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/recurrencedow.html?mode=package">RecurrenceDow</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceDowim</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/recurrencedowim.html?mode=package">RecurrenceDowim</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceDowMaskList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recurrencedowmasklist.html?mode=package">RecurrenceDowMaskList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">reminderMinutes</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/calendareventreminderminutes.html?mode=package">CalendarEventReminderMinutes</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reminder Minutes</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field has a default value of 15m. The values used to populate this field are _none, _0minutes, _5minutes, _10minutes, _15minutes, _30minutes, _1hour, _2hours, _3hours, _4hours, _5hours, _8hours, _1day, _2days, _3days, or _1week.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">reminderType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/calendareventremindertype.html?mode=package">CalendarEventReminderType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reminder type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select Email to receive an e-mail reminder at the address you log in with.
+
+Select Popup Window to receive a popup reminder.
+
+Set the amount of time before the event your reminder should trigger in the Reminder field. If you select None, you will not receive a reminder.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">resourceList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/calendareventresourcelist.html?mode=package">CalendarEventResourceList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendEmail</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">This field has a default value of false. If set to True, each attendee listed in the attendeeList type is notified of the event via email.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">seriesStartDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is not available for add operations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The startDate represents the day component and hour/min component of the event's start time. Important: For both non-recurring and recurring events, you cannot set multi-day events using the startDate and endDate fields. The interval indicated by startDate/endDate must not cross midnight in the user's indicated time zone. For example, users cannot schedule an event that starts (in their own time zone) on 8/24/07 and ends on 8/25/07. The startDate and endDate must be the same date. Two separate events must be scheduled for events that extend beyond one calendar day.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/calendareventstatus.html?mode=package">CalendarEventStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field has a default value of confirmed. The values used to populate this field are _cancelled, _completed, _confirmed or _tentative.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supportCase</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Support Case</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timedEvent</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Timed Event</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this event requires reserved time on your calendar, such as an hour meeting or another time period you want others to see as not available.
+
+Clear this box for items you want to include on your calendar but do not have a set time, such as birthdays and anniversaries.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeItemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/calendareventtimeitemlist.html?mode=package">CalendarEventTimeItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Title</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This sets the subject line of the e-mail sent to those invited to the event, the title displayed if this event is marked public and the title displayed on the calendar of those invited to this event.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">transaction</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transaction</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a reference to an opportunity record that already exists in your NetSuite account. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/calendareventsearch.html?mode=package">CalendarEventSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/calendareventsearchadvanced.html?mode=package">CalendarEventSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/calendareventsearchbasic.html?mode=package">CalendarEventSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/calendareventsearchrow.html?mode=package">CalendarEventSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/calendareventsearchrowbasic.html?mode=package">CalendarEventSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

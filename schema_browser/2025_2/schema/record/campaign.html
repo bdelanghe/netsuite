@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__campaign','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__campaign','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Campaign</H1>
+
+
+    Namespace: <a href="../../schema/record/campaign.html?mode=package">urn:marketing.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">audience</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Audience</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the audience for this campaign.
+
+Tracking the target audience is useful for media marketing without a clear list of recipients.
+
+You can create new campaign audience records at Setup &gt; Marketing &gt; Campaign Audiences &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">baseCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the cost of this campaign apart from the cost of any specific campaign events.
+
+The base cost is added to the cost of individual campaign events to determine the total cost of the campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">campaignDirectMailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/campaigndirectmaillist.html?mode=package">CampaignDirectMailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">campaignEmailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/campaignemaillist.html?mode=package">CampaignEmailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">campaignEventList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/campaigneventlist.html?mode=package">CampaignEventList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">campaignId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ID</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The campaign ID is determined in one of the following ways:
+
+    * If you use auto-generated numbers for campaigns, this ID is generated when you save the campaign.
+    * If you do not use auto-generated numbers for campaigns, enter a campaign ID.
+
+Campaign IDs make it easier to identify campaigns on reports and lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">category</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the category this campaign belongs in.
+
+Campaign categories are used to group campaigns on reports and lists.
+
+You can create new campaign categories at Setup &gt; Marketing &gt; Campaign Categories &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">convCostPerCustomer</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost per Purchaser</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The cost per customer conversion for this campaign is calculated here.
+
+This is calculated by dividing the cost of the campaign by the number of transactions entered with this campaign's promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">conversions</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Number of Purchasers</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the number of leads or prospects that have become customers as a result of this campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">cost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This cost is calculated by adding the base cost of the campaign to the cost of each individual campaign event. You cannot edit the amount in this field.
+
+This amount is deducted from the revenue generated by this campaign to determine the return on investment.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costPerCustomer</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost Per Lead</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The cost per new customer for this campaign is calculated here.
+
+Cost per customer is calculated by dividing the total cost of the campaign by the number of new customers your business gained as a result of this campaign.
+
+The number of new customers is calculated by counting the transactions entered with this campaign's promotion code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the campaign form you want to use.
+
+To create a custom campaign form, go to Customization &gt; Forms &gt; Entry Forms or select –New–.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter or select the date this campaign ends.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">eventResponseList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/campaigneventresponselist.html?mode=package">CampaignEventResponseList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expectedRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Projected Income</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the amount of revenue that is predicted that this marketing campaign will generate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">family</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Family</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the family of keywords this campaign keyword is a part of.
+
+Keyword families are larger groupings of paid keywords. You can create a keyword family at Setup &gt; Marketing &gt; Campaign Families &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is false by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">keyword</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Keyword</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the paid keyword you are tracking with this campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">leadsGenerated</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Leads Generated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the number of new leads generated by this campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">local</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Execute On Local Server</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a description for this campaign.
+
+This description only appears on the campaign record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">offer</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Offer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an offer you want to associate with this campaign.
+
+You can create new campaign offers at Setup &gt; Marketing &gt; Offers &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Campaign Manager</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the campaign manager for his campaign.
+
+The campaign manager receives a notification email message when a campaign event is delivered successfully.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">profit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Profit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the profit earned by this campaign. Profit is calculated by deducting the cost of the campaign from the total revenue.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">promotionCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Promotion</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a promotion code that you want to associate with this campaign. You must instruct the recipients of your marketing message to enter this code on transactions in your Web store.
+
+Promotion codes allow you to offer discounts through your campaigns.
+
+You can create new promotion codes at Commerce &gt; Marketing &gt; Promotion Codes &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">roi</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Return on Investment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The return on investment of this campaign is calculated here.
+
+Return on investment is calculated by deducting the cost of the campaign from the total revenue generated and dividing the difference by the campaign's cost.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchEngine</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Search Engine</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the search engine you purchased this keyword from.
+
+You can create new search engine records at Setup &gt; Marketing &gt; Campaign Search Engines &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter or select the date this campaign begins.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Title</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a title for this campaign.
+
+You can enter up to 99 characters in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">totalRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revenue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the total sales of transactions associated with this campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">uniqueVisitors</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Unique Visitors</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the number of unique visitors that have visited your website as a result of this campaign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">url</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">URL</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the URL for the campaign landing page or online customer form associated with this campaign.
+
+If you enter a campaign ID or if you autonumber your campaigns, NetSuite automatically appends the URL to include the leadsource parameter. This is the destination URL you provide to search engine services for paid keywords.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vertical</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vertical</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the market vertical you are targeting with this campaign.
+
+You can create new verticals at Setup &gt; Marketing &gt; Campaign Verticals &gt; New.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/campaignsearch.html?mode=package">CampaignSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/campaignsearchadvanced.html?mode=package">CampaignSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/campaignsearchbasic.html?mode=package">CampaignSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/campaignsearchrow.html?mode=package">CampaignSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/campaignsearchrowbasic.html?mode=package">CampaignSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

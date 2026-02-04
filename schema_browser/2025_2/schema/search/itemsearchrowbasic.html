@@ -1,0 +1,2620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__itemsearchrowbasic','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__itemsearchrowbasic','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>ItemSearchRowBasic</H1>
+    Namespace: urn:common.platform.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">accBookRevRecForecastRule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book Rev Rec Forecast Rule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingBook</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingBookAmortization</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book Amortization Template</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingBookCreatePlansOn</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book Create Revenue Plans On</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingBookRevRecRule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book Revenue Recognition Rule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingBookRevRecSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Accounting Book Rev. Rec. Template</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">allowedShippingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Allowed Shipping Methods</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">alternateDemandSourceItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Alternate Source Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">assetAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Asset Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">atpLeadTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">ATP Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">atpMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default ATP Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">autoLeadTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Auto Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">autoPreferredStockLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Auto Stock Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">autoReorderPoint</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Auto Reorder Point</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">availableToPartners</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Available to Partners</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">averageCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Average Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">backwardConsumptionDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Backward Consumption Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">basePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Base Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billExchRateVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bill Exchange Rate Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billPriceVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bill Price Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billQtyVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bill Quantity Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bin Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binOnHandAvail</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bin On Hand Available</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binOnHandCount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Bin On Hand Count</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bomQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">BOM Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buildEntireAssembly</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Mark Sub-assemblies Phantom</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buildTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Work Order Variable Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buildTimeLotSize</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Work Order Lead Time Lot Size</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buyItNowPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">category</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">categoryPreferred</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Category (preferred)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">class</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Class</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">componentYield</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Component Yield</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consumptionUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Consumption Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contingentRevenueHandling</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Eligible for Contingent Revenue Handling</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">conversionRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Conversion Rate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">copyDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Copy SO Descr.</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">correlatedItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Correlated Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">correlatedItemCorrelation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Correlated Item Correlation</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">correlatedItemCount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Correlated Item Count</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">correlatedItemLift</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Correlated Item Lift</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">correlatedItemPurchaseRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Correlated Item Purchase Rate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Purchase Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costAccountingStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Cost Accounting Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Cost Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costEstimate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Item Defined Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costEstimateType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Cost Estimate Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">costingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Costing Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">countryOfManufacture</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">created</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date Created</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">createJob</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Create Job</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">createRevenuePlansOn</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Create Revenue Plans On</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customFieldList</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumncustomfieldlist.html?mode=package">SearchColumnCustomFieldList</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">custReturnVarianceAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Customer Return Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dateViewed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date Viewed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">daysBeforeExpiration</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Days Before Expiration</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultReturnCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Return Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultShippingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Shipping Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deferredExpenseAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Deferred Expense Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deferredRevenueAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Deferred Revenue Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deferRevRec</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Hold Revenue Recognition</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">demandModifier</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Expected Demand Change</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">demandSource</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Demand Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">demandTimeFence</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Demand Time Fence</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">department</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Department</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">departmentnohierarchy</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Department (no hierarchy)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">directRevenuePosting</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Direct Revenue Posting</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">displayIneBayStore</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">displayName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Display Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">distributionCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Distribution Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">distributionNetwork</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Distribution Network</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dontShowPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Don't Show Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">eBayItemDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">eBayItemSubtitle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">eBayItemTitle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ebayRelistingOption</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">effectiveBomControl</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Effective BOM Control</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">effectiveDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Effective Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">effectiveRevision</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Effective Revision</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">enableCatchWeight</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Enable Catch Weight</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">endAuctionsWhenOutOfStock</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">excludeFromSitemap</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Exclude from Sitemap</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Expense/COGS Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">External ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">featuredDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Featured Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">feedDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Feed Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">feedName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Feed Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fixedBuildTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Work Order Fixed Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fixedLotSize</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Fixed Lot Size</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">forwardConsumptionDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Forward Consumption Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fraudRisk</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Fraud Risk</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">froogleProductFeed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Google Base Product Feed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">futureHorizon</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Supply Chain Future Horizon</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Purchase Price (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gainLossAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gain/Loss Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">generateAccruals</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Generate Accruals</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertAuthCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate Auth Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertEmail</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate To (Email)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertExpirationDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate Exp Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertFrom</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate From (Name)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertMessage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate Message</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertOriginalAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate Orig Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giftCertRecipient</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Gift Certificate To (Name)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">hierarchyNode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Hierarchy Node</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">hierarchyVersion</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Hierarchy Version</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">hits</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"># Times Viewed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">imageUrl</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Image URL</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">includeChildren</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Include Children</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">incomeAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Income Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">intercoDefRevAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Intercompany Deferred Revenue Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">intercoExpenseAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Intercompany Expense/COGS Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">intercoIncomeAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Intercompany Income Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">inventoryLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Inventory Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">invtClassification</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Inventory Classification</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">invtCountInterval</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Count Interval</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isAvailable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Is Available?</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isDropShipItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Drop Ship Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isFulfillable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Can be Fulfilled</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isGcoCompliant</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Google Checkout Compliant</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInactive</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Inactive</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isLotItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Is Lot Numbered Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isOnline</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Display in Web Site</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isSerialItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Is Serialized Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isSpecialOrderItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Special Order Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isSpecialWorkOrderItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Special Work Order Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isStorePickupAllowed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Pickup Allowed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">issueProduct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Product</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isTaxable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Taxable</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isVsoeBundle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Is VSOE Bundle?</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isWip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">WIP</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemRevenueCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Item Revenue Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemUrl</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Item URL</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastInvtCountDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Count Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastPurchasePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Purchase Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastQuantityAvailableChange</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Quantity Available Change</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">leadTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Purchase Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">liabilityAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Liability Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">listingDuration</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">location</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationAllowStorePickup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Allow Store Pickup</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationAtpLeadTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location ATP Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationAverageCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Average Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationBinQuantityAvailable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Bin Available</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationBuildTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Work Order Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Default Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationCostAccountingStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Cost Accounting Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationDefaultReturnCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Default Return Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationDemandSource</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Demand Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationDemandTimeFence</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Demand Time Fence</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationFixedLotSize</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Fixed Lot Size</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationInventoryCostTemplate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Inventory Cost Template</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationInvtClassification</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Inventory Classification</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationInvtCountInterval</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Inventory Count Interval</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationLastInvtCountDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Last Inventory Count Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationLeadTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Lead Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationNextInvtCountDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Next Inventory Count Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationPeriodicLotSizeDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Periods of Supply Increment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationPeriodicLotSizeType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Periods of Supply Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationPreferredStockLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Preferred Stock Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQtyAvailForStorePickup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Available for Store Pickup</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityAvailable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Available</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityBackOrdered</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Back Ordered</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityCommitted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Committed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityInTransit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location In Transit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityOnHand</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location On Hand</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationQuantityOnOrder</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location On Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationReOrderPoint</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Reorder Point</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationRescheduleInDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Reschedule In Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationRescheduleOutDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Reschedule Out Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationSafetyStockLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Safety Stock Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationStorePickupBufferStock</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Store Pickup Buffer Stock</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationSupplyLotSizingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Supply Lot Sizing Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationSupplyTimeFence</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Planning Time Fence</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationSupplyType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Supply Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationTotalValue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Total Value</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locBackwardConsumptionDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Backward Consumption Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locForwardConsumptionDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Forward Consumption Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lowerWarningLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Lower Warning Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturer</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerAddr1</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerCity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer State</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerTariff</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer Tariff</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerTaxId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer Tax Id</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturerZip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturer Zip</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturingChargeItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Manufacturing Charge Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">matchBillToReceipt</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Match Bill To Receipt</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">maximumQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Maximum Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">memberItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Member Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">memberQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Member Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">metaTagHtml</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Meta Tag Html</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">minimumQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Minimum Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">modified</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Modified</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">mossApplies</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">OSS Service Applies</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">mpn</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">MPN</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">multManufactureAddr</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Multiple Manufacture Addresses</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextagCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">NexTag Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextagProductFeed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">NexTag Product Feed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextInvtCountDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Next Count Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">noPriceMessage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">No Price Message</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">numActiveListings</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">numberAllowedDownloads</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Number of Allowed Downloads</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">numCurrentlyListed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">obsoleteDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Obsolete Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">obsoleteRevision</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Obsolete Revision</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">offerSupport</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Offer Support</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">onlineCustomerPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Online Customer Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">onlinePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Online Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">onSpecial</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">On Special</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">otherPrices</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Other Prices</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">otherVendor</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">outOfStockBehavior</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Out Of Stock Behavior</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">outOfStockMessage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Out Of Stock Message</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">overallQuantityPricingType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Overall Qty. Pricing Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">overheadType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Overhead Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pageTitle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Page Title</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">parent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Parent</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">periodicLotSizeDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Periods of Supply Increment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">periodicLotSizeType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Periods of Supply Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">planningItemCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Planning Item Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">preferenceCriterion</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Preference Criterion</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">preferredBin</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Preferred Bin</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">preferredLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Preferred Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">preferredStockLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Preferred Stock Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">preferredStockLevelDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Days Supply</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pricesIncludeTax</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Prices Include Tax</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pricingGroup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Pricing Group</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">primaryCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">prodPriceVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Production Price Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">prodQtyVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Production Quantity Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Purchase Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderQuantityDiff</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Purchase Order Quantity Difference</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchasePriceVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Purchase Price Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Purchase Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityAvailable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Available</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityBackOrdered</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Back Ordered</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityCommitted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Committed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityOnHand</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">On Hand</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityOnOrder</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">On Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">quantityPricingSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Quantity Pricing Schedule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">receiptAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">receiptQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">receiptQuantityDiff</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Bill - Item Receipt Quantity Difference</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reorderMultiple</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Reorder Multiple</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reOrderPoint</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Reorder Point</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">rescheduleInDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Reschedule In Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">rescheduleOutDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Reschedule Out Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reservePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revenueAllocationGroup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Revenue Allocation Group</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revenueRecognitionRule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Revenue Recognition Rule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecForecastRule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Rev Rec Forecast Rule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revReclassFXAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Foreign Currency Adjustment Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Revenue Recognition Template</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">roundUpAsComponent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Round Up Quantity as Component</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">safetyStockLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Safety Stock Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">safetyStockLevelDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Safety Stock Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesTaxCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Tax Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">saleUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Sale Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sameAsPrimaryBookAmortization</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Same as Primary Book Amortization</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sameAsPrimaryBookRevRec</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Same as Primary Book Rev. Rec.</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">scheduleBCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Schedule B Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">scheduleBNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Schedule B Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">scheduleBQuantity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Schedule B Quantity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">scrapAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Scrap Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">searchKeywords</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Search Keywords</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">seasonalDemand</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Seasonal Demand</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">secondaryConsumptionUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Secondary Consumption Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">secondaryPurchaseUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Secondary Purchase Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">secondarySaleUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Secondary Sale Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">secondaryStockUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Secondary Stock Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">secondaryUnitsType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Secondary Units Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sellOnEBay</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Serial/Lot Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">serialNumberLocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Serial/Lot Number Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipIndividually</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Ships Individually</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipPackage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Package</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shippingCarrier</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Carrier</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shippingRate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Rate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shoppingDotComCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shopping.com Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shoppingProductFeed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shopping.com Product Feed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shopzillaCategoryId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shopzilla Category Id</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shopzillaProductFeed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shopzilla Product Feed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sitemapPriority</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sitemap Priority</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">softDescriptor</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Soft Descriptor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">startingPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">stockDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Stock Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">stockUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Stock Unit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storeDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storeDetailedDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Detailed Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storeDisplayImage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Display Image</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storeDisplayName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Display Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storeDisplayThumbnail</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Display Thumbnail</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">SubType</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supplyLotSizingMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Supply Lot Sizing Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supplyReplenishmentMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Replenishment Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supplyTimeFence</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Planning Time Fence</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supplyType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Supply Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Tax Schedule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">thumbNailUrl</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Thumbnail URL</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">totalValue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Total Value</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">trackLandedCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Track Landed Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">transferPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Transfer Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">type</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unbuildVarianceAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Unbuild Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unitsType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Units Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">upcCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">UPC Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">upperWarningLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Upper Warning Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">urlComponent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">URL Component</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">useBins</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Use Bins</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">useComponentYield</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Use Component Yield</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">useMarginalRates</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Use Marginal Rates</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendor</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Preferred Vendor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorCostEntered</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Price (Entered)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorPriceCurrency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Price Currency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorSchedule</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Schedule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendReturnVarianceAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Vendor Return Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeDeferral</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Deferral</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeDelivered</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default as Delivered</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoePermitDiscount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Permit Discount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoePrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">VSOE Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vsoeSopGroup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Allocation Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">webSite</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Web Site</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">weight</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Weight</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">weightUnit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Weight Units</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">wipAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">WIP Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">wipVarianceAcct</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">WIP Cost Variance Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">yahooProductFeed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Yahoo Shopping Product Feed</td>
+            </tr>
+    </table>
+
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

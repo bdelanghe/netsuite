@@ -1,0 +1,1670 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__invoice','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__invoice','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Invoice</H1>
+
+
+    Namespace: <a href="../../schema/record/invoice.html?mode=package">urn:sales.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">account</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the Accounts Receivable account that will be affected by this transaction.
+
+Click New to set up a new account.
+
+For details on accounts, go to Setup &gt; Accounting &gt; Chart of Accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altHandlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The handling cost automatically calculates depending on the shipping method you select in the Ship Via field.
+
+To change the cost of handling, go to Lists &gt; Shipping Items and select the shipping method with the handling cost you want to change.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altShippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The shipping cost automatically calculates depending on the shipping method you select in the Ship Via field above.
+
+To change the cost of a shipping method, go to Lists &gt; Shipping Items and select the shipping method you want to change.
+
+If you use UPS Real-Time rates, shipments over 150lbs are broken up into shipments less than or equal to 150lbs for charging.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amountPaid</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount Paid</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Displays the total amount paid for this invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amountRemaining</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount Remaining</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Displays the total amount due for this invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">approvalStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Approval Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">balance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Balance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Displays the total of all outstanding invoices for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the appropriate billing address for this transaction. 
+
+    * Select New to enter a new billing address to be used for this transaction and saved with the associated entity record.
+    * Select Custom to enter a new billing address to be used for this transaction only (and not saved with the associated entity record).
+    * Click the Edit icon to modify an existing billing address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the billing account from the list.
+
+For more information about billing accounts, see Creating Billing Accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">canHaveStackable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Can Stack Promotions</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want, select the class that applies to this invoice.
+
+Click New to set up a new class.
+
+Go to Setup &gt; Company &gt; Classes for details about existing classes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contribPct</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contribution Percentage</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdFrom</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Created From</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the sales order this invoice is created from.
+
+Click the link to open the sales order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this transaction for is shown here.
+
+If you use the Multi-Currency Customers feature, select the transaction currency you want to create this transaction in. This customer's primary currency is selected by default.
+
+If you have already selected items on this transaction, selecting a new currency refreshes them to show the price in the new currency (except for items you entered custom prices for) and recalculates tax and gross profit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you customized an invoice form, select it here, or click New to customize a new invoice form.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferredRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferred Revenue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Deferred Revenue: amount of revenue deferred on this transaction</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a department to associate with this invoice.
+
+Click New to enter a new department.
+
+Go to Setup &gt; Company &gt; Departments for details about existing departments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The amount listed here is the discount your customer will receive if he or she pays this invoice according to the terms you have set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date listed here is the date your customer must pay this invoice by in order to receive a discount. The discount your customer receives in based on the terms you have set for the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can select a discount for this invoice. NetSuite fills the Rate and Discount Total fields based on the discount you choose.
+
+Leave this field blank if you do not want to apply a discount to this transaction.
+
+To create new discount items, go to Lists &gt; Accounting Items and click New. On the New Item page, click Discount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite enters the rate for the discount item you selected. You can change the discount rate for this cash refund.
+
+Enter the discount as a dollar amount like 10.00, or as a percentage like 10%.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite enters the amount discounted on this invoice.
+
+If this discount item is taxable, the discount is applied before taxes. If it is not taxable, the discount is applied after taxes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dueDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Due Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Type or pick the due date for this invoice. If you do not assign a due date, the due date defaults to the date in the Date field. In addition, if you do not assign a due date, this invoice will appear on aging reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Type or pick the end date for this invoice.
+
+If an invoice is created from a sales order that includes a Start Date and End Date, those dates autofill on the invoice when the order is billed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the customer for this invoice.
+
+Click New to set up a new customer.
+
+Go to Lists &gt; Relationships &gt; Customers for details about existing customers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit: Read-only field that equals the revenue amount minus the Est. Cost. At the transaction level, it equals the gross profit of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfitPercent</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit Percent</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit Margin, as a percentage: Read-only field that equals the Est. Gross Profit divided by revenue, expressed as a percentage. At the transaction level, it equals the gross profit percent of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The currency's exchange rate is shown in this field.
+
+You can edit the exchange rate for this transaction only, or you can update the currency record with the exchange rate you enter here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">excludeCommission</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exclude Commissions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this option to exclude this transaction and its subordinate transactions from inclusion in all commission calculations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate you enter automatically appears here.
+
+If you entered a percentage in the Rate field, NetSuite multiplies the discount or markup percentage by the total amount of line items you select.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount/Markup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want to add a discount or markup to the cost of the expenses you are billing, select it from the list.
+
+To see a list of your discounts or markups, go to Lists &gt; Items and select Discount or Markup from the dropdown list at the bottom of the page.
+
+To create a new discount or markup, go to Lists &gt; New Item and click Discount or Markup.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscPrint</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Print</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you added a discount or markup and want to print it on the invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate for the discount or markup item you selected automatically appears here.
+
+If you want, enter a new rate.
+
+Rates can be entered as dollar amounts and percentages.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscTax1Amt</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Amt</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostDiscTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the expenses you are billing are taxable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoiceexpcostlist.html?mode=package">InvoiceExpCostList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostTaxRate1</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the GST rate based on the tax code you assigned to this expense.
+
+To set up tax codes and corresponding tax percentages, go to Lists &gt; Tax Codes.
+
+To change the assignment of a tax code to an item, go to Lists &gt; Items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expCostTaxRate2</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fob</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">FOB</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the location where the customers technically acquire ownership. For example, if your customers own goods as soon as they ship and pay the shipping costs from your location to theirs, you might enter Our warehouse.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">giftCertApplied</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Gift Certificate</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">giftCertRedemptionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/giftcertredemptionlist.html?mode=package">GiftCertRedemptionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The handling cost automatically calculates depending on the shipping method you select in the Ship Via field.
+
+To change the cost of handling, go to Lists &gt; Accounting &gt; Shipping Items and select the shipping method with the handling cost you want to change.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTax1Rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The tax rate for the tax code selected shows here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTax2Rate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the tax code that determines the tax for handling charges.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">installmentList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/installmentlist.html?mode=package">InstallmentList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Place a check mark in this box if the order you are invoicing is taxable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate you enter automatically appears here.
+
+If you entered a percentage in the Rate field, NetSuite multiplies the discount or markup percentage by the total amount of line items you select.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount/Markup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want to add a discount or markup to the cost of the items you are billing, select it from the list.
+
+To see a list of your discounts or markups, go to Lists &gt; Items and select Discount or Markup from the dropdown list at the bottom of the page.
+
+To create a new discount or markup, go to Lists &gt; New Item and click Discount or Markup.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscPrint</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Print</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you added a discount or markup and want to print it on the invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate for the discount or markup item you selected automatically appears here.
+
+If you want, enter a new rate.
+
+Rates can be entered as dollar amounts and percentages.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscTax1Amt</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Amt</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostDiscTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want the discount or markup you entered to be applied before taxes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoiceitemcostlist.html?mode=package">InvoiceItemCostList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostTaxRate1</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the GST rate based on the tax code you assigned to this item.
+
+To set up tax codes and corresponding tax percentages, go to Lists &gt; Tax Codes.
+
+To change the assignment of a tax code to an item, go to Lists &gt; Items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCostTaxRate2</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoiceitemlist.html?mode=package">InvoiceItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">job</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the project associated with this invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">leadSource</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lead Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the lead source associated with this transaction.
+
+If you use the Marketing Automation feature, select the campaign you want to associate with this transaction's revenue.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">linkedTrackingNumbers</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Linked Tracking Numbers</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the location you want to associate with this transaction.
+
+Select New to enter a new location record.
+
+Go to Lists &gt; Locations for details about existing location records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an optional memo to describe this invoice so you can easily distinguish it from others for this customer.
+
+For example: Suite A installation or Suite B installation.
+
+It will appear on reports such as the 2-line Accounts Receivable register, which your customers can see if you give them permission to log in and view their transaction history.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The text of the customer message you select in the Select Message field appears here.
+
+You can edit the message or enter a new customer message for only this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">messageSel</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Select Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a customer message to appear on this form. For example, you may add &quot;Thank you for your business!&quot; Choose from the list of existing customer messages stored in Accounting Lists.
+
+The text of the selected message appears in the Customer Message field. In this field, you can optionally edit the message or enter a new customer message for only this transaction.
+
+To add messages to appear in the Select Message field, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New, and click Customer Message.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nextApprover</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Next Approver</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Nexus</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the nexus of the transaction. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different nexus in the dropdown list, the corresponding tax registration number is automatically selected in the Subsidiary Tax Reg. Number field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">onCreditHold</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">opportunity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opportunity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you are entering this transaction for an opportunity, select the opportunity.
+
+You can create opportunity records at Transactions &gt; Sales &gt; Create Opportunities.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">otherRefNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PO/Check Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">To make it easy for your customers to locate this invoice in their own records, enter their purchase order number here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overrideInstallments</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Override</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Partner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The partner associated with this customer appears in the Partner field.
+
+ 
+
+You can change the partner for this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoicepartnerslist.html?mode=package">InvoicePartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">postingPeriod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Posting Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the period you want to post this invoice to.
+
+If a period is closed, you cannot post to that period.
+
+If your transaction is subject to approval, the posting period is set when the transaction is approved. For details, refer to Posting Period for Transactions Subject to Approval under the help topic Approval Routing.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">promoCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Promotion</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want to apply a multiple-use coupon code to this transaction, select the promotion here.
+
+If you want to apply a single-use coupon code, enter the code in the Coupon Code field. The promotion for that coupon code is shown here.
+
+Customers associated with a partner can only use coupon codes from that partner's promotions. If you select a promotion associated with a partner, this transaction is attributed to that partner for reporting purposes.
+
+You can choose to have a promotion selected by default at Setup &gt; Marketing &gt; Marketing Preferences in the Default Promotion Code on Sales Transactions field.
+
+Create new promotion codes at Lists &gt; Marketing &gt; Promotions &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">promotionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/promotionslist.html?mode=package">PromotionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recognizedRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recognized Revenue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Recognized Revenue: cumulative amount of revenue recognized for this transaction</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurringBill</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurring Bill</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Recurring Bill box to create a recurring invoice for the billing account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revenueStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/revenuestatus.html?mode=package">RevenueStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revenue Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The possible values for this field are:
+
+   1. Pending: indicates that no recognition has occurred. All revenue is still deferred.
+   2. In Progress: indicates that some recognition has occurred.
+   3. Completed: indicates that all recognition has occurred. No deferred revenue remains.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecEndDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev. Rec. End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the Revenue Recognition End Date for the line.
+
+This date does not apply to variable schedules. This is similar to the Rev. Rec. End Date on Invoices and Credit Memos.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecOnRevCommitment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev Rec on Rev Commit.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this check box to create a Revenue Commitment or Revenue Commitment Reversal.
+
+    * On a Sales Order, the Revenue Commitment replaces an invoice
+    * On a Return Authorization, the Revenue Commitment Reversal replaces a credit memo.
+
+NetSuite creates all applicable Revenue Recognition schedules the Revenue Commitment or Revenue Commitment Reversal.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev. Rec. Schedule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Revenue Recognition Template from the drop-down list.
+
+After saving a transaction, NetSuite uses this template to create a Revenue Recognition Schedule.
+
+For more information, see Revenue Recognition Schedules and Revenue Recognition Templates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecStartDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev. Rec. Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the Revenue Recognition Start Date for the line. This date does not apply to variable schedules.
+
+The Rev. Rec. Start Date should occur on or after the Revenue Commitment's date or the Revenue Commitment Reversal’s date. This is similar to the Rev. Rec. Start Date on Invoices and Credit Memos.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesEffectiveDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Effective Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can change the sales effective date for this transaction. The sales effective date determines which commission plan and historical sales team this transaction applies to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Choose Team</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a sales team to associate with this transaction.
+
+To create a sales team, go to Lists &gt; Relationships &gt; New &gt; Select Sales Team Members.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesRep</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the sales representative associated with this company on the customer record at Lists &gt; Customers.
+
+If a different sales rep is assigned to this transaction, select that sales rep here.
+
+To add additional sales reps to this list, go to Lists &gt; New Employee.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTeamList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoicesalesteamlist.html?mode=package">InvoiceSalesTeamList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the appropriate shipping address for this transaction. 
+
+    * Select New to enter a new shipping address to be used for this transaction and saved with the associated entity record.
+    * Select Custom to enter a new shipping address to be used for this transaction only (and not saved with the associated entity record).
+    * Click the Edit icon to edit an existing shipping address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Type or pick a shipping date for this invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipGroupList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoiceshipgrouplist.html?mode=package">InvoiceShipGroupList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipIsResidential</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping address is residential</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Via</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a shipping method for this order.
+
+If you automatically charge for shipping, the shipping amount is entered in the shipping costs field. To automatically charge for shipping, go to Setup &gt; Accounting &gt; Shipping. Check the Charge for Shipping box and click Save. You must also set up the charge details of your shipping items.
+
+To add or edit shipping items, go to Lists &gt; Accounting &gt; Shipping Items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The shipping cost automatically calculates depending on the shipping method you select in the Ship Via field above.
+
+To change the cost of a shipping method, go to Lists &gt; Accounting &gt; Shipping Items and select the shipping method you want to change.
+
+If you use UPS Real-Time rates, shipments over 150lbs are broken up into shipments less than or equal to 150lbs for charging.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTax1Rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The tax rate for the selected tax code shows here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTax2Rate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the tax code that determines the tax charged for shipping.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">source</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The source of the invoice, for example, the program or software name.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use the Advanced Billing feature, enter the date for the first invoice to be created.
+
+If an invoice is created from a sales order that includes a Start Date and End Date, those dates autofill on the invoice when the order is billed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the subsidiary associated with this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the tax registration number of the transaction nexus. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different tax registration number in the dropdown list, the corresponding nexus is automatically selected in the Nexus field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subtotal</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the total of the items on this invoice.
+
+This is the total before any discounts, shipping cost, handling cost or tax is added to the order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncPartnerTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the sales team on the customer's record with changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncSalesTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the sales team on the customer's record with changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tax2Total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/taxdetailslist.html?mode=package">TaxDetailsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Details Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the tax information on the Tax Details subtab of the transaction. Only roles with at least the Edit level of the Tax Details Tab permission can override the tax details.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A tax item is a tax that you collect at one certain rate and pay to one tax agency for this invoice. NetSuite inserts the tax item for this customer from the record at Lists &gt; Customers. To change it just for this order, select another tax item.
+
+To add additional choices to this list, go to Lists &gt; New Item &gt; Sales Tax Item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxPointDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Point Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the percentage rate of the tax item from its record at Lists &gt; Items. You can change it here for just this transaction if you wish.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Registration Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the values in the Nexus and Subsidiary Tax Reg. Number fields. Only roles with at least the Edit level of the Tax Details Tab permission can override the values that NetSuite automatically selects in these fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select billing terms that apply to this invoice.
+
+To add additional choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Terms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate you enter automatically appears here.
+
+If you entered a percentage in the Rate field, NetSuite multiplies the discount or markup percentage by the total amount of line items you select.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount/Markup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want to add a discount or markup to the cost of the time you are billing, select it from the list.
+
+To see a list of your discounts or markups, go to Lists &gt; Items and select Discount or Markup from the dropdown list at the bottom of the page.
+
+To create a new discount or markup, go to Lists &gt; New Item and click Discount or Markup.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscPrint</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Print</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you added a discount or markup and want to print it on the invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The rate for the discount or markup item you selected automatically appears here.
+
+If you want, enter a new rate.
+
+Rates can be entered as dollar amounts and percentages.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscTax1Amt</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Amt</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeDiscTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want the discount or markup you entered to be applied before taxes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/invoicetimelist.html?mode=package">InvoiceTimeList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeTaxRate1</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the GST rate based on the tax code you assigned to this time.
+
+To set up tax codes and corresponding tax percentages, go to Lists &gt; Tax Codes.
+
+To change the assignment of a tax code to an item, go to Lists &gt; Items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeTaxRate2</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBeEmailed</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Emailed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When processing individual invoices:
+    * Check the To Be Emailed box if you want to email this invoice. Then enter the email address in the space to the right of the check box.
+    * You can enter multiple email addresses by separating them with a semicolon. It is important to separate the addresses with only a semicolon, and do not include any spaces.
+
+When bulk processing invoices:
+
+In the To Be Emailed field:
+    * Select Yes if you want to email this form.
+    * Select No if you do not want to email this form.
+    * Select Respect Customer Preference to send the form based on the default preference on the customer record. Set the preference on the Info subtab of a customer record in the Send Transactions Via field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBeFaxed</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Faxed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When processing individual invoices:
+
+    * Check the To Be Faxed box if you want to fax this invoice. Then enter the fax number in the box to the right of the check box if it does not already appear.
+
+
+When bulk processing invoices:
+In the To Be Faxed field:
+
+    * Select Yes if you want to fax this form.
+    * Select No if you do not want to fax this form.
+    * Select Respect Customer Preference to send the form based on the default preference on the customer record.
+Set the preference on the Info subtab of a customer record in the Send Transactions Via field.
+
+To fax NetSuite forms, an administrator must first set up fax service at Setup &gt; Company &gt; Printing, Fax and Email Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBePrinted</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Printed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When processing individual invoices:
+
+Check the To Be Printed box if you want to print this invoice.
+
+When bulk processing invoices:
+
+    * Select Yes if you want to save this in a queue of invoices to print.
+    * Select No if you do not want to print this form.
+    * Select Respect Customer Preference to send the form based on the default preference on the customer record.
+      Set the preference on the Info subtab of a customer record in the Send Transactions Via field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite computes the total of line items, tax and shipping costs, and then enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">totalCostEstimate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Cost: Estimated cost of the specific number of items; estimated rate x quantity = estimated cost.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">trackingNumbers</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tracking Numbers</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the shipment tracking number from the shipping company.
+
+If a tracking number is entered in the exact format used by UPS or FedEx and the transaction is saved, the tracking number will show on the transaction as a link to the UPS or FedEx website. You can click the link to check the status of the shipment.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">NetSuite inserts today's date for the posting date of this invoice. You can type or pick another date.
+
+What you enter here determines the date range in which this transaction appears on the Accounts Receivable Register.
+
+You can select or enter custom date ranges on registers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Invoice #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite increases the largest invoice number by one. You can type another number. The next invoice number will revert to the standard pattern.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranIsVsoeBundle</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transaction Is VSOE Bundle</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to include all items added to this transaction as a VSOE bundle.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vatRegNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">VAT Registration</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoeAutoCalc</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Auto Calculate VSOE Allocation</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The VSOE allocation amount for a sale can be calculated automatically by checking the Auto Calculate VSOE Allocation box.
+ 
+Allocation is the process to determine the VSOE price for items on a sale. The total VSOE amount allocated is the revenue amount to be recognized for the bundle.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

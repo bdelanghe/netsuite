@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__job','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__job','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Job</H1>
+
+
+    Namespace: <a href="../../schema/record/job.html?mode=package">urn:relationships.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you assign account numbers for projects, enter the account number here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">actualTime</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the actual time entered for the project, including open, pending approval, approved, unapproved, and rejected time transactions. This total includes time transactions entered against project tasks and the project as a whole without a specified task.
+
+If this project is set to include CRM tasks in project totals, then Actual Work also includes time entered for CRM tasks associated with this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addressbookList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobaddressbooklist.html?mode=package">JobAddressbookList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allocatePayrollExpenses</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowAllResourcesForTasks</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Display All Resources for Project Task Assignment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to allow any employee or vendor designated as a project resource on the entity record or any employee or vendor that has previously been assigned to a project to be assigned to a project task.
+
+When you enable this preference, any resource that has been previously assigned to a project appears in the list of available resources. This allows for the possibility that an employee or vendor no longer designated as a project resource can still be assigned to a new project task.
+
+Clear the box if you want to restrict project task assignment to resources you add to the Resources subtab.
+
+If you use Resource Allocations, enabling this preference overrides the need to allocate resources prior to making task assignments. Disabling this preference requires you to allocate defined resources prior to making task assignments. Generic resources are available for task assignments regardless of project allocation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowExpenses</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allow Expenses</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to allow expenses to be entered for this project.
+
+If the Limit Time Entry to Assignees field is also checked, then only resources listed on the Resource subtab will be able to see this project in the Customer/Project select list for Expense Reporting.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowTime</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allow Time Entry</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to enable time to be entered for this project.
+
+If the Limit Time Entry to Assignees field is checked, the project appears only in the Customer/Project dropdown for resources listed on the Resource tab of the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When using Auto-Generated Numbers for projects, the project number assigned to this project is displayed in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altPhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an alternative phone number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">applyProjectExpenseTypeToAll</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Apply to all time entries</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to apply the selected project expense type to all time entries for this project. This preference overrides any other project expense type for time transactions recorded for this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingRateCard</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Rate Card</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Billing Rate Card for this project. New Rate Card can be customer specific.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Schedule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A billing schedule determines when and how to bill a customer over the duration of the project.
+
+Billing schedules for Fixed Bid, Interval and Time and Materials projects are public schedules and can be shared across projects. A Fixed Bid, Milestone billing schedule is private and used only for the project it is created for.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPay</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">calculatedEndDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Calculated End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite calculates the end date for the project as the date that all project tasks will be complete according to the current project schedule.
+
+Calculated End Date changes as the project schedule changes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">calculatedEndDateBaseline</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Calculated End Date Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Calculated End Date when the baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">calculatedStartDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Calculated Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you selected Backward in the Scheduling Method field, NetSuite displays the calculated start date of your project here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">category</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the category that applies to this customer.
+
+To add choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Customer Category.
+
+For example, you might create categories of wholesale, retail, and online.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">comments</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter other information about this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">companyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a unique project name.
+
+If you use Auto-Generated Numbering, it is important to enter the project name here because the Project ID does not include the project name.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createChargeRule</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Create Charge Rule</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditCardsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobcreditcardslist.html?mode=package">JobCreditCardsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The customer's currency is shown here. This is the currency used for all transactions and records created for this project.
+
+If you use the Multi-Currency Customers feature, select the customer's transaction currency you want to use for this project and its associated records and transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the form you want to use to enter this record.
+
+Select Standard Project Form to continue using this form, select a custom project form you have already created, or select New to create a custom project form.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dateCreated</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the date the project was created.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAddress</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a default address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an email address for this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emailPreference</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/emailpreference.html?mode=package">EmailPreference</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of email message you want to send.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date the project is finished.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Entity ID</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">NetSuite copies the Project Name as the Project ID.
+
+If you want to manually enter a Project ID, clear the Auto check box next to the field and enter the ID.
+
+If you use Auto-Generated Numbering, then NetSuite creates this ID automatically based on your settings at Setup &gt; Company Set Up Auto-Generated Numbers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the progress of the project.
+
+When creating a new project, select the status that best indicates the progress of the project.
+
+You can create new statuses at Setup &gt; Accounting &gt; Accounting Lists &gt; New, and click Project Status.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the projected cost to complete this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedGrossProfit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Gross Profit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit is calculated as follows:
+
+For projects with the Job Costing and Project Budgeting feature, Estimated Cost and Estimated Revenue disabled: For Fix Bid projects: [Project Price - Estimated Labor Cost]; for all other cases: [Estimated Labor Revenue - Estimated Labor Cost].
+
+For projects with the Job Costing and Project Budgeting feature disabled, Estimated Cost, or Estimated Revenue enabled: [Estimated Revenue - Estimated Cost]. Note: The field that you do not use gets a 0 value.
+
+For projects with the Job Costing and Project Budgeting feature enabled: [Estimated Revenue - Estimated Cost]</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedGrossProfitPercent</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Gross Profit Percent</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Shows the expected profit percentage, calculated as:
+
+For Time and Materials projects:
+[Estimated Gross Profit / Estimated Labor Revenue
+
+For Fixed Bid projects:
+[Estimated Gross Profit / Project Price]</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedLaborCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Labor Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Labor Cost is the total amount expected to be spent on labor for the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedLaborCostBaseline</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Labor Cost Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The value of Estimated Labor Cost when the baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedLaborRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Labor Revenue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the projected revenue to be billed for work performed on this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedRevenue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Revenue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the projected revenue to be billed for work performed on this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedTime</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initial Time Budget</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the sum of the initial time budgeted for the CRM Tasks that are included in this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedTimeOverride</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Work is the sum of the estimated work for all project tasks.
+
+Estimated Work also includes the Current Time Budget amounts for all CRM tasks if the Include CRM Tasks in Project Totals check box is selected for this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimateRevRecTemplate</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev Rec Forecast Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a revenue recognition template created for the project. The template generates a schedule forecasting expected revenue to be recognized for the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a fax number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fxRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Shows the currency's exchange rate when you create the project.
+
+You can edit the rate for this project if you want to use a different rate for cost and labor estimates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">globalSubscriptionStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/globalsubscriptionstatus.html?mode=package">GlobalSubscriptionStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeCrmTasksInTotals</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include CRM Task In Project Totals</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to allow CRM tasks to be included in costs, planned time, and actual time for this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isExemptTime</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Classify Time as Exempt</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Exempt time is excluded when calculating utilization. It is not included in the numerator or denominator of the utilization formula.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you check this box, then the project no longer appears on the list of projects.
+ 
+You cannot edit or make any changes to a project marked inactive.
+Check the Show Inactives box at the bottom of the List page to view inactive projects.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isProductiveTime</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Classify Time as Productive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Productive time is time worked on a project but not included when calculating revenue for the project.
+
+Productive time is not billed to the customer.
+
+Training and pre-sales support are examples of productive time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isUtilizedTime</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Classify Time as Utilized</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Utilized time directly contributes to the revenue for a project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobBillingType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/jobbillingtype.html?mode=package">JobBillingType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a method to bill project costs to the customer.
+
+Charge-Based: billable amounts are represented by charges. Charges are generated based on charge rules based on fixed dates, milestones, project progress, or time entries. This option requires that you have enabled the Charge-Based Billing feature.
+
+Fixed Bid, Interval: bill customers at predefined intervals for a portion of the fixed amount based on project percent complete.
+
+Fixed Bid Milestone: bill customers as milestones are completed for the percentage of the total project amount specified for the milestone.
+
+Time and Materials: bill customers for time and expenses entered against the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the service item to appear on transactions billed to the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobPrice</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the price billed to the customer on transactions.
+
+Project Price is also used to calculate the gross profit margin for the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobResourcesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobresourceslist.html?mode=package">JobResourcesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">jobType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the project type. Project types are user-defined values to classify projects in a way meaningful to your company.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">language</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Language</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the language to use to display all project records and invoices.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastBaselineDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Baseline Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date when the last project baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Returns the date on which the job record was last modified.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">limitTimeToAssignees</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Limit Time and Expenses To Resources</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to allow only resources listed on the Resources subtab for the project to enter time and expenses.
+
+Clearing this box allows any project resource to track time against this project and its project tasks.
+
+Only resources listed on the Resource tab will be able to see the project in Project select lists for time and expenses.
+
+Note: Regardless of whether this box is marked, in the Vendor Center, this project will only show if the vendor is listed as a resource of the project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">materializeTime</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Create Planned Time Entries</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to generate time entries for planned work on project tasks.
+
+Resources assigned to this project will be able to see their planned time in Time Tracking or Timesheets.
+
+If you use Project Budgets, planned time entries are required to generate calculated costs.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">milestonesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobmilestoneslist.html?mode=package">JobMilestonesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalanceAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalanceDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parent Record</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the name of the customer for this project. If you are creating a subproject, then enter a customer and project in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentComplete</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev Rec Override Percent Complete</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an estimate of how much of the total project work is complete.
+ 
+This percentage is not calculated or updated by NetSuite.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentCompleteOverrideList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobpercentcompleteoverridelist.html?mode=package">JobPercentCompleteOverrideList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentTimeComplete</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Percent Work Complete</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Shows the percent of the total planned project time that has been completed.
+
+Percent Work Complete is calculated by dividing the total number of actual hours worked and reported in Time Tracking by the number of hours entered in the Estimated Work field for each project task.
+
+The percentage is 100% when the status of all project tasks is Completed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a phone number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phoneticName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">plannedWork</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Planned Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Total of all planned time entered for project tasks. This field is not updated when time is entered outside the planned time. Planned time can only be updated by manually adding addition time to project tasks.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">plannedWorkBaseline</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Planned Work Baseline</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">plStatementList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/jobplstatementlist.html?mode=package">JobPlStatementList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projectedEndDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date you plan to complete all project tasks by. You can update this date at any time.
+ 
+If you use Advanced Projects, NetSuite calculates an end date based on the project schedule and displays it in Calculated End Date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projectedEndDateBaseline</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated End Date Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Estimated End Date when the baseline was set.
+ 
+Baseline information is available only if you use Advanced Projects.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projectExpenseType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project Expense Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a project expense type for this project.
+
+The project expense type determines which account is debited when posting time transactions recorded for this project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projectManager</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Manager</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the Project Manager for this project. The project resource must be designated as Project Manager on the employee record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecForecastRule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev Rec Forecast Rule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a revenue recognition rule to create a forecast revenue recognition plan for the project. The project must have both a Start Date and an End Date or Projected End Date.
+
+For more information, see the help topic Linking a Forecast Revenue Recognition Rule to a Project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scheduledEndDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Scheduled End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you selected Backward in the Scheduling Method field, enter the end date for your project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">schedulingMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/jobschedulingmethod.html?mode=package">JobSchedulingMethod</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Scheduling Method</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select how you want to plan the schedule for your project.
+
+    * Forward – Select a start date for your project and plan tasks forward in time from the start date. NetSuite calculates the end date for your project based on the tasks you enter.
+    * Backward – Select an end date for your project and plan tasks backward in time from the end date. NetSuite calculates the start date for your project based on the tasks you enter.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceServiceItemFromRateCard</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Source Service Item to Task Assignments from Rate Card</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Displays a check mark if the Source Service Item to Task Assignments from Rate Card box is checked on the job record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the estimated date work will start on the project. You can change this date at any time during the life of the project.
+
+NetSuite schedules all project tasks without predecessors to start on this date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDateBaseline</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Start Date when the baseline was set.
+
+Baseline information is available only if you use Advanced Projects.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The subsidiary for this project is displayed here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeApproval</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time Approval</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select how you want time to be approved for this project.
+
+The following options are available:
+    * Approve time automatically – Project time is approved automatically when entered.
+    * Default Time Approver – Project time can be approved only by each employee’s supervisor or time approver defined on the employee record.
+    * Project Time Approver – Project time can be approved only by project resources with project time approval permission defined on the project resource role.
+    * Project Time Approver or Default Time Approver – Both project time approvers and default time approvers can approve project time. This option is selected by default.
+Note: The Time Approval preference does not override roles with full time permissions. Any role that has full time permissions and unrestricted employee permissions will be able to approve and reject time entries for any employee regardless of the selection made in this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeRemaining</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Remaining Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the time for work yet to be done on all project tasks, calculated as:
+
+[Estimated Work(all tasks) - Actual Work (all tasks)]</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">usePercentCompleteOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Use Percent Complete Override for Forecasting</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to generate forecast revenue plans based on the latest status of the Rev Rec Percent Complete Override subtab. Any planned time entries in the project record are ignored for revenue recognition and forecasting purposes. The Cumulative Percent Complete on the subtab must equal 100.
+
+For more information, see the help topic Using the Rev Rec Percent Complete Override Subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workplace</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/jobsearch.html?mode=package">JobSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/jobsearchadvanced.html?mode=package">JobSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/jobsearchbasic.html?mode=package">JobSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/jobsearchrow.html?mode=package">JobSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/jobsearchrowbasic.html?mode=package">JobSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

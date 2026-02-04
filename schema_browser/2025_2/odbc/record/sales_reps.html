@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__sales_reps','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__sales_reps','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Sales_reps
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Entity Fields custom field is available for the Sales Reps table.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ACCOUNT_NUMBER">
+            <td class="rt_fname">account_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account number</td>
+        </tr>
+        <tr id="field_ADDRESS">
+            <td class="rt_fname">address</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address</td>
+        </tr>
+        <tr id="field_ADDRESS1">
+            <td class="rt_fname">address1</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address line 1</td>
+        </tr>
+        <tr id="field_ADDRESS2">
+            <td class="rt_fname">address2</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address line 2</td>
+        </tr>
+        <tr id="field_ADDRESS3">
+            <td class="rt_fname">address3</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address line 3</td>
+        </tr>
+        <tr id="field_APPROVAL_LIMIT">
+            <td class="rt_fname">approval_limit</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Approval limit</td>
+        </tr>
+        <tr id="field_APPROVER_ID">
+            <td class="rt_fname">approver_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Approver ID</td>
+        </tr>
+        <tr id="field_BIRTHDATE">
+            <td class="rt_fname">birthdate</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Birth date</td>
+        </tr>
+        <tr id="field_CITY">
+            <td class="rt_fname">city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">City</td>
+        </tr>
+        <tr id="field_CLASS_ID">
+            <td class="rt_fname">class_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Class ID</td>
+        </tr>
+        <tr id="field_COUNTRY">
+            <td class="rt_fname">country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Country</td>
+        </tr>
+        <tr id="field_CREATE_DATE">
+            <td class="rt_fname">create_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Create date</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified (GMT)</td>
+        </tr>
+        <tr id="field_DEF_ACCT_CORP_CARD_EXPENSES_ID" class="foreignKeyField">
+            <td class="rt_fname">def_acct_corp_card_expenses_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                account_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a><br/>
+            </td>
+            <td class="rt_fhelp">ID of the default account for corporate card in expense report</td>
+        </tr>
+        <tr id="field_DEF_EXPENSE_REPORT_CURRENCY_ID" class="foreignKeyField">
+            <td class="rt_fname">def_expense_report_currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                currency_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a><br/>
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_DEPARTMENT_ID">
+            <td class="rt_fname">department_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Department ID</td>
+        </tr>
+        <tr id="field_EMAIL">
+            <td class="rt_fname">email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">254</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Email</td>
+        </tr>
+        <tr id="field_EMPLOYEE_TYPE_ID">
+            <td class="rt_fname">employee_type_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Employee type ID</td>
+        </tr>
+        <tr id="field_FIRSTNAME">
+            <td class="rt_fname">firstname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">First name</td>
+        </tr>
+        <tr id="field_FULL_NAME">
+            <td class="rt_fname">full_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1800</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full name</td>
+        </tr>
+        <tr id="field_IDENTIFICATION_NUMBER">
+            <td class="rt_fname">identification_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">11</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Social security number</td>
+        </tr>
+        <tr id="field_INITIALS">
+            <td class="rt_fname">initials</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Initials</td>
+        </tr>
+        <tr id="field_ISINACTIVE">
+            <td class="rt_fname">isinactive</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Employee is inactive</td>
+        </tr>
+        <tr id="field_LASTNAME">
+            <td class="rt_fname">lastname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last name</td>
+        </tr>
+        <tr id="field_LOGINACCESS">
+            <td class="rt_fname">loginaccess</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Login access</td>
+        </tr>
+        <tr id="field_MIDNAME">
+            <td class="rt_fname">midname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Middle name</td>
+        </tr>
+        <tr id="field_NAME">
+            <td class="rt_fname">name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">83</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name</td>
+        </tr>
+        <tr id="field_NOTES">
+            <td class="rt_fname">notes</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Notes</td>
+        </tr>
+        <tr id="field_PHONE">
+            <td class="rt_fname">phone</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Phone</td>
+        </tr>
+        <tr id="field_SALES_REP_EXTID">
+            <td class="rt_fname">sales_rep_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales rep external ID</td>
+        </tr>
+        <tr id="field_SALES_REP_ID" class="primaryKeyField">
+            <td class="rt_fname">sales_rep_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales rep ID</td>
+        </tr>
+        <tr id="field_SALES_ROLE_ID">
+            <td class="rt_fname">sales_role_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales role</td>
+        </tr>
+        <tr id="field_SALUTATION">
+            <td class="rt_fname">salutation</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">30</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Salutation</td>
+        </tr>
+        <tr id="field_STATE">
+            <td class="rt_fname">state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">State</td>
+        </tr>
+        <tr id="field_SUBSIDIARY_ID">
+            <td class="rt_fname">subsidiary_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary ID</td>
+        </tr>
+        <tr id="field_SUPERVISOR_ID">
+            <td class="rt_fname">supervisor_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Supervisor ID</td>
+        </tr>
+        <tr id="field_ZIPCODE">
+            <td class="rt_fname">zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Zip code</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">sales_rep_id</td>
+        </tr>
+    </table>
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">sales_reps_accounts_fk</td>
+            <td class="rt_tfkcolumn_name">def_acct_corp_card_expenses_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">sales_reps_currencies_fk</td>
+            <td class="rt_tfkcolumn_name">def_expense_report_currency_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a></td>
+            <td class="rt_tpkcolumn_name">currency_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>Foreign keys referencing this table</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tfktable_name">FK Table Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_pe_sales_reps_fk</td>
+            <td class="rt_tpkcolumn_name">sales_rep_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity_pe" href="../../odbc/record/posting_account_activity_pe.html?mode=">Posting_account_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">sales_rep_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_sales_reps_fk</td>
+            <td class="rt_tpkcolumn_name">sales_rep_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity" href="../../odbc/record/posting_account_activity.html?mode=">Posting_account_activity</a></td>
+            <td class="rt_tfkcolumn_name">sales_rep_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

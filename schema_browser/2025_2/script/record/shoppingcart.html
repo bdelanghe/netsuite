@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__shoppingcart','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__shoppingcart','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Shopping Cart</H1>
+    <H3>Internal ID: shoppingcart</H3>
+        <H3>Search only</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+
+
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_item">
+                    <td class="rt_jid">item</td>
+                    <td class="rt_jlabel">Item</td>
+                    <td class="rt_jname">Item</td>
+                </tr>
+                    <tr id="join_shopper">
+                    <td class="rt_jid">shopper</td>
+                    <td class="rt_jlabel">Shopper</td>
+                    <td class="rt_jname">Customer</td>
+                </tr>
+                    <tr id="join_user">
+                    <td class="rt_jid">user</td>
+                    <td class="rt_jlabel">User</td>
+                    <td class="rt_jname">Employee</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_cartid">
+                    <td class="rt_iname">cartid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Cart ID</td>
+                </tr>
+                    <tr id="filter_cartidnumber">
+                    <td class="rt_iname">cartidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Cart ID (Number)</td>
+                </tr>
+                    <tr id="filter_customerid">
+                    <td class="rt_iname">customerid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer ID</td>
+                </tr>
+                    <tr id="filter_customeridnumber">
+                    <td class="rt_iname">customeridnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Customer ID (Number)</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_datemodified">
+                    <td class="rt_iname">datemodified</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Last Item Added</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_item">
+                    <td class="rt_iname">item</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item</td>
+                </tr>
+                    <tr id="filter_itemid">
+                    <td class="rt_iname">itemid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item ID</td>
+                </tr>
+                    <tr id="filter_itemidnumber">
+                    <td class="rt_iname">itemidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Item ID (Number)</td>
+                </tr>
+                    <tr id="filter_itemprice">
+                    <td class="rt_iname">itemprice</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Item Price</td>
+                </tr>
+                    <tr id="filter_subtotal">
+                    <td class="rt_iname">subtotal</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">SubTotal</td>
+                </tr>
+                    <tr id="filter_website">
+                    <td class="rt_iname">website</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Website</td>
+                </tr>
+                    <tr id="filter_websiteid">
+                    <td class="rt_iname">websiteid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Website ID</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_cartid">
+                    <td class="rt_cname">cartid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Cart ID</td>
+                </tr>
+                    <tr id="column_customerid">
+                    <td class="rt_cname">customerid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Customer ID</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_datemodified">
+                    <td class="rt_cname">datemodified</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Last Item Added</td>
+                </tr>
+                    <tr id="column_daysold">
+                    <td class="rt_cname">daysold</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Days old</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_item">
+                    <td class="rt_cname">item</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Items in Cart</td>
+                </tr>
+                    <tr id="column_itemid">
+                    <td class="rt_cname">itemid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Item ID</td>
+                </tr>
+                    <tr id="column_itemprice">
+                    <td class="rt_cname">itemprice</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Item Price</td>
+                </tr>
+                    <tr id="column_itemqty">
+                    <td class="rt_cname">itemqty</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Item Quantity</td>
+                </tr>
+                    <tr id="column_subtotal">
+                    <td class="rt_cname">subtotal</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Sub-Total Amount</td>
+                </tr>
+                    <tr id="column_website">
+                    <td class="rt_cname">website</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Website</td>
+                </tr>
+                    <tr id="column_websiteid">
+                    <td class="rt_cname">websiteid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Website ID</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

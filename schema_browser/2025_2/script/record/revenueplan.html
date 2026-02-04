@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__revenueplan','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__revenueplan','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Revenue Recognition Plan</H1>
+    <H3>Internal ID: revenueplan</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_amount">
+                <td class="rt_fname">amount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the total revenue amount included in this revenue recognition plan.</td>
+            </tr>
+                <tr id="field_amountsource">
+                <td class="rt_fname">amountsource</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount Source</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of this field is copied from the revenue recognition rule. The Amount Source value is combined with the Create Revenue Plans On option on the item record to derive the Amount for the revenue plan.</td>
+            </tr>
+                <tr id="field_catchupperiod">
+                <td class="rt_fname">catchupperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Catch Up Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field is blank until the check is cleared from the Hold Revenue Recognition box. When the hold is removed, the catch up period defaults to the earliest open period. You can change the catch up period to any open period.</td>
+            </tr>
+                <tr id="field_comments">
+                <td class="rt_fname">comments</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Comments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Include brief comments about the revenue plan here.</td>
+            </tr>
+                <tr id="field_createdfrom">
+                <td class="rt_fname">createdfrom</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Created From</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is a link to the source revenue element.</td>
+            </tr>
+                <tr id="field_enddatechangeimpact">
+                <td class="rt_fname">enddatechangeimpact</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">End Date Change Impact</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of this field is copied from the revenue recognition rule. It determines how revenue plans are updated when the end date changes. The options are:
+
+    * Update Remaining Periods Only - The remaining unrecognized revenue is divided by the total number of months or periods remaining.
+    * Update All Periods - The total revenue is divided by the total number of months or periods. Adjustments to catch up or claw back revenue are made in the current period for previously recognized revenue.</td>
+            </tr>
+                <tr id="field_exchangerate">
+                <td class="rt_fname">exchangerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the exchange rate between the source currency (the Parent Line Currency) and the base currency (the Revenue Recognition Plan Currency). This exchange rate may not be the same as the exchange rate on the linked revenue element if the revenue element has participated in a merge.</td>
+            </tr>
+                <tr id="field_holdrevenuerecognition">
+                <td class="rt_fname">holdrevenuerecognition</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Hold Revenue Recognition</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to place the revenue plan on hold. When you check the box, the status changes to On Hold. When a plan is on hold, revenue recognition journal entries cannot be generated for any period in the plan.
+
+Clear the box to resume recognizing revenue. Revenue that was not recognized while the plan was on hold is recognized in the catch up period.</td>
+            </tr>
+                <tr id="field_initialamount">
+                <td class="rt_fname">initialamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Initial Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of this field is copied from the revenue recognition rule. It is a percentage or fixed amount to be recognized in the first recognition period.</td>
+            </tr>
+                <tr id="field_item">
+                <td class="rt_fname">item</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is a link to the item record.</td>
+            </tr>
+                <tr id="field_parentlinecurrency">
+                <td class="rt_fname">parentlinecurrency</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Parent Line Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the currency from the source customer obligation document.</td>
+            </tr>
+                <tr id="field_periodoffset">
+                <td class="rt_fname">periodoffset</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Period Offset</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of this field is copied from the revenue recognition rule. It is the number of periods that the start of recognition is postponed from the date derived from the rev rec start date source.
+
+When there is a period offset, the recognition period has been moved into the future by the number of periods specified.</td>
+            </tr>
+                <tr id="field_recognitionmethod">
+                <td class="rt_fname">recognitionmethod</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Recognition Method</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The recognition method is copied from the revenue recognition rule.</td>
+            </tr>
+                <tr id="field_recognitionperiod">
+                <td class="rt_fname">recognitionperiod</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Recognition Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field has a value only when the Rev Rec End Date Source is Recognition Period. It is the number of periods included in the revenue recognition plan. An initial partial period is included in the period count if applicable.</td>
+            </tr>
+                <tr id="field_recordnumber">
+                <td class="rt_fname">recordnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Revenue plans are identified by number rather than name. The revenue plan number is configured on the Other subtab of the Set Up Auto-Generated Numbers page.</td>
+            </tr>
+                <tr id="field_remainingdeferredbalance">
+                <td class="rt_fname">remainingdeferredbalance</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Remaining Deferred Balance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the value from the Amount field minus the value of the Total Recognized field as of the current date.</td>
+            </tr>
+                <tr id="field_revenueplancurrency">
+                <td class="rt_fname">revenueplancurrency</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition Plan Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the same as the subsidiary base currency. When multi-book accounting is enabled, it is the base currency for the accounting book and subsidiary.</td>
+            </tr>
+                <tr id="field_revenueplantype">
+                <td class="rt_fname">revenueplantype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Plan Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This may be one of the following:
+
+    * Forecast - used only for forecasting and in forecast reports
+    * Actual - a revenue plan that controls the posting of revenue</td>
+            </tr>
+                <tr id="field_revenuerecognitionrule">
+                <td class="rt_fname">revenuerecognitionrule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition Rule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In view mode this is a link to the revenue recognition rule from which the revenue plan was derived.
+
+In edit mode, you may be able to select a different revenue recognition rule. When you change the rule, only the recognition method changes. The start and end dates do not change. You can change the rule only if the status of the plan is Not Started.</td>
+            </tr>
+                <tr id="field_revrecenddate">
+                <td class="rt_fname">revrecenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Rev Rec End Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">When you change the end date, the plan is adjusted according to the value set in the End Date Change Impact field.</td>
+            </tr>
+                <tr id="field_revrecenddatesource">
+                <td class="rt_fname">revrecenddatesource</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition End Date Source</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the source of the default end date on the revenue recognition plan. The value is copied from the revenue recognition rule.</td>
+            </tr>
+                <tr id="field_revrecstartdate">
+                <td class="rt_fname">revrecstartdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Rev Rec Start Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">When you change this date, the end date does not change automatically to match the number of months or periods in the revenue recognition rule. Instead, the amounts for the planned periods are adjusted.
+
+You can change the start date only if no revenue has been recognized.</td>
+            </tr>
+                <tr id="field_revrecstartdatesource">
+                <td class="rt_fname">revrecstartdatesource</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition Start Date Source</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the source of the initial revenue recognition start date on the revenue recognition plan. The value is copied from the revenue recognition rule.</td>
+            </tr>
+                <tr id="field_startoffset">
+                <td class="rt_fname">startoffset</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Offset</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of this field is copied from the revenue recognition rule. It is the number of periods that the start of recognition is postponed from the date derived from the rev rec start date source.
+
+When there is a start offset, only the start date has been moved into the future. The end date may be the same as that derived from the rev rec end date source. The number of periods was adjusted as needed.</td>
+            </tr>
+                <tr id="field_status">
+                <td class="rt_fname">status</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the current status of the revenue plan. It can be one of the following:
+
+    * Not Started - No revenue has been recognized yet.
+    * In Progress - Some revenue has been recognized but not all. Additional revenue can be recognized.
+    * On Hold - Some revenue may or may not have been recognized. No additional revenue can be recognized until the hold is removed.
+    * Complete - All revenue has been recognized for this revenue plan.</td>
+            </tr>
+                <tr id="field_terminmonths">
+                <td class="rt_fname">terminmonths</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Term In Months</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field has a value only when the Rev Rec End Date Source is Rev Term in Months. It is the number of months included in the revenue recognition plan. If the start date is in the middle of the month, the end date is also mid-month. As a result, the revenue recognition plan may span more periods than the month count.</td>
+            </tr>
+                <tr id="field_totalrecognized">
+                <td class="rt_fname">totalrecognized</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Total Recognized</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the total revenue that has been recognized on the revenue plan as of the current date.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_plannedrevenue_">plannedrevenue - Planned Revenue</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_plannedrevenue_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_dateexecuted">
+                        <td class="rt_sname">dateexecuted</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date Executed</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_deferredrevenueaccount">
+                        <td class="rt_sname">deferredrevenueaccount</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Deferral Account</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_isrecognized">
+                        <td class="rt_sname">isrecognized</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Is Recognized</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_journal">
+                        <td class="rt_sname">journal</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Journal</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_percentrecognizedinperiod">
+                        <td class="rt_sname">percentrecognizedinperiod</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">% Recognized in Period</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_percenttotalrecognized">
+                        <td class="rt_sname">percenttotalrecognized</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">% Total Recognized</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_plannedperiod">
+                        <td class="rt_sname">plannedperiod</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Planned Period</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_plannedrevenue">
+                        <td class="rt_sname">plannedrevenue</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Planned Revenue</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_postingperiod">
+                        <td class="rt_sname">postingperiod</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Posting Period</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plannedrevenue_recognitionaccount">
+                        <td class="rt_sname">recognitionaccount</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Recognition Account</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+
+
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__location','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__location','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Location</H1>
+
+
+    Namespace: <a href="../../schema/record/location.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">allowStorePickup</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allow Store Pickup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Allow Store Pickup box to set the location as a valid store pickup location. This enables the location to be used in a store pickup fulfillment workflow.
+
+In a sales order, when you set the Fulfillment Choice to Store Pickup, you can select this location as the fulfillment location for line items in the sales order, provided that the line items also have the Allow Store Pickup box checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">autoAssignmentRegionSetting</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/locationautoassignmentregionsetting.html?mode=package">LocationAutoAssignmentRegionSetting</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Automatic Location Assignment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose how you want the automatic location assignment feature to work with the location. You can select one of the following:
+
+    * Disallow - Disables automatic location assignment for the location. The location will not be assigned to any sales orders by the automatic location assignment engine.
+    * Allow Worldwide - The location can be assigned to sales orders with shipping addresses anywhere in the world.
+    * Allow Worldwide Except Excluded Regions - The location can be assigned to sales orders with shipping addresses anywhere in the world, except if the shipping address is in an excluded region.
+    * Allow Specified Regions Only - The location can be assigned to sales orders, but only when the shipping address is in one of the included regions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bufferStock</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Buffer Stock</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Buffer Stock field, enter the minimum quantity of inventory to be maintained at the location.
+
+NetSuite uses this buffer stock when the Automatic Location Assignment feature processes orders. The buffer stock prevents NetSuite from assigning a fulfillment location to a line on an order if doing this causes inventory at the location to drop below the buffer stock.
+
+For example, the current item inventory at a location is 6 and the buffer stock for the location is 5. If an order is created with quantity 2, NetSuite will not assign the location to the line because doing this would cause inventory to drop below the buffer stock.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">businessHoursList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/locationbusinesshourslist.html?mode=package">LocationBusinessHoursList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">classTranslationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/classtranslationlist.html?mode=package">ClassTranslationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dailyShippingCapacity</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Daily Shipping Capacity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the maximum number of orders that can be shipped from a location in one day. Shipping capacity is based on the number of fulfillment requests created for the location in a one day interval. Automatic location assignment will not assign orders to the location if the daily shipping capacity has been reached.
+
+This field is only available when the Fulfillment Request feature is enabled.
+
+Note: The shipping capacity can be exceeded if the location is set manually on a sales order line.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">excludeLocationRegionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/locationregionslist.html?mode=package">LocationRegionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">geolocationMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/locationgeolocationmethod.html?mode=package">LocationGeolocationMethod</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Geolocation Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the method by which automatic location assignment establishes the geographic position of the location:
+
+    * Derive From Postal Code: Choose this option when you want automatic location assignment to use the postal code to calculate the geographic coordinates of the location. Because postal codes are irregular in shape, NetSuite uses the centroid (or geometrical center) of the postal code area. NetSuite uses third-party data to calculate these coordinates.
+
+      This option is the default geolocation method for location records.
+
+    * Use Latitude/Longitude Coordinates: Choose this option when you want automatic location assignment to use the latitude and longitude coordinates as specified in the Latitude and Longitude fields of the location record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeChildren</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include Children</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Include Children box to associate the location with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeInControlTower</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include In Control Tower</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to include this location when generating snapshots using the Supply Chain Control Tower feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeLocationRegionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/locationregionslist.html?mode=package">LocationRegionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location is Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is false by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">latitude</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Latitude</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the latitude coordinate of the location in decimal format, for example, &quot;37.5367&quot;.
+Latitude is between -90 and 90.
+
+Use at least four decimal places to achieve a precise location. The decimal symbol you use depends on the number format in your user preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">locationType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/locationtype.html?mode=package">LocationType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the kind of location: Store, Warehouse, or Undefined. The location type is one of the criteria that the Automatic Location Assignment feature uses when determining the ideal fulfillment location. You can set the location to Undefined to represent locations that are neither a store nor a warehouse.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">logo</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Logo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">longitude</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Longitude</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the longitude coordinate of the location in decimal format, for example, &quot;-122.3285&quot;. Longitude is between -180 and 180.
+
+Use at least four decimal places to achieve a precise location. The decimal symbol you use depends on the number format in your user preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mainAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">makeInventoryAvailable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Make Inventory Available</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to make on-hand inventory stored at the location available to orders.
+Clear this box to exclude on-hand inventory stored at the location from the available count.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">makeInventoryAvailableStore</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Make Inventory Available in Web Store</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to include on-hand inventory stored at the location in the total quantity available to display in the Web Store.
+Clear this box to exclude the on-hand inventory stored at the location from the total quantity available to display in the Web Store.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a name for this location. The name you enter here is the name that shows in location lists on records and transactions.
+
+The name can be alphanumeric. The maximum number of characters is 60.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nextPickupCutOffTime</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Next Pickup Cut-Off Time</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The next cut-off time for same day pickup orders at the location. NetSuite determines this time based on the same day pickup cut-off times in the business hours. The next pickup cut-off time might not be on the current day if one of the following is true:
+
+    * The current day does not have a same day pickup cut-off time defined.
+    * The same day pickup cut-off time has already passed on the current day.
+
+This field is read only.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parent Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">returnAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Return Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">soPredConfidence</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Order Predicted Risk Confidence</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the predicted percentage of confidence the sales order might be late.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">soPredictedDays</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Order Predicted Days Late/Early</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the predicted number of days the sales order might be late or early.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storePickupBufferStock</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Store Pickup Buffer Stock</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Store Pickup Buffer Stock field, enter the minimum inventory to be maintained at the location when creating store pickup orders.
+
+NetSuite uses the store pickup buffer stock to calculate the quantity available for store pickup of an item. Visitors to the web store will only be able to create a pickup order if the quantity available for store pickup is greater than zero.
+
+The store pickup buffer stock applies to all items at the location.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeZone</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/locationtimezone.html?mode=package">LocationTimeZone</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time Zone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the time zone of the location.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">totalShippingCapacity</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total Shipping Capacity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The maximum number of shipping orders that can accumulate in the backlog of orders to be shipped from the location. Shipping orders are based on the number of open fulfillment requests.
+
+The fulfillment workload distribution strategy in a rule uses this field to calculate current available work capacity at locations.
+
+This field is only available when the Fulfillment Request feature is enabled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranPrefix</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Document Number Prefix</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When you use auto-generated numbering with the Locations feature, you can make your transaction number sequences independent per location.
+
+Enter up to 8 alphanumeric characters in this field to number transactions with a prefix to signify this location. Then, click Save.
+
+To set up auto-generated numbering, go to Setup &gt; Company &gt; Setup Tasks &gt; Auto-Generated Numbers. On the Document Numbers subtab, check the Use Location box next to each transaction this prefix should apply to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">useBins</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Use Bins</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to use bins to track inventory at this location.
+Clear this box to not use bins track inventory at this location.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/locationsearch.html?mode=package">LocationSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/locationsearchadvanced.html?mode=package">LocationSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/locationsearchbasic.html?mode=package">LocationSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/locationsearchrow.html?mode=package">LocationSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/locationsearchrowbasic.html?mode=package">LocationSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

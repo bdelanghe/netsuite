@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__billingaccount','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__billingaccount','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Billing Account</H1>
+    <H3>Internal ID: billingaccount</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_billingschedule">
+                <td class="rt_fname">billingschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Schedule</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the billing schedule associated with this billing account.</td>
+            </tr>
+                <tr id="field_cashsaleform">
+                <td class="rt_fname">cashsaleform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Cash Sale Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the cash sale form you want to use for this billing account.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_createdby">
+                <td class="rt_fname">createdby</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Created By</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the currency this customer conducts business in. This customer's currency cannot be changed after transactions for this customer have been saved. All transactions involving this customer are conducted in this currency. Transaction figures are converted to your base currency in registers and on reports.
+
+If you use the Multi-Currency Customers feature, select the customer's primary currency in this field. The primary currency is the default currency on transactions and is used to display balance information for this customer. You can enter other transaction currencies on the Currencies subtab under the Financial subtab.
+
+Subcustomers are assigned the same currency as the parent customer.
+
+You can change the currency (or primary) currency at any time as long as the customer is not also have a vendor, partner, or other name record. Also, if you change the currency, you must re-enter the customer credit limit in the new currency.
+
+An administrator can create new currency records at Lists &gt; Accounting &gt; Currencies.</td>
+            </tr>
+                <tr id="field_customer">
+                <td class="rt_fname">customer</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of the customer associated with this billing account.</td>
+            </tr>
+                <tr id="field_customerdefault">
+                <td class="rt_fname">customerdefault</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer Default</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If checked, this field indicates that this is the default billing account for this customer.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the form you want to use to enter this record.
+
+Select Standard Customer Form to continue using this form, select a custom customer form you have already created, or select New to create a custom customer form.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_frequency">
+                <td class="rt_fname">frequency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Frequency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates how often the customers is billed. The information for this field is sourced from the billing schedule.</td>
+            </tr>
+                <tr id="field_idnumber">
+                <td class="rt_fname">idnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The number of the billing account. This number is automatically generated upon save.</td>
+            </tr>
+                <tr id="field_idnumberexternal">
+                <td class="rt_fname">idnumberexternal</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">External Id</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_inactive">
+                <td class="rt_fname">inactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if the billing account is no longer active.</td>
+            </tr>
+                <tr id="field_invoiceform">
+                <td class="rt_fname">invoiceform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Invoice Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the invoice form you want to use for this billing account.</td>
+            </tr>
+                <tr id="field_lastbillcycledate">
+                <td class="rt_fname">lastbillcycledate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Bill Cycle Date</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastbilldate">
+                <td class="rt_fname">lastbilldate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Bill Date</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a description for this billing account.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of this billing account.</td>
+            </tr>
+                <tr id="field_nextbillcycledate">
+                <td class="rt_fname">nextbillcycledate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Next Bill Cycle Date</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the date this person or company became a customer, lead or prospect.
+
+If this person or company has a contract with you, enter the start date of the contract.
+
+If you enter an estimate or an opportunity for this customer, this field will be updated with the date of that transaction.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the subsidiary to associate with this entity or job. You cannot enter transactions for this entity or job unless a subsidiary is assigned.
+ 
+If you select this entity on a transaction, the transaction is associated with this subsidiary. The entity is able to access only information associated with this subsidiary.
+ 
+Note: Once a transaction has posted for the entity or job, you are not able to change the subsidiary selected on the entity or job record.</td>
+            </tr>
+        </table>
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_billingschedule">
+                    <td class="rt_iname">billingschedule</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Schedule</td>
+                </tr>
+                    <tr id="filter_cashsaleform">
+                    <td class="rt_iname">cashsaleform</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Cash Sale Form</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_customer">
+                    <td class="rt_iname">customer</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer</td>
+                </tr>
+                    <tr id="filter_customerdefault">
+                    <td class="rt_iname">customerdefault</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Customer Default</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_formuladate">
+                    <td class="rt_iname">formuladate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Formula (Date)</td>
+                </tr>
+                    <tr id="filter_frequency">
+                    <td class="rt_iname">frequency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Frequency</td>
+                </tr>
+                    <tr id="filter_idnumber">
+                    <td class="rt_iname">idnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Account Number</td>
+                </tr>
+                    <tr id="filter_idnumberexternal">
+                    <td class="rt_iname">idnumberexternal</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External Id</td>
+                </tr>
+                    <tr id="filter_inactive">
+                    <td class="rt_iname">inactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_invoiceform">
+                    <td class="rt_iname">invoiceform</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Invoice Form</td>
+                </tr>
+                    <tr id="filter_lastbillcycledate">
+                    <td class="rt_iname">lastbillcycledate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Last Bill Cycle Date</td>
+                </tr>
+                    <tr id="filter_lastbilldate">
+                    <td class="rt_iname">lastbilldate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Last Bill Date</td>
+                </tr>
+                    <tr id="filter_memo">
+                    <td class="rt_iname">memo</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Account Description</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nextbillcycledate">
+                    <td class="rt_iname">nextbillcycledate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Next Bill Cycle Date</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_billingschedule">
+                    <td class="rt_cname">billingschedule</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Schedule</td>
+                </tr>
+                    <tr id="column_cashsaleform">
+                    <td class="rt_cname">cashsaleform</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Cash Sale Form</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_customer">
+                    <td class="rt_cname">customer</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Customer</td>
+                </tr>
+                    <tr id="column_customerdefault">
+                    <td class="rt_cname">customerdefault</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Customer Default</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_frequency">
+                    <td class="rt_cname">frequency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Frequency</td>
+                </tr>
+                    <tr id="column_idnumber">
+                    <td class="rt_cname">idnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account Number</td>
+                </tr>
+                    <tr id="column_idnumberexternal">
+                    <td class="rt_cname">idnumberexternal</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">External Id</td>
+                </tr>
+                    <tr id="column_inactive">
+                    <td class="rt_cname">inactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_invoiceform">
+                    <td class="rt_cname">invoiceform</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Invoice Form</td>
+                </tr>
+                    <tr id="column_lastbillcycledate">
+                    <td class="rt_cname">lastbillcycledate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Last Bill Cycle Date</td>
+                </tr>
+                    <tr id="column_lastbilldate">
+                    <td class="rt_cname">lastbilldate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Last Bill Date</td>
+                </tr>
+                    <tr id="column_memo">
+                    <td class="rt_cname">memo</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account Description</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_nextbillcycledate">
+                    <td class="rt_cname">nextbillcycledate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Next Bill Cycle Date</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

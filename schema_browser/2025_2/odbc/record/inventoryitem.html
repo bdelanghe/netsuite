@@ -1,0 +1,2002 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__inventoryitem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__inventoryitem','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Inventory_items
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    This table provides a list of all Inventory items and Kit items and their properties.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ALLOW_DROP_SHIP">
+            <td class="rt_fname">allow_drop_ship</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Drop ship item</td>
+        </tr>
+        <tr id="field_ALT_DEMAND_SOURCE_ITEM_ID">
+            <td class="rt_fname">alt_demand_source_item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Alternative demand source item ID</td>
+        </tr>
+        <tr id="field_ASSET_ACCOUNT_ID">
+            <td class="rt_fname">asset_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Asset account ID</td>
+        </tr>
+        <tr id="field_ATP_LEAD_TIME">
+            <td class="rt_fname">atp_lead_time</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">ATP lead time</td>
+        </tr>
+        <tr id="field_ATP_METHOD">
+            <td class="rt_fname">atp_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">ATP method</td>
+        </tr>
+        <tr id="field_AVERAGECOST">
+            <td class="rt_fname">averagecost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Average cost</td>
+        </tr>
+        <tr id="field_BACKWARD_CONSUMPTION_DAYS">
+            <td class="rt_fname">backward_consumption_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Backward consumption days</td>
+        </tr>
+        <tr id="field_BILL_EXCH_RATE_VAR_ACCOUNT_ID">
+            <td class="rt_fname">bill_exch_rate_var_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bill exchange rate variance account ID</td>
+        </tr>
+        <tr id="field_BILL_PRICE_VARIANCE_ACCOUNT_ID">
+            <td class="rt_fname">bill_price_variance_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bill price variance account ID</td>
+        </tr>
+        <tr id="field_BILL_QTY_VARIANCE_ACCOUNT_ID">
+            <td class="rt_fname">bill_qty_variance_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bill quantity variance account ID</td>
+        </tr>
+        <tr id="field_CONVERSION_RATE">
+            <td class="rt_fname">conversion_rate</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">This column does not return results</td>
+        </tr>
+        <tr id="field_COST_0">
+            <td class="rt_fname">cost_0</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost</td>
+        </tr>
+        <tr id="field_COST_ACCOUNTING_STATUS">
+            <td class="rt_fname">cost_accounting_status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost accounting status</td>
+        </tr>
+        <tr id="field_COST_CATEGORY">
+            <td class="rt_fname">cost_category</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost category</td>
+        </tr>
+        <tr id="field_COSTING_METHOD">
+            <td class="rt_fname">costing_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">16</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Costing method</td>
+        </tr>
+        <tr id="field_CREATE_PLAN_ON_EVENT_TYPE">
+            <td class="rt_fname">create_plan_on_event_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">128</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether to create a revenue recognition plan on the event type</td>
+        </tr>
+        <tr id="field_CREATED">
+            <td class="rt_fname">created</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Created (GMT)</td>
+        </tr>
+        <tr id="field_CURRENT_ON_ORDER_COUNT">
+            <td class="rt_fname">current_on_order_count</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Current on order count</td>
+        </tr>
+        <tr id="field_CUSTRETURN_VARIANCE_ACCOUNT_ID">
+            <td class="rt_fname">custreturn_variance_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Customer return variance account ID</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified</td>
+        </tr>
+        <tr id="field_DATE_OF_LAST_TRANSACTION">
+            <td class="rt_fname">date_of_last_transaction</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date of last transaction</td>
+        </tr>
+        <tr id="field_DEFAULT_RETURN_COST">
+            <td class="rt_fname">default_return_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Default return cost</td>
+        </tr>
+        <tr id="field_DEMAND_SOURCE">
+            <td class="rt_fname">demand_source</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Demand source</td>
+        </tr>
+        <tr id="field_DEMAND_TIME_FENCE">
+            <td class="rt_fname">demand_time_fence</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Demand time fence</td>
+        </tr>
+        <tr id="field_DEPOSIT">
+            <td class="rt_fname">deposit</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Deposit</td>
+        </tr>
+        <tr id="field_DISPLAYNAME">
+            <td class="rt_fname">displayname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Store display name</td>
+        </tr>
+        <tr id="field_DISTRIBUTION_CATEGORY">
+            <td class="rt_fname">distribution_category</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Distribution category</td>
+        </tr>
+        <tr id="field_DISTRIBUTION_NETWORK">
+            <td class="rt_fname">distribution_network</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Distribution network</td>
+        </tr>
+        <tr id="field_DROPSHIP_EXPENSE_ACCOUNT_ID">
+            <td class="rt_fname">dropship_expense_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Dropship expense account ID</td>
+        </tr>
+        <tr id="field_EXPENSE_ACCOUNT_ID">
+            <td class="rt_fname">expense_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Expense account</td>
+        </tr>
+        <tr id="field_FEATUREDDESCRIPTION">
+            <td class="rt_fname">featureddescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">65534</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Featured description</td>
+        </tr>
+        <tr id="field_FIXED_LOT_SIZE">
+            <td class="rt_fname">fixed_lot_size</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fixed lot size</td>
+        </tr>
+        <tr id="field_FORWARD_CONSUMPTION_DAYS">
+            <td class="rt_fname">forward_consumption_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Forward consumption days</td>
+        </tr>
+        <tr id="field_FRAUD_RISK">
+            <td class="rt_fname">fraud_risk</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">128</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fraud risk</td>
+        </tr>
+        <tr id="field_FULL_NAME">
+            <td class="rt_fname">full_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">550</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full name</td>
+        </tr>
+        <tr id="field_FX_ADJUSTMENT_ACCOUNT_ID">
+            <td class="rt_fname">fx_adjustment_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Foreign exchange adjustment account ID</td>
+        </tr>
+        <tr id="field_GAIN_LOSS_ACCOUNT_ID">
+            <td class="rt_fname">gain_loss_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Gain loss account ID</td>
+        </tr>
+        <tr id="field_HANDLING_COST">
+            <td class="rt_fname">handling_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Handling cost</td>
+        </tr>
+        <tr id="field_HAZMAT">
+            <td class="rt_fname">hazmat</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat</td>
+        </tr>
+        <tr id="field_HAZMAT_HAZARD_CLASS">
+            <td class="rt_fname">hazmat_hazard_class</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat hazard class</td>
+        </tr>
+        <tr id="field_HAZMAT_ID">
+            <td class="rt_fname">hazmat_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat ID</td>
+        </tr>
+        <tr id="field_HAZMAT_ITEM_UNITS">
+            <td class="rt_fname">hazmat_item_units</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat item units</td>
+        </tr>
+        <tr id="field_HAZMAT_ITEM_UNITS_QTY">
+            <td class="rt_fname">hazmat_item_units_qty</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat item units quantity</td>
+        </tr>
+        <tr id="field_HAZMAT_PACKING_GROUP">
+            <td class="rt_fname">hazmat_packing_group</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">10</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat packing group</td>
+        </tr>
+        <tr id="field_HAZMAT_SHIPPING_NAME">
+            <td class="rt_fname">hazmat_shipping_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hazmat shipping name</td>
+        </tr>
+        <tr id="field_INCLUDE_CHILD_SUBSIDIARIES">
+            <td class="rt_fname">include_child_subsidiaries</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Include child subsidiaries</td>
+        </tr>
+        <tr id="field_INCOME_ACCOUNT_ID">
+            <td class="rt_fname">income_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Income account ID</td>
+        </tr>
+        <tr id="field_INTERCO_EXPENSE_ACCOUNT_ID">
+            <td class="rt_fname">interco_expense_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Intercompany expense account ID</td>
+        </tr>
+        <tr id="field_INTERCO_INCOME_ACCOUNT_ID">
+            <td class="rt_fname">interco_income_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Intercompany income account ID</td>
+        </tr>
+        <tr id="field_INVT_COUNT_CLASSIFICATION">
+            <td class="rt_fname">invt_count_classification</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">inventory count classification</td>
+        </tr>
+        <tr id="field_INVT_COUNT_INTERVAL">
+            <td class="rt_fname">invt_count_interval</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">inventory count interval</td>
+        </tr>
+        <tr id="field_IS_CATCH_WEIGHT_ENABLED">
+            <td class="rt_fname">is_catch_weight_enabled</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">This column does not return results</td>
+        </tr>
+        <tr id="field_IS_CONT_REV_HANDLING">
+            <td class="rt_fname">is_cont_rev_handling</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the item is subject to contingent revenue handling</td>
+        </tr>
+        <tr id="field_IS_HOLD_REV_REC">
+            <td class="rt_fname">is_hold_rev_rec</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether to put revenue recognition plan on hold</td>
+        </tr>
+        <tr id="field_IS_MOSS">
+            <td class="rt_fname">is_moss</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the MOSS taxation scheme is used</td>
+        </tr>
+        <tr id="field_ISINACTIVE">
+            <td class="rt_fname">isinactive</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item is inactive</td>
+        </tr>
+        <tr id="field_ISONLINE">
+            <td class="rt_fname">isonline</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Display in web site</td>
+        </tr>
+        <tr id="field_ISTAXABLE">
+            <td class="rt_fname">istaxable</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Taxable</td>
+        </tr>
+        <tr id="field_ITEM_EXTID">
+            <td class="rt_fname">item_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item external ID</td>
+        </tr>
+        <tr id="field_ITEM_ID">
+            <td class="rt_fname">item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item ID</td>
+        </tr>
+        <tr id="field_ITEM_REVENUE_CATEGORY">
+            <td class="rt_fname">item_revenue_category</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">250</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item revenue category</td>
+        </tr>
+        <tr id="field_LAST_COGS_CORRECTION">
+            <td class="rt_fname">last_cogs_correction</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last COGS correction</td>
+        </tr>
+        <tr id="field_LAST_INVT_COUNT_DATE">
+            <td class="rt_fname">last_invt_count_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last inventory count date</td>
+        </tr>
+        <tr id="field_LAST_PURCHASE_PRICE">
+            <td class="rt_fname">last_purchase_price</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last purchase price</td>
+        </tr>
+        <tr id="field_LOT_NUMBERED_ITEM">
+            <td class="rt_fname">lot_numbered_item</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Lot numbered item</td>
+        </tr>
+        <tr id="field_LOT_SIZING_METHOD">
+            <td class="rt_fname">lot_sizing_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Lot sizing method</td>
+        </tr>
+        <tr id="field_LOWER_WARNING_LIMIT">
+            <td class="rt_fname">lower_warning_limit</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_MATCH_BILL_TO_RECEIPT">
+            <td class="rt_fname">match_bill_to_receipt</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Match bill to receipt</td>
+        </tr>
+        <tr id="field_MATRIX_TYPE">
+            <td class="rt_fname">matrix_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">6</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">If item is a matrix item, this field determines the item type. The Matrix Item type can be either Parent or Child. Otherwise the field is empty.</td>
+        </tr>
+        <tr id="field_MODIFIED">
+            <td class="rt_fname">modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Modified (GMT)</td>
+        </tr>
+        <tr id="field_NAME">
+            <td class="rt_fname">name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">250</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name</td>
+        </tr>
+        <tr id="field_NEXT_INVT_COUNT_DATE">
+            <td class="rt_fname">next_invt_count_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Next inventory count date</td>
+        </tr>
+        <tr id="field_NS_LEAD_TIME">
+            <td class="rt_fname">ns_lead_time</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">NetSuite lead time</td>
+        </tr>
+        <tr id="field_OFFERSUPPORT">
+            <td class="rt_fname">offersupport</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Offer support</td>
+        </tr>
+        <tr id="field_ONSPECIAL">
+            <td class="rt_fname">onspecial</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">On special</td>
+        </tr>
+        <tr id="field_PARENT_ID">
+            <td class="rt_fname">parent_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subitem of</td>
+        </tr>
+        <tr id="field_PAYMENT_METHOD_ID">
+            <td class="rt_fname">payment_method_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Payment method ID</td>
+        </tr>
+        <tr id="field_PERIODIC_LOT_SIZE_DAYS">
+            <td class="rt_fname">periodic_lot_size_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Periodic lot size days</td>
+        </tr>
+        <tr id="field_PERIODIC_LOT_SIZE_TYPE">
+            <td class="rt_fname">periodic_lot_size_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Periodic lot size type</td>
+        </tr>
+        <tr id="field_PREF_PURCHASE_TAX_ID">
+            <td class="rt_fname">pref_purchase_tax_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Preferred purchase tax ID</td>
+        </tr>
+        <tr id="field_PREF_SALE_TAX_ID">
+            <td class="rt_fname">pref_sale_tax_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Preferred sales tax ID</td>
+        </tr>
+        <tr id="field_PREF_STOCK_LEVEL">
+            <td class="rt_fname">pref_stock_level</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Preferred stock level</td>
+        </tr>
+        <tr id="field_PRICES_INCLUDE_TAX">
+            <td class="rt_fname">prices_include_tax</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Prices include tax</td>
+        </tr>
+        <tr id="field_PRICING_GROUP_ID">
+            <td class="rt_fname">pricing_group_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Pricing Group ID</td>
+        </tr>
+        <tr id="field_PRINT_SUB_ITEMS">
+            <td class="rt_fname">print_sub_items</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Print sub items</td>
+        </tr>
+        <tr id="field_PROD_PRICE_VAR_ACCOUNT_ID">
+            <td class="rt_fname">prod_price_var_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Product price variance account ID</td>
+        </tr>
+        <tr id="field_PROD_QTY_VAR_ACCOUNT_ID">
+            <td class="rt_fname">prod_qty_var_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Product quantity variance account ID</td>
+        </tr>
+        <tr id="field_PURCHASE_PRICE_VAR_ACCOUNT_ID">
+            <td class="rt_fname">purchase_price_var_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase price variance account ID</td>
+        </tr>
+        <tr id="field_PURCHASE_UNIT_ID">
+            <td class="rt_fname">purchase_unit_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase unit ID</td>
+        </tr>
+        <tr id="field_PURCHASEDESCRIPTION">
+            <td class="rt_fname">purchasedescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase description</td>
+        </tr>
+        <tr id="field_QUANTITYAVAILABLE">
+            <td class="rt_fname">quantityavailable</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Quantity available</td>
+        </tr>
+        <tr id="field_QUANTITYBACKORDERED">
+            <td class="rt_fname">quantitybackordered</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Quantity back-ordered</td>
+        </tr>
+        <tr id="field_QUANTITYONHNAD">
+            <td class="rt_fname">quantityonhnad</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Quantity on hand</td>
+        </tr>
+        <tr id="field_REORDER_MULTIPLE">
+            <td class="rt_fname">reorder_multiple</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Re-order multiple</td>
+        </tr>
+        <tr id="field_REORDERPOINT">
+            <td class="rt_fname">reorderpoint</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reorder point</td>
+        </tr>
+        <tr id="field_REPLENISHMENT_METHOD">
+            <td class="rt_fname">replenishment_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Replenishment method</td>
+        </tr>
+        <tr id="field_RESCHEDULE_IN_DAYS">
+            <td class="rt_fname">reschedule_in_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reschedule in days</td>
+        </tr>
+        <tr id="field_RESCHEDULE_OUT_DAYS">
+            <td class="rt_fname">reschedule_out_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reschedule out days</td>
+        </tr>
+        <tr id="field_REV_REC_FORECAST_RULE_ID">
+            <td class="rt_fname">rev_rec_forecast_rule_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue recognition forecast rule ID</td>
+        </tr>
+        <tr id="field_REV_REC_RULE_ID">
+            <td class="rt_fname">rev_rec_rule_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue recognition rule ID</td>
+        </tr>
+        <tr id="field_REVENUE_ALLOCATION_GROUP">
+            <td class="rt_fname">revenue_allocation_group</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue allocation group</td>
+        </tr>
+        <tr id="field_ROUND_UP_AS_COMPONENT">
+            <td class="rt_fname">round_up_as_component</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Round up as component</td>
+        </tr>
+        <tr id="field_SAFETY_STOCK_DAYS">
+            <td class="rt_fname">safety_stock_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Safety stock days</td>
+        </tr>
+        <tr id="field_SAFETY_STOCK_LEVEL">
+            <td class="rt_fname">safety_stock_level</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Safety stock level</td>
+        </tr>
+        <tr id="field_SALE_UNIT_ID">
+            <td class="rt_fname">sale_unit_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sale unit ID</td>
+        </tr>
+        <tr id="field_SALESDESCRIPTION">
+            <td class="rt_fname">salesdescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales description</td>
+        </tr>
+        <tr id="field_SALESPRICE">
+            <td class="rt_fname">salesprice</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">42</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales price</td>
+        </tr>
+        <tr id="field_SCRAP_ACCOUNT_ID">
+            <td class="rt_fname">scrap_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Scrap account ID</td>
+        </tr>
+        <tr id="field_SECONDARY_UNITS_TYPE_ID" class="foreignKeyField">
+            <td class="rt_fname">secondary_units_type_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                units_type_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__unitstype" href="../../odbc/record/unitstype.html?mode=">Units_type</a><br/>
+            </td>
+            <td class="rt_fhelp">This column does not return results</td>
+        </tr>
+        <tr id="field_SERIALIZED_ITEM">
+            <td class="rt_fname">serialized_item</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Serialized item</td>
+        </tr>
+        <tr id="field_SHIPPING_COST">
+            <td class="rt_fname">shipping_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping cost</td>
+        </tr>
+        <tr id="field_SPECIALSDESCRIPTION">
+            <td class="rt_fname">specialsdescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">65534</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Specials description</td>
+        </tr>
+        <tr id="field_STOCK_UNIT_ID">
+            <td class="rt_fname">stock_unit_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Stock unit ID</td>
+        </tr>
+        <tr id="field_STOREDESCRIPTION">
+            <td class="rt_fname">storedescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Store description</td>
+        </tr>
+        <tr id="field_STOREDETAILEDDESCRIPTION">
+            <td class="rt_fname">storedetaileddescription</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">65534</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Detailed description</td>
+        </tr>
+        <tr id="field_STOREDISPLAYNAME">
+            <td class="rt_fname">storedisplayname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">500</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Store display name</td>
+        </tr>
+        <tr id="field_SUBTYPE">
+            <td class="rt_fname">subtype</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">10</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subtype</td>
+        </tr>
+        <tr id="field_SUPPLY_TIME_FENCE">
+            <td class="rt_fname">supply_time_fence</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Supply time fence</td>
+        </tr>
+        <tr id="field_SUPPLY_TYPE">
+            <td class="rt_fname">supply_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Supply type</td>
+        </tr>
+        <tr id="field_TAX_ITEM_ID">
+            <td class="rt_fname">tax_item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Tax item ID</td>
+        </tr>
+        <tr id="field_TOTALVALUE">
+            <td class="rt_fname">totalvalue</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">29</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Total value</td>
+        </tr>
+        <tr id="field_TRANSFERPRICE">
+            <td class="rt_fname">transferprice</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transfer price</td>
+        </tr>
+        <tr id="field_UNITS_TYPE_ID">
+            <td class="rt_fname">units_type_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Units type used by the item</td>
+        </tr>
+        <tr id="field_UPC_CODE">
+            <td class="rt_fname">upc_code</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">180</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">UPC code</td>
+        </tr>
+        <tr id="field_UPPER_WARNING_LIMIT">
+            <td class="rt_fname">upper_warning_limit</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">This column does not return results</td>
+        </tr>
+        <tr id="field_USE_COMPONENT_YIELD">
+            <td class="rt_fname">use_component_yield</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Use component yield</td>
+        </tr>
+        <tr id="field_VENDOR_ID">
+            <td class="rt_fname">vendor_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Vendor ID</td>
+        </tr>
+        <tr id="field_VENDORNAME">
+            <td class="rt_fname">vendorname</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">250</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Vendor name</td>
+        </tr>
+        <tr id="field_VENDRETURN_VARIANCE_ACCOUNT_ID">
+            <td class="rt_fname">vendreturn_variance_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Vendor return variance account ID</td>
+        </tr>
+        <tr id="field_VSOE_DEFERRAL">
+            <td class="rt_fname">vsoe_deferral</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">28</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">VSOE deferral</td>
+        </tr>
+        <tr id="field_VSOE_DELIVERED">
+            <td class="rt_fname">vsoe_delivered</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">VSOE delivered</td>
+        </tr>
+        <tr id="field_VSOE_DISCOUNT">
+            <td class="rt_fname">vsoe_discount</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">12</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">VSOE discount</td>
+        </tr>
+        <tr id="field_VSOE_PRICE">
+            <td class="rt_fname">vsoe_price</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">VSOE price</td>
+        </tr>
+        <tr id="field_WEIGHT">
+            <td class="rt_fname">weight</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Weight</td>
+        </tr>
+        <tr id="field_WEIGHT_IN_USER_DEFINED_UNIT">
+            <td class="rt_fname">weight_in_user_defined_unit</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Weight in user-defined limit</td>
+        </tr>
+        <tr id="field_WEIGHT_UNIT_INDEX">
+            <td class="rt_fname">weight_unit_index</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Weight unit index</td>
+        </tr>
+        <tr id="field_WIP_ACCOUNT_ID">
+            <td class="rt_fname">wip_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">WIP account ID</td>
+        </tr>
+        <tr id="field_WIP_COST_VARIANCE_ACCOUNT_ID">
+            <td class="rt_fname">wip_cost_variance_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">WIP cost variance account ID</td>
+        </tr>
+        <tr id="field_WORK_ORDER_LEAD_TIME">
+            <td class="rt_fname">work_order_lead_time</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Work order lead time</td>
+        </tr>
+    </table>
+
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">inventory_items_units_type_fk</td>
+            <td class="rt_tfkcolumn_name">secondary_units_type_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__unitstype" href="../../odbc/record/unitstype.html?mode=">Units_type</a></td>
+            <td class="rt_tpkcolumn_name">units_type_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

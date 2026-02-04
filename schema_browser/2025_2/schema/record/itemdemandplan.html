@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__itemdemandplan','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__itemdemandplan','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>ItemDemandPlan</H1>
+
+
+    Namespace: <a href="../../schema/record/itemdemandplan.html?mode=package">urn:demandplanning.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">demandPlanCalendarType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/demandplancalendartype.html?mode=package">DemandPlanCalendarType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">View</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can alter your view of the demand plan by changing the date range or the plan view, as described below:
+    * Year – Enter the year to view.
+    * Month – Select a month to view
+    * Start Date – Enter the first date of the period you want to view.
+    * End Date – Enter the last date of the period you want to view.
+    * View – Choose to see the demand results in a Daily, Weekly or Monthly format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">demandPlanMatrix</td>
+                        <td class="rst_ftype"><a href="../../schema/other/demandplanmatrix.html?mode=package">DemandPlanMatrix</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can alter your view of the demand plan by changing the date range or the plan view, as described below:
+    * Year – Enter the year to view.
+    * Month – Select a month to view
+    * Start Date – Enter the first date of the period you want to view.
+    * End Date – Enter the last date of the period you want to view.
+    * View – Choose to see the demand results in a Daily, Weekly or Monthly format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">item</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the item you are entering a demand plan for.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use the Multi-Location Inventory feature, select a location. Then, the list of items that shows is filtered to show only items for the selected location that are time-phased replenishment items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Optionally enter a memo for this plan. Later, you can search for this plan by the text entered here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">month</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/demandplanmonth.html?mode=package">DemandPlanMonth</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Month</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can alter your view of the demand plan by changing the date range or the plan view, as described below:
+    * Year – Enter the year to view.
+    * Month – Select a month to view
+    * Start Date – Enter the first date of the period you want to view.
+    * End Date – Enter the last date of the period you want to view.
+    * View – Choose to see the demand results in a Daily, Weekly or Monthly format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can alter your view of the demand plan by changing the date range or the plan view, as described below:
+    * Year – Enter the year to view.
+    * Month – Select a month to view
+    * Start Date – Enter the first date of the period you want to view.
+    * End Date – Enter the last date of the period you want to view.
+    * View – Choose to see the demand results in a Daily, Weekly or Monthly format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the subsidiary associated with this item demand plan.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">units</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Unit of Measure</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Unit of Measure to create a demand plan based on the unit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">year</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Year</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can alter your view of the demand plan by changing the date range or the plan view, as described below:
+    * Year – Enter the year to view.
+    * Month – Select a month to view
+    * Start Date – Enter the first date of the period you want to view.
+    * End Date – Enter the last date of the period you want to view.
+    * View – Choose to see the demand results in a Daily, Weekly or Monthly format.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/itemdemandplansearch.html?mode=package">ItemDemandPlanSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/itemdemandplansearchadvanced.html?mode=package">ItemDemandPlanSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/itemdemandplansearchbasic.html?mode=package">ItemDemandPlanSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/itemdemandplansearchrow.html?mode=package">ItemDemandPlanSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/itemdemandplansearchrowbasic.html?mode=package">ItemDemandPlanSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

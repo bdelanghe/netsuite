@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__subsidiaries','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__subsidiaries','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Subsidiaries
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Other &gt; Subsidiary custom field is available for the Subsidiaries table.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ADDRESS">
+            <td class="rt_fname">address</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary address</td>
+        </tr>
+        <tr id="field_ADDRESS1">
+            <td class="rt_fname">address1</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address line 1</td>
+        </tr>
+        <tr id="field_ADDRESS2">
+            <td class="rt_fname">address2</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address line 2</td>
+        </tr>
+        <tr id="field_BASE_CURRENCY_ID">
+            <td class="rt_fname">base_currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Base currency ID</td>
+        </tr>
+        <tr id="field_CITY">
+            <td class="rt_fname">city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">City</td>
+        </tr>
+        <tr id="field_COUNTRY">
+            <td class="rt_fname">country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">2</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Country</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified (GMT)</td>
+        </tr>
+        <tr id="field_EDITION">
+            <td class="rt_fname">edition</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">NetSuite edition</td>
+        </tr>
+        <tr id="field_FEDERAL_NUMBER">
+            <td class="rt_fname">federal_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">40</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Federal tax ID</td>
+        </tr>
+        <tr id="field_FISCAL_CALENDAR_ID">
+            <td class="rt_fname">fiscal_calendar_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fiscal calendar ID</td>
+        </tr>
+        <tr id="field_FULL_NAME">
+            <td class="rt_fname">full_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full name</td>
+        </tr>
+        <tr id="field_IS_ELIMINATION">
+            <td class="rt_fname">is_elimination</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether elimination subsidiary</td>
+        </tr>
+        <tr id="field_IS_MOSS">
+            <td class="rt_fname">is_moss</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the subsidiary uses the MOSS taxation scheme</td>
+        </tr>
+        <tr id="field_ISINACTIVE">
+            <td class="rt_fname">isinactive</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary is inactive</td>
+        </tr>
+        <tr id="field_ISINACTIVE_BOOL">
+            <td class="rt_fname">isinactive_bool</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary is inactive. Use this column in queries instead of the isinactive column for improved performance.</td>
+        </tr>
+        <tr id="field_LEGAL_NAME">
+            <td class="rt_fname">legal_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">83</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Legal name</td>
+        </tr>
+        <tr id="field_MOSS_NEXUS_ID">
+            <td class="rt_fname">moss_nexus_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">ID of the nexus that uses the MOSS taxation scheme</td>
+        </tr>
+        <tr id="field_NAME">
+            <td class="rt_fname">name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">83</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name</td>
+        </tr>
+        <tr id="field_PARENT_ID">
+            <td class="rt_fname">parent_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Parent subsidiary ID</td>
+        </tr>
+        <tr id="field_PURCHASEORDERAMOUNT">
+            <td class="rt_fname">purchaseorderamount</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase order amount</td>
+        </tr>
+        <tr id="field_PURCHASEORDERQUANTITY">
+            <td class="rt_fname">purchaseorderquantity</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase order quantity</td>
+        </tr>
+        <tr id="field_PURCHASEORDERQUANTITYDIFF">
+            <td class="rt_fname">purchaseorderquantitydiff</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase order quantity difference</td>
+        </tr>
+        <tr id="field_RECEIPTAMOUNT">
+            <td class="rt_fname">receiptamount</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Receipt amount</td>
+        </tr>
+        <tr id="field_RECEIPTQUANTITY">
+            <td class="rt_fname">receiptquantity</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Receipt quantity</td>
+        </tr>
+        <tr id="field_RECEIPTQUANTITYDIFF">
+            <td class="rt_fname">receiptquantitydiff</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Receipt quantity difference</td>
+        </tr>
+        <tr id="field_RETURN_ADDRESS">
+            <td class="rt_fname">return_address</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address</td>
+        </tr>
+        <tr id="field_RETURN_ADDRESS1">
+            <td class="rt_fname">return_address1</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address line 1</td>
+        </tr>
+        <tr id="field_RETURN_ADDRESS2">
+            <td class="rt_fname">return_address2</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address line 2</td>
+        </tr>
+        <tr id="field_RETURN_CITY">
+            <td class="rt_fname">return_city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address city</td>
+        </tr>
+        <tr id="field_RETURN_COUNTRY">
+            <td class="rt_fname">return_country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address country</td>
+        </tr>
+        <tr id="field_RETURN_STATE">
+            <td class="rt_fname">return_state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address state</td>
+        </tr>
+        <tr id="field_RETURN_ZIPCODE">
+            <td class="rt_fname">return_zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address postal code</td>
+        </tr>
+        <tr id="field_SHIPPING_ADDRESS">
+            <td class="rt_fname">shipping_address</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address</td>
+        </tr>
+        <tr id="field_SHIPPING_ADDRESS1">
+            <td class="rt_fname">shipping_address1</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address line 1</td>
+        </tr>
+        <tr id="field_SHIPPING_ADDRESS2">
+            <td class="rt_fname">shipping_address2</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address line 2</td>
+        </tr>
+        <tr id="field_SHIPPING_CITY">
+            <td class="rt_fname">shipping_city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address city</td>
+        </tr>
+        <tr id="field_SHIPPING_COUNTRY">
+            <td class="rt_fname">shipping_country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address country</td>
+        </tr>
+        <tr id="field_SHIPPING_STATE">
+            <td class="rt_fname">shipping_state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address state</td>
+        </tr>
+        <tr id="field_SHIPPING_ZIPCODE">
+            <td class="rt_fname">shipping_zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address postal code</td>
+        </tr>
+        <tr id="field_STATE">
+            <td class="rt_fname">state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary state</td>
+        </tr>
+        <tr id="field_STATE_TAX_NUMBER">
+            <td class="rt_fname">state_tax_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">40</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">State tax ID</td>
+        </tr>
+        <tr id="field_SUBSIDIARY_EXTID">
+            <td class="rt_fname">subsidiary_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary external ID</td>
+        </tr>
+        <tr id="field_SUBSIDIARY_ID" class="primaryKeyField">
+            <td class="rt_fname">subsidiary_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary ID</td>
+        </tr>
+        <tr id="field_TRAN_NUM_PREFIX">
+            <td class="rt_fname">tran_num_prefix</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">8</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction number prefix</td>
+        </tr>
+        <tr id="field_URL">
+            <td class="rt_fname">url</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">64</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">URL</td>
+        </tr>
+        <tr id="field_ZIPCODE">
+            <td class="rt_fname">zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Subsidiary postal code</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+        </tr>
+    </table>
+
+
+    <H2>Foreign keys referencing this table</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tfktable_name">FK Table Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_activity_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_activity" href="../../odbc/record/account_activity.html?mode=">Account_activity</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_period_activity_pe_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_period_activity_pe" href="../../odbc/record/account_period_activity_pe.html?mode=">Account_period_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_period_activity_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_period_activity" href="../../odbc/record/account_period_activity.html?mode=">Account_period_activity</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscriptions_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscriptions" href="../../odbc/record/billing_subscriptions.html?mode=">Billing_subscriptions</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Budget_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__budget" href="../../odbc/record/budget.html?mode=">Budget</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Companies_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__companies" href="../../odbc/record/companies.html?mode=">Companies</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Consolidated_exchange_rates_from_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__consolidatedexchangerate" href="../../odbc/record/consolidatedexchangerate.html?mode=">Consolidated_exchange_rates</a></td>
+            <td class="rt_tfkcolumn_name">from_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Consolidated_exchange_rates_to_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__consolidatedexchangerate" href="../../odbc/record/consolidatedexchangerate.html?mode=">Consolidated_exchange_rates</a></td>
+            <td class="rt_tfkcolumn_name">to_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Customer_subsidiary_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__customer_subsidiary_map" href="../../odbc/record/customer_subsidiary_map.html?mode=">Customer_subsidiary_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Customers_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__customer" href="../../odbc/record/customer.html?mode=">Customers</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Customers_subsidiaries_fk_2</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__customer" href="../../odbc/record/customer.html?mode=">Customers</a></td>
+            <td class="rt_tfkcolumn_name">represents_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employee_time_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee_time" href="../../odbc/record/employee_time.html?mode=">Employee_time</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employee_time_subsidiaries_fk_2</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee_time" href="../../odbc/record/employee_time.html?mode=">Employee_time</a></td>
+            <td class="rt_tfkcolumn_name">billing_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employees_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee" href="../../odbc/record/employee.html?mode=">Employees</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_categories_subs_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_categories_subs_map" href="../../odbc/record/expense_categories_subs_map.html?mode=">Expense_categories_subs_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_account_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__global_account_map" href="../../odbc/record/global_account_map.html?mode=">Global_account_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_inventory_relationships_invt_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__globalinventoryrelationship" href="../../odbc/record/globalinventoryrelationship.html?mode=">Global_inventory_relationships</a></td>
+            <td class="rt_tfkcolumn_name">inventory_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_inventory_relationships_orig_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__globalinventoryrelationship" href="../../odbc/record/globalinventoryrelationship.html?mode=">Global_inventory_relationships</a></td>
+            <td class="rt_tfkcolumn_name">originating_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_account_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_account_map" href="../../odbc/record/item_account_map.html?mode=">Item_account_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_subsidiary_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_subsidiary_map" href="../../odbc/record/item_subsidiary_map.html?mode=">Item_subsidiary_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_vendor_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_vendor_map" href="../../odbc/record/item_vendor_map.html?mode=">Item_vendor_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_vendor_pricing_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_vendor_pricing" href="../../odbc/record/item_vendor_pricing.html?mode=">Item_vendor_pricing</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Opportunity_lines_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__opportunity_lines" href="../../odbc/record/opportunity_lines.html?mode=">Opportunity_lines</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Partners_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__partner" href="../../odbc/record/partner.html?mode=">Partners</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_pe_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity_pe" href="../../odbc/record/posting_account_activity_pe.html?mode=">Posting_account_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_pe_subsidiaries_fk_2</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity_pe" href="../../odbc/record/posting_account_activity_pe.html?mode=">Posting_account_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">balance_from_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity" href="../../odbc/record/posting_account_activity.html?mode=">Posting_account_activity</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Role_subsidiary_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__role_subsidiary_map" href="../../odbc/record/role_subsidiary_map.html?mode=">Role_subsidiary_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subscription_plans_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subscriptionplan" href="../../odbc/record/subscriptionplan.html?mode=">Subscription_plans</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subsidiary_class_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subsidiary_class_map" href="../../odbc/record/subsidiary_class_map.html?mode=">Subsidiary_class_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subsidiary_department_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subsidiary_department_map" href="../../odbc/record/subsidiary_department_map.html?mode=">Subsidiary_department_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subsidiary_location_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subsidiary_location_map" href="../../odbc/record/subsidiary_location_map.html?mode=">Subsidiary_location_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Support_incidents_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__support_incidents" href="../../odbc/record/support_incidents.html?mode=">Support_incidents</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_lines_subsidiaries_fk_1</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_lines" href="../../odbc/record/transaction_lines.html?mode=">Transaction_lines</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_lines_subsidiaries_fk_2</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_lines" href="../../odbc/record/transaction_lines.html?mode=">Transaction_lines</a></td>
+            <td class="rt_tfkcolumn_name">source_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Vendor_subsidiary_map_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__vendor_subsidiary_map" href="../../odbc/record/vendor_subsidiary_map.html?mode=">Vendor_subsidiary_map</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Vendors_subsidiaries_fk</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__vendor" href="../../odbc/record/vendor.html?mode=">Vendors</a></td>
+            <td class="rt_tfkcolumn_name">subsidiary</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Vendors_subsidiaries_fk_2</td>
+            <td class="rt_tpkcolumn_name">subsidiary_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__vendor" href="../../odbc/record/vendor.html?mode=">Vendors</a></td>
+            <td class="rt_tfkcolumn_name">represents_subsidiary_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>This table is included in the following domains</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tpkcolumn_name">Domains</th>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=multibooks">Multibooks</a>
+            </td>
+        </tr>
+    </table>
+
+
+    <H2>Domain diagrams</H2>
+        <div class="diagramholder">
+            Multibooks<br />
+            <a href="../diagrams/multibooks.png"><img class="diagram" alt="" src="../diagrams/multibooks.png" height=330  /></a>
+        </div>
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

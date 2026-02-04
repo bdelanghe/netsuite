@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__revrectemplate','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__revrectemplate','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>RevRecTemplate</H1>
+
+
+    Namespace: <a href="../../schema/record/revrectemplate.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">amortizationPeriod</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recognition Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field sets the number of periods over which the schedule will amortize. For example, if you enter 12, then the schedule runs for 12 periods starting from the Rev Rec Start Date. 
+ 
+If both the Rev Rec Start Date and Rev Rec End Date are entered, then those dates override the recognition period set on the template. 
+ 
+Note: If either the Rev Rec Start Date or Rev Rec End Date field is empty, NetSuite populates either date based on the recognition period.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amortizationType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/revrecscheduleamortizationtype.html?mode=package">RevRecScheduleAmortizationType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the kind of template you are creating:
+
+    * Standard – Select this type if you are able to enter a Method and Term Source for the template.
+    * Variable – Select this type to use this template for percent-complete recognition.
+
+Variable templates are selected on item records and amortization amounts are determined by job completion amounts.
+
+Note: If you select Variable, you cannot set the following template fields: Recognition Method, Recognition Term Source, Recognition Period, Period Offset and Start Offset.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">initialAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initial Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a percentage or amount to be recognized in the first recognition period. The remaining amount is then recognized according to the set amortization method.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you no longer want to use this template or schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a name for this template or schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">periodOffset</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Period Offset</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Specify the number of periods to postpone the start of recognition for the entire schedule.
+
+ 
+
+For example, if your amortization terms are based on 30-day periods, enter a 2 in this field to wait 60 days before you begin recognizing revenue.
+
+ 
+
+This can be useful for services you sell that have a probationary or trial period.
+
+ 
+
+Setting a period offset does not change the number of periods in the schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recogIntervalSrc</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/revrecschedulerecogintervalsrc.html?mode=package">RevRecScheduleRecogIntervalSrc</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Term Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Recognition Term Source controls how the recognition period is determined.
+
+Select from the following:
+
+    * Rev Rec Dates Specified on Transaction – sources the invoice or cash sale
+      The revenue recognition period is determined by Rev Rec start and end dates entered on the invoice or cash sale.
+    * Rev Rec Dates Specified on Sales Order – sources the sales order
+      The revenue recognition period is determined by Rev Rec start and end dates entered on the sales order.
+      Note: This choice appears only when you use the Sales Order feature.
+    * Billing Schedule, Transaction Date on Sales Order – sources the transaction date of the sales order
+      This term source creates a schedule to recognize revenue based on the sales order transaction date. NetSuite dates subsequent invoices based on the assigned billing schedule.
+    * Billing Schedule, Rev Rec Date on Sales Order - sources the Rev Rec dates from the sales order. This term source creates a schedule to recognize revenue based on the sales order revenue recognition dates, not the transaction dates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/revrectemplaterecurrencelist.html?mode=package">RevRecTemplateRecurrenceList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/revrecschedulerecurrencetype.html?mode=package">RevRecScheduleRecurrenceType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the terms to post income from the net sales amount:
+
+    * Straight-line, by even periods – Amortizes income evenly for each period. Currency amounts are not prorated based on the number of days in any period.
+    * Straight-line, prorate first &amp; last period – Amortizes equal amounts for periods other than the first and the final period, regardless of the number of days in each period. Amounts are prorated for the first period and the final period based on the number of days in each period.
+    * Straight-line, using exact days – Amortizes amounts individually for each period based on the number of days in each period.
+    * Straight-line, prorate first &amp; last period (period-rate) – Determines the full number of periods in the schedule and allocates revenue based on the proportional period amount.
+    * Custom – Enables you to define amortization terms that can include uneven periods, amounts and multiple income accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecOffset</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Offset</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Specify the number of periods to postpone the start of the recognition for a schedule.
+
+ 
+
+Setting a period offset changes the number of periods in the schedule because it postpones the beginning, but does not change the final period of the schedule.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/revrectemplatesearch.html?mode=package">RevRecTemplateSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/revrectemplatesearchadvanced.html?mode=package">RevRecTemplateSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/revrectemplatesearchbasic.html?mode=package">RevRecTemplateSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/revrectemplatesearchrow.html?mode=package">RevRecTemplateSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/revrectemplatesearchrowbasic.html?mode=package">RevRecTemplateSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

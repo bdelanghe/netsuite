@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__customerdeposit','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__customerdeposit','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CustomerDeposit</H1>
+
+
+    Namespace: <a href="../../schema/record/customerdeposit.html?mode=package">urn:customers.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">account</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">applyList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customerdepositapplylist.html?mode=package">CustomerDepositApplyList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">authCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Auth. Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you have a NetSuite merchant account, then this field autofills with the authorization code as soon as the charge is approved.
+
+If you do not have a NetSuite merchant account, enter the authorization code you receive when the charge to the customer's credit card is validated outside of NetSuite, such as by a card-swipe terminal.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccApproved</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Credit Card Approved</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Place a check mark in this box only if the credit card transaction has been performed outside NetSuite, such as by a card-swipe terminal.
+
+If you have a NetSuite merchant account, then this field is automatically filled as soon as the transaction is approved.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccAvsStreetMatch</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">AVS Street Match</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the Address Verification Services (AVS) result code returned to VeriSign when a credit card transaction takes place.
+
+The possible codes are:
+
+   1. Y – The address information submitted did match.
+   2. N – The address information submitted did not match.
+   3. X – The credit card company does not support AVS, or no information was returned to VeriSign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccAvsZipMatch</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">AVS Zip Match</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the Address Verification Services (AVS) result code returned to VeriSign when a credit card transaction takes place.
+
+The possible codes are:
+
+   1. Y – The address information submitted did match.
+   2. N – The address information submitted did not match.
+   3. X – The credit card company does not support AVS, or no information was returned to VeriSign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccExpireDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expires (MM/YYYY)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the credit card's expiration date using this format: MM/YYYY.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccIsPurchaseCardBin</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Card BIN</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name on Card</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite enters the cardholder name from the default credit card on the customer's record.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Financial subtab of the customer's record, verify that the Cardholder Name field contains the correct information.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Credit Card #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use this field to set the credit card number. Enter numbers only, without spaces. Partially masked values are not accepted. Only a 16-digit number is accepted.
+
+On a get, this value is masked.
+
+When searching on this field, you can use only the empty and notEmpty operators.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccProcessAsPurchaseCard</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Send Line-Level Data</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This box is checked when NetSuite has determined that the credit card entered is a purchase card. You can clear this box if you need to process this payment as a Level I payment transaction.
+
+If NetSuite does not recognize the credit card entered as a purchase card but you want to process it as one, check this box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccSecurityCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">CSC</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the three-digit card security code on the back of the customer's credit card.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccSecurityCodeMatch</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/avsmatchcode.html?mode=package">AvsMatchCode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">CSC Match</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the Card Security Code (CSC) result code returned to VeriSign when a credit card transaction takes place.
+
+The possible codes are:
+
+   1. Y – The code submitted did match.
+   2. N – The code submitted did not match.
+   3. X – The credit card company does not support CSC, or no information was returned to VeriSign.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccStreet</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Card Street</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite enters the street address from the customer's billing address.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Address subtab of the customer's record, make sure the default billing address contains the correct street address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ccZipCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Card Zip Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite enters the zip or postal code from the customer's billing address.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Address subtab of the customer's record, make sure the default billing address contains the correct zip or postal code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">chargeIt</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Process Credit Card</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If payment is by credit card, place a check mark in this box to process the credit card charge over the Internet. The effect is the same as swiping a card through a terminal. Funds will move if the card is accepted. If rejected, you will be told why. You must have previously set up a NetSuite merchant account for this to work.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">checkNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Check #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If your customer paid by check, enter the number here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">checkNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Check #</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a class to associate with this transaction.
+
+To create a new class, select New.
+
+For details on existing classes, go to Setup &gt; Company &gt; Classes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditCard</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cards on File</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a credit card stored on the customer record to use as the payment method for this deposit.
+
+Click New to enter a new credit card.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditCardProcessor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Processing Profile</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the credit card processor you want to use for this transaction.
+
+You can set up credit card processors at Setup &gt; Accounting &gt; Payment Processing Profiles &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this transaction for is shown here.
+
+If you use the Multi-Currency Customers feature, select the transaction currency you want to create this transaction in. This customer's primary currency is selected by default.
+
+If you have already selected items on this transaction, selecting a new currency refreshes them to show the price in the new currency (except for items you entered custom prices for) and recalculates tax and gross profit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customer</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the customer. If you are using projects, select the appropriate project rather than the master customer account.
+
+Click New to set up a new customer. Go to Lists &gt; Relationships &gt; Customers for details about existing customers and projects.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">debitCardIssueNo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Issue No.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If the card is a debit card, enter the card's issue number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a department to associate with this deposit.
+
+To create a new department, select New.
+
+For details on existing departments, go to Setup &gt; Company &gt; Departments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dynamicDescriptor</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Soft Descriptor</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The currency's exchange rate is shown in this field.
+
+You can edit the exchange rate for this transaction only, or you can update the currency record with the exchange rate you enter here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingMode</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customerdeposithandlingmode.html?mode=package">CustomerDepositHandlingMode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Mode</td>
+                    <td class="rst_freq">T</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ignoreAvs</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ignore AVS</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Ignore AVS box to ignore the results of the Address Verification System (AVS) pre-authorization check.
+ 
+If you choose to ignore the AVS check, when a customer's address information does not match the billing address of the credit card account, then Cybersource still processes the payment.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inputAuthCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Input Auth. Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inputReferenceCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Input P/N Ref.</td>
+                    <td class="rst_freq">T</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isRecurringPayment</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurring Payment</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This box is checked if this cash sale was generated from a sales order for a recurring payment.
+
+Payments marked as recurring can be successfully processed even if the credit card expires during the billing schedule.
+
+You should not check this box for standalone cash sales. You should only check this box for transactions with recurring payments. It can be used for cash sale sales orders with billing schedules or memorized cash sale sales order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a location to associate with this transaction.
+
+To create a new location, select New.
+
+For details on existing locations, go to Setup &gt; Company &gt; Locations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a Memo to identify this deposit transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">outputAuthCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Auth. Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">outputReferenceCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">P/N Ref.</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">payment</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Amount</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the curency amount of the deposit here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentCardCsc</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">CSC</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the payment method for this deposit.
+
+To add additional choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Payment Method.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentOperation</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customerdepositpaymentoperation.html?mode=package">CustomerDepositPaymentOperation</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Operation</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentOption</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Option</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentProcessingProfile</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Processing Profile</td>
+                    <td class="rst_freq">T</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pnRefNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">P/N Ref.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you accept credit card payments, the Verisign authentication code appears here once the payment is approved.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">postingPeriod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Posting Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the period you want to post this deposit to.
+
+If a period is closed, you cannot post to that period.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesOrder</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Order</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This deposit is reserved for the sales order shown here. This deposit can only be applied to this order.
+
+If this deposit amount exceeds the sales order amount, the excess is used to create a separate deposit that can be applied to any invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesOrderRequiredDepositDue</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Order Required Deposit Due</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">softDescriptor</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Soft Descriptor</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a subsidiary for this customer deposit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">threeDStatusCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payer Authentication Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">NetSuite inserts today's date for this deposit. You can enter or select another date.
+
+What you enter here determines the date range in which this transaction appears on the Accounts Receivable Register.
+
+Deposits are recorded in your general ledger as a liability until the goods or services are actually delivered and do not affect the customer's accounts receivable balance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deposit #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The system generated deposit number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">undepFunds</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Undeposited Funds</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">* If you receive payment by cash or check, click
+      Undep. Funds.
+      Once you deposit the money, you will need to go to Transactions &gt; Bank &gt; Make Deposits.
+
+    * If you receive payment by credit card, click Account
+      and select the account to be credited.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">validFrom</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Valid From / Start Date (MM/YYYY)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date when this card first became valid.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

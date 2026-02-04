@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__itemlocationconfiguration','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__itemlocationconfiguration','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Item Location Configuration</H1>
+    <H3>Internal ID: itemlocationconfiguration</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_advancewarningthreshold">
+                <td class="rt_fname">advancewarningthreshold</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Firm/Release Advance Warning Threshold</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Defines a threshold used by the supply planning process to determine when a warning message should be generated for a planned order.</td>
+            </tr>
+                <tr id="field_atpleadtime">
+                <td class="rt_fname">atpleadtime</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">ATP Lead Time</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an ATP Lead Time to use as a planning horizon for supply and demand considerations in the ship date recommendation calculations.
+It also provides a ship date on orders when no inventory is available based on future supply and demand.</td>
+            </tr>
+                <tr id="field_backwardconsumptiondays">
+                <td class="rt_fname">backwardconsumptiondays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Backward Consumption Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you use the Forecast Consumption demand source method, set the following:
+    * Forward Consumption – Number of days after the order date to consider
+    * Backward Consumption – Number of days prior to the order date to consider
+
+When backward and forward consumption days are entered for an item, these fields determine the window, or time period, that is considered for each sales order when a forecast amount may be consumed to calculate demand. If an order falls within the consumption window, that order quantity is calculated as being consumed and the forecast is adjusted to account for the order consumption.
+Note: NetSuite always considers backward consumption first.  
+The forecast closest to the order in the backward window is consumed first.
+The forecast closest to the order in the forward window is considered if there are remaining quantities to be consumed.
+Note: Only sales order and invoice quantities can consume forecast quantities. Demand from transfer orders and work orders does not consume forecast quantities.</td>
+            </tr>
+                <tr id="field_buildtime">
+                <td class="rt_fname">buildtime</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Work Order Variable Lead Time</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the production build time (in days) to build one assembly in the base unit. You can also have NetSuite automatically calculate lead times. Click the Auto Calculate Production Lead Time box.</td>
+            </tr>
+                <tr id="field_cost">
+                <td class="rt_fname">cost</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Standard Cost</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the price you pay for this item.
+
+If you do not enter a price, purchase orders for this item show the most recent purchase price by default.
+
+If you select a preferred vendor for this item, the price is shown in the currency selected on the vendor's record. If no preferred vendor is selected, the price is shown in your base currency.</td>
+            </tr>
+                <tr id="field_costinglotsize">
+                <td class="rt_fname">costinglotsize</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Costing Lot Size</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the Costing Lot Size to display on the assembly item Locations subtab.
+
+The default value for this field is 1 and the minimum value is 0.01.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the form you want to use to enter this record.
+
+You can select the standard form, a custom form you have already created, or select New to create a custom form.</td>
+            </tr>
+                <tr id="field_defaultreturncost">
+                <td class="rt_fname">defaultreturncost</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Default Return Cost</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the rate you want to default to show as the cost for this item when it is returned. What you enter in this field defaults to show in the Override Rate field on item receipts. You can still change this value after it appears on the item receipt.</td>
+            </tr>
+                <tr id="field_demandsource">
+                <td class="rt_fname">demandsource</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Demand Source</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a Demand Source to determine where demand data is sourced for an item.
+
+    * Forecast from Demand Plan – Source only the item's demand plan record.
+      Note: A sales order with a related work order generates a supply plan for the sales order. The Mass Create Work Orders page automatically suggests a supply for the sales order.
+    * Entered and Planned Orders – Source open orders and use the expected ship date as the demand date. If the item is a member of an assembly, demand for the assembly is included demand calculations for the item.
+    * Order and Forecast – Calculates demand for an item by including both the forecast amount and the amount on orders that have been entered.
+      Forecast demand for an item is calculated by combining (Quantity forecast over time) + (quantity on sales orders and invoices entered)
+    * Forecast Consumption – Calculates demand for an item by subtracting from the forecast quantity any item quantities on orders entered. This removes duplication if an order is already included as part of a forecast.
+      Demand for an item is calculated as (Quantity forecast over time) - (quantity on sales orders and invoices entered).</td>
+            </tr>
+                <tr id="field_demandtimefence">
+                <td class="rt_fname">demandtimefence</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Demand Time Fence</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Demand Time Fence defaults to the number entered in the Default Demand Time Fence field.
+Verify the default or enter a number between zero and 365 to determine the demand time fence for this item.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_fixedlotsize">
+                <td class="rt_fname">fixedlotsize</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Fixed Lot Size</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you selected Fixed Lot Size as the lot sizing method, then enter a quantity in the Fixed Lot Size field. This is the quantity that procurement of this item is always based on, regardless of demand projections.</td>
+            </tr>
+                <tr id="field_forwardconsumptiondays">
+                <td class="rt_fname">forwardconsumptiondays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Forward Consumption Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you use the Forecast Consumption demand source method, set the following:
+    * Forward Consumption – Number of days after the order date to consider
+    * Backward Consumption – Number of days prior to the order date to consider
+
+When backward and forward consumption days are entered for an item, these fields determine the window, or time period, that is considered for each sales order when a forecast amount may be consumed to calculate demand. If an order falls within the consumption window, that order quantity is calculated as being consumed and the forecast is adjusted to account for the order consumption.
+Note: NetSuite always considers backward consumption first.  
+The forecast closest to the order in the backward window is consumed first.
+The forecast closest to the order in the forward window is considered if there are remaining quantities to be consumed.
+Note: Only sales order and invoice quantities can consume forecast quantities. Demand from transfer orders and work orders does not consume forecast quantities.</td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_inventorycosttemplate">
+                <td class="rt_fname">inventorycosttemplate</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Inventory Cost Template</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the inventory cost template you want to associate with this item.</td>
+            </tr>
+                <tr id="field_invtclassification">
+                <td class="rt_fname">invtclassification</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Classification</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field displays the chosen classification used for inventory counts.</td>
+            </tr>
+                <tr id="field_invtcountinterval">
+                <td class="rt_fname">invtcountinterval</td>
+                <td class="rt_ftype">posinteger</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Count Interval</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field displays the total number of days between required counts. For example, if you enter 30, the date a count is required is calculated based on 30 day intervals.</td>
+            </tr>
+                <tr id="field_isautolocassignmentallowed">
+                <td class="rt_fname">isautolocassignmentallowed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Auto Loc. Assignment Allowed</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">* Check this box to enable the automatic location assignment process to assign the location to lines in a sales order.
+      The box for this attribute is checked by default for all locations.
+    * If the box is cleared for a location, the location will not be assigned even if it meets all other automatic location assignment rule criteria.
+    * To enable the automatic location assignment process to assign a location again, clear this box for the location.
+    * This attribute appears in the Locations list in the Purchasing/Inventory subtab.</td>
+            </tr>
+                <tr id="field_isautolocassignmentsuspended">
+                <td class="rt_fname">isautolocassignmentsuspended</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Auto Loc. Assignment Suspended</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">* Check this box to temporarily suspend the automatic location assignment process from assigning the location to sales order lines.
+    * Check this box if you feel that there are discrepancies in inventory at the location.
+    * To enable the automatic location assignment process to assign a location again, clear this box for the location.
+    * This attribute appears in the Locations list in the Purchasing/Inventory subtab.</td>
+            </tr>
+                <tr id="field_iswip">
+                <td class="rt_fname">iswip</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">WIP</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_item">
+                <td class="rt_fname">item</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Item</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter or select one or more items to determine which items the attributes are copied to.
+Click the Select Multiple icon to open the Choose Item window and select more than one item.
+Note: If the source item is a different item type than the target item, data in extraneous fields is copied over but does not affect calculations. For example, if the source item processed is a time-phased planning item but the target item is not a time-phased planning item, fields relevant to time-phased planning will be populated on the target item but the data is not used for calculations.</td>
+            </tr>
+                <tr id="field_latedemandthreshold">
+                <td class="rt_fname">latedemandthreshold</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">High Impact Late Demand Threshold</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Defines a threshold for highlighting late demand in the workbench as high impact.</td>
+            </tr>
+                <tr id="field_leadtime">
+                <td class="rt_fname">leadtime</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Lead Time</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Lead time is the average number of days between ordering this item from the vendor and receiving it.
+    * Auto-Calculating – Check the Auto-Calculate box if you want NetSuite to calculate the lead time based on the most recent order history of this item. Lead time is calculated by taking the number of days between the order entry and receipt on the three most recent purchase orders, and dividing by three. If more than three purchase orders exist, all purchase orders within the period specified in the Order Analysis Interval field on the Inventory Management Preferences dialog will be used.
+          o If there are multiple receipts for the item against the same purchase order, the calculation is made using the difference between the purchase order and the last receipt (the receipt that fully receives the order).
+          o Lead time calculation is not weighted by number of units received.
+          o More recent purchase orders without receipts are ignored.
+    * Manually Calculating – Clear the Auto-Calculate box to manually enter a lead time value in days. If the Auto-Calculate box is cleared and no value is entered, then the default value from the Set Up Inventory Management page is used.</td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a location to associate with this item.
+To use a location, the Multi-Location Inventory feature must be enabled.
+
+    * If the Multi-Location Inventory feature is not enabled:
+
+      Selecting an item record location limits the items that certain roles can access.
+      For example, Role A is set up to access only items associated with Location One. Therefore, employees who have Role A can access only items associated with Location One.
+
+      Note: If the Multi-Location Inventory feature is not enabled, you cannot use this field to track inventory by locations. For example, you cannot track how many widgets you have in stock in Location One.
+
+      For more information click here.
+
+    * If the Multi-Location Inventory feature is enabled:
+
+      Selecting an item record location classifies the item by that location to limit the items that certain roles can access. To track inventory per location, use the Locations subtab at the bottom of this form.
+
+      For more information click here.
+
+Select New to enter a new location record.
+
+Go to Setup &gt; Company &gt; Locations for details about existing location records.</td>
+            </tr>
+                <tr id="field_locationallowstorepickup">
+                <td class="rt_fname">locationallowstorepickup</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Allow Store Pickup</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Allow Store Pickup box to enable store pickup.
+All items are enabled for store pickup by default.</td>
+            </tr>
+                <tr id="field_locationstorepickupbufferstock">
+                <td class="rt_fname">locationstorepickupbufferstock</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Buffer Stock</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Store Pickup Buffer Stock field, enter the minimum inventory to be maintained at the location when creating store pickup orders.
+
+NetSuite uses the store pickup buffer stock to calculate the quantity available for store pickup of an item. Visitors to the web store will only be able to create a pickup order if the quantity available for store pickup is greater than zero.
+
+The store pickup buffer stock applies to all items at the location.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Optionally enter a memo. Later, you can search for the text you enter in this field.</td>
+            </tr>
+                <tr id="field_minimumrescheduledays">
+                <td class="rt_fname">minimumrescheduledays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Minimum Reschedule Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The minimum number of days the supply planning process reschedules a supply order from its current period.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the item name.</td>
+            </tr>
+                <tr id="field_nextinvtcountdate">
+                <td class="rt_fname">nextinvtcountdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Next Count Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the Next Inventory Count Date.
+NetSuite uses this information to calculate when that item needs to be counted.</td>
+            </tr>
+                <tr id="field_pastdueforecastdays">
+                <td class="rt_fname">pastdueforecastdays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Past Due Forecast Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The number of days into the past the supply planning process will search for past due unconsumed forecast.</td>
+            </tr>
+                <tr id="field_periodiclotsizedays">
+                <td class="rt_fname">periodiclotsizedays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Periods of Supply Increment</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Period of Supply Increment field, enter a number from 1 to 90. The default setting is 1.
+The increment starts on the first day an order is required. From the first day, NetSuite aggregates all orders in the increment. Orders are placed on the first day of the period.
+Note: The Periodic Lot Size Increment field is enabled only when you select Interval in the Periodic Lot Size Type field.</td>
+            </tr>
+                <tr id="field_periodiclotsizetype">
+                <td class="rt_fname">periodiclotsizetype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Periods of Supply Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Supply Type field shows the method by which more stock is procured, either Purchase or Assembly. On assembly items, if you have enabled the Allow Purchase of Assembly Items preference, you can choose whether to build additional supply or purchase it.</td>
+            </tr>
+                <tr id="field_poreceiptcost">
+                <td class="rt_fname">poreceiptcost</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">PO Receipt Cost</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_preferredstocklevel">
+                <td class="rt_fname">preferredstocklevel</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Preferred Stock Level</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The preferred stock level is the optimum quantity to maintain in stock of an item.
+
+The quantity you enter here is used to determine your replenishment needs on the Order Items page. It is the quantity you want to have in stock after an order is placed.
+
+    * Auto-Calculating – Check the Auto-Calculate box if you want NetSuite to calculate the preferred stock level based on demand for the item.
+
+      The preferred stock level is calculated as:
+
+      (daily demand * number of days supply preferred).
+
+      If no preferred stock level is identified, then the default preferred stock level is used from the Set Up Inventory Management page.
+
+    * Manually Calculating – Clear the Auto-Calculate box to manually enter the preferred stock quantity.
+
+The preferred stock level you set is used to calculate the quantity of items to be ordered on the Order Items page.</td>
+            </tr>
+                <tr id="field_reorderpoint">
+                <td class="rt_fname">reorderpoint</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Reorder Point</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Reorder Point is the quantity level at which you need to reorder or build more of this item.
+
+    * Auto-Calculating – Check the Auto-Calculate box if you want NetSuite to calculate the reorder point based on demand for the item over time. The reorder point depends on the safety stock definition and is calculated as follows:
+          o Without safety stock defined:
+            Reorder point = (average lead time days * demand)
+          o With safety stock defined in days:
+            Reorder point = [(average lead time days + safety stock days) * demand]
+          o With safety stock quantity defined:
+            Reorder point = [(average lead time days * demand) + safety stock quantity)
+    * Manually Calculating – Clear the Auto-Calculate box if you want to manually enter the point at which to reorder or build more of this item.
+
+If you go to Home &gt; User Preferences and place a check mark in the Inventory Level Warnings box, you are reminded when you have reached the reorder point.</td>
+            </tr>
+                <tr id="field_rescheduleindays">
+                <td class="rt_fname">rescheduleindays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Reschedule In Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Reschedule In Days field, enter a number between one and 90 that is the maximum number of days that the order can be advanced from the current day. For example, if you enter 10 in this field, an order for this item can be moved up ten days earlier, but not eleven or more days. This field defaults to be blank.
+Note: If this field is left blank, NetSuite does not make recommendations to reschedule orders for this item to a later date.</td>
+            </tr>
+                <tr id="field_rescheduleoutdays">
+                <td class="rt_fname">rescheduleoutdays</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Reschedule Out Days</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Reschedule Out Days field, enter a number between one and 180 that is the maximum number of days that the order can be delayed from the current day. For example, if you enter 10 in this field, an order for this item can be moved to ten days later, but not eleven or more days. This field defaults to be blank.
+Note: If this field is left blank, NetSuite does not make recommendations to reschedule orders for this item to a later date.</td>
+            </tr>
+                <tr id="field_safetystocklevel">
+                <td class="rt_fname">safetystocklevel</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Safety Stock Level</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the amount of an item you prefer to keep in stock at all times. Safety stock can be a quantity or a number of days worth of stock.
+ 
+This amount is used to auto-calculate the reorder point of an item.
+    * To define safety stock as a quantity, enter a value.
+    * To define safety stock as a number of days, enter a value in the field next to Days.
+
+If no safety stock value is entered, then the default value from the Set Up Inventory Management page is used.</td>
+            </tr>
+                <tr id="field_savedleadtime">
+                <td class="rt_fname">savedleadtime</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_savedpreferredstocklevel">
+                <td class="rt_fname">savedpreferredstocklevel</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_savedreorderpoint">
+                <td class="rt_fname">savedreorderpoint</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Reorder Point</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select one or multiple subsidiaries.
+To select multiple subsidiaries, press and hold the Ctrl key while selecting each subsidiary.
+A subsidiary must be associated with an item in order for the item to be added to a transaction related to that Subsidiary.
+
+For example, you can enter a sales order and select the Wolfe US subsidiary on the transaction. When you select an item to add to the sales order, only items associated with Wolfe US can be added to the sales order.</td>
+            </tr>
+                <tr id="field_supplylotsizingmethod">
+                <td class="rt_fname">supplylotsizingmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Lot Sizing Method</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a Lot Sizing Method:
+
+    * Lot For Lot – Orders are suggested for procurement based on the exact projections for that day. The suggested order quantity may vary from day to day depending on demand calculations.
+    * Fixed Lot Size – Orders are suggested for procurement based on a fixed amount or a multiple of the fixed amount.
+    * Periods of Supply – Generates aggregated purchase orders or work orders based on the overall demand requirements extended over a designated period, such as weekly or monthly.
+      For example, rather than creating multiple purchase orders for each instance of demand, you can consolidate into one order created from the demand planning engine for all items required within the next 2 weeks. By sending a consolidated purchase order to a vendor, the vendor can ship all items at one time rather than in multiple shipments, potentially resulting in reduced shipping costs.
+      Note: Be aware of costs from vendor holding charges. You can consolidate orders for a period, but after being consolidated, the Bill of Materials (BOM) for that specific work order on that specific level will also be used for subsequent levels.</td>
+            </tr>
+                <tr id="field_supplytimefence">
+                <td class="rt_fname">supplytimefence</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Planning Time Fence</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field defaults to the number entered in the Default Planning Time Fence field. Verify the default or enter a number between zero and 365 to determine the planning time fence for this item.</td>
+            </tr>
+                <tr id="field_supplytype">
+                <td class="rt_fname">supplytype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Supply Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Supply Type list, select a method for procuring more stock: Purchase or Assembly.
+On assembly items, if you have enabled the Allow Purchase of Assembly Items preference, you can choose whether to build additional supply or purchase it.</td>
+            </tr>
+                <tr id="field_templatestored">
+                <td class="rt_fname">templatestored</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_advancewarningthreshold">
+                    <td class="rt_iname">advancewarningthreshold</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Firm/Release Advance Warning Threshold</td>
+                </tr>
+                    <tr id="filter_atpleadtime">
+                    <td class="rt_iname">atpleadtime</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">ATP Lead Time</td>
+                </tr>
+                    <tr id="filter_backwardconsumptiondays">
+                    <td class="rt_iname">backwardconsumptiondays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Backward Consumption Days</td>
+                </tr>
+                    <tr id="filter_buildtime">
+                    <td class="rt_iname">buildtime</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Work Order Lead Time</td>
+                </tr>
+                    <tr id="filter_cost">
+                    <td class="rt_iname">cost</td>
+                    <td class="rt_itype">currency2</td>
+                    <td class="rt_ilabel">Standard Cost</td>
+                </tr>
+                    <tr id="filter_costinglotsize">
+                    <td class="rt_iname">costinglotsize</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Costing Lot Size</td>
+                </tr>
+                    <tr id="filter_defaultreturncost">
+                    <td class="rt_iname">defaultreturncost</td>
+                    <td class="rt_itype">currency2</td>
+                    <td class="rt_ilabel">Default Return Cost</td>
+                </tr>
+                    <tr id="filter_demandsource">
+                    <td class="rt_iname">demandsource</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Demand Source</td>
+                </tr>
+                    <tr id="filter_demandtimefence">
+                    <td class="rt_iname">demandtimefence</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Demand Time Fence</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fixedlotsize">
+                    <td class="rt_iname">fixedlotsize</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Fixed Lot Size</td>
+                </tr>
+                    <tr id="filter_forwardconsumptiondays">
+                    <td class="rt_iname">forwardconsumptiondays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Forward Consumption Days</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_inventorycosttemplate">
+                    <td class="rt_iname">inventorycosttemplate</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Inventory Cost Template</td>
+                </tr>
+                    <tr id="filter_invtclassification">
+                    <td class="rt_iname">invtclassification</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Inventory Classification</td>
+                </tr>
+                    <tr id="filter_invtcountinterval">
+                    <td class="rt_iname">invtcountinterval</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Count Interval</td>
+                </tr>
+                    <tr id="filter_isautolocassignmentallowed">
+                    <td class="rt_iname">isautolocassignmentallowed</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Auto Loc. Assignment Allowed</td>
+                </tr>
+                    <tr id="filter_isautolocassignmentsuspended">
+                    <td class="rt_iname">isautolocassignmentsuspended</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Auto Loc. Assignment Suspended</td>
+                </tr>
+                    <tr id="filter_iswip">
+                    <td class="rt_iname">iswip</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">WIP</td>
+                </tr>
+                    <tr id="filter_item">
+                    <td class="rt_iname">item</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item</td>
+                </tr>
+                    <tr id="filter_latedemandthreshold">
+                    <td class="rt_iname">latedemandthreshold</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">High Impact Late Demand Threshold</td>
+                </tr>
+                    <tr id="filter_leadtime">
+                    <td class="rt_iname">leadtime</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Lead Time</td>
+                </tr>
+                    <tr id="filter_location">
+                    <td class="rt_iname">location</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Location</td>
+                </tr>
+                    <tr id="filter_locationallowstorepickup">
+                    <td class="rt_iname">locationallowstorepickup</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Allow Store Pickup</td>
+                </tr>
+                    <tr id="filter_locationstorepickupbufferstock">
+                    <td class="rt_iname">locationstorepickupbufferstock</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Buffer Stock</td>
+                </tr>
+                    <tr id="filter_memo">
+                    <td class="rt_iname">memo</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Memo</td>
+                </tr>
+                    <tr id="filter_minimumrescheduledays">
+                    <td class="rt_iname">minimumrescheduledays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Minimum Reschedule Days</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nextinvtcountdate">
+                    <td class="rt_iname">nextinvtcountdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Next Count Date</td>
+                </tr>
+                    <tr id="filter_pastdueforecastdays">
+                    <td class="rt_iname">pastdueforecastdays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Past Due Forecast Days</td>
+                </tr>
+                    <tr id="filter_periodiclotsizedays">
+                    <td class="rt_iname">periodiclotsizedays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Periods of Supply Increment</td>
+                </tr>
+                    <tr id="filter_periodiclotsizetype">
+                    <td class="rt_iname">periodiclotsizetype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Periods of Supply Type</td>
+                </tr>
+                    <tr id="filter_poreceiptcost">
+                    <td class="rt_iname">poreceiptcost</td>
+                    <td class="rt_itype">currency2</td>
+                    <td class="rt_ilabel">PO Receipt Cost</td>
+                </tr>
+                    <tr id="filter_preferredstocklevel">
+                    <td class="rt_iname">preferredstocklevel</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Preferred Stock Level</td>
+                </tr>
+                    <tr id="filter_reorderpoint">
+                    <td class="rt_iname">reorderpoint</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Reorder Point</td>
+                </tr>
+                    <tr id="filter_rescheduleindays">
+                    <td class="rt_iname">rescheduleindays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Reschedule In Days</td>
+                </tr>
+                    <tr id="filter_rescheduleoutdays">
+                    <td class="rt_iname">rescheduleoutdays</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Reschedule Out Days</td>
+                </tr>
+                    <tr id="filter_safetystocklevel">
+                    <td class="rt_iname">safetystocklevel</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Safety Stock Level</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+                    <tr id="filter_supplylotsizingmethod">
+                    <td class="rt_iname">supplylotsizingmethod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Lot Sizing Method</td>
+                </tr>
+                    <tr id="filter_supplytimefence">
+                    <td class="rt_iname">supplytimefence</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Planning Time Fence</td>
+                </tr>
+                    <tr id="filter_supplytype">
+                    <td class="rt_iname">supplytype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Supply Type</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_advancewarningthreshold">
+                    <td class="rt_cname">advancewarningthreshold</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Firm/Release Advance Warning Threshold</td>
+                </tr>
+                    <tr id="column_atpleadtime">
+                    <td class="rt_cname">atpleadtime</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">ATP Lead Time</td>
+                </tr>
+                    <tr id="column_backwardconsumptiondays">
+                    <td class="rt_cname">backwardconsumptiondays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Backward Consumption Days</td>
+                </tr>
+                    <tr id="column_buildtime">
+                    <td class="rt_cname">buildtime</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Work Order Lead Time</td>
+                </tr>
+                    <tr id="column_cost">
+                    <td class="rt_cname">cost</td>
+                    <td class="rt_ctype">currency2</td>
+                    <td class="rt_clabel">Standard Cost</td>
+                </tr>
+                    <tr id="column_costinglotsize">
+                    <td class="rt_cname">costinglotsize</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Costing Lot Size</td>
+                </tr>
+                    <tr id="column_defaultreturncost">
+                    <td class="rt_cname">defaultreturncost</td>
+                    <td class="rt_ctype">currency2</td>
+                    <td class="rt_clabel">Default Return Cost</td>
+                </tr>
+                    <tr id="column_demandsource">
+                    <td class="rt_cname">demandsource</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Demand Source</td>
+                </tr>
+                    <tr id="column_demandtimefence">
+                    <td class="rt_cname">demandtimefence</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Demand Time Fence</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fixedlotsize">
+                    <td class="rt_cname">fixedlotsize</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Fixed Lot Size</td>
+                </tr>
+                    <tr id="column_forwardconsumptiondays">
+                    <td class="rt_cname">forwardconsumptiondays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Forward Consumption Days</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_inventorycosttemplate">
+                    <td class="rt_cname">inventorycosttemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Inventory Cost Template</td>
+                </tr>
+                    <tr id="column_invtclassification">
+                    <td class="rt_cname">invtclassification</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Inventory Classification</td>
+                </tr>
+                    <tr id="column_invtcountinterval">
+                    <td class="rt_cname">invtcountinterval</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Inventory Count Interval</td>
+                </tr>
+                    <tr id="column_isautolocassignmentallowed">
+                    <td class="rt_cname">isautolocassignmentallowed</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Auto Loc. Assignment Allowed</td>
+                </tr>
+                    <tr id="column_isautolocassignmentsuspended">
+                    <td class="rt_cname">isautolocassignmentsuspended</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Auto Loc. Assignment Suspended</td>
+                </tr>
+                    <tr id="column_iswip">
+                    <td class="rt_cname">iswip</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">WIP</td>
+                </tr>
+                    <tr id="column_item">
+                    <td class="rt_cname">item</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Item</td>
+                </tr>
+                    <tr id="column_latedemandthreshold">
+                    <td class="rt_cname">latedemandthreshold</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">High Impact Late Demand Threshold</td>
+                </tr>
+                    <tr id="column_leadtime">
+                    <td class="rt_cname">leadtime</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Lead Time</td>
+                </tr>
+                    <tr id="column_location">
+                    <td class="rt_cname">location</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Location</td>
+                </tr>
+                    <tr id="column_locationallowstorepickup">
+                    <td class="rt_cname">locationallowstorepickup</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Allow Store Pickup</td>
+                </tr>
+                    <tr id="column_locationstorepickupbufferstock">
+                    <td class="rt_cname">locationstorepickupbufferstock</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Buffer Stock</td>
+                </tr>
+                    <tr id="column_memo">
+                    <td class="rt_cname">memo</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Memo</td>
+                </tr>
+                    <tr id="column_minimumrescheduledays">
+                    <td class="rt_cname">minimumrescheduledays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Minimum Reschedule Days</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_nextinvtcountdate">
+                    <td class="rt_cname">nextinvtcountdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Next Inventory Count Date</td>
+                </tr>
+                    <tr id="column_pastdueforecastdays">
+                    <td class="rt_cname">pastdueforecastdays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Past Due Forecast Days</td>
+                </tr>
+                    <tr id="column_periodiclotsizedays">
+                    <td class="rt_cname">periodiclotsizedays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Periods of Supply Increment</td>
+                </tr>
+                    <tr id="column_periodiclotsizetype">
+                    <td class="rt_cname">periodiclotsizetype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Periods of Supply Type</td>
+                </tr>
+                    <tr id="column_poreceiptcost">
+                    <td class="rt_cname">poreceiptcost</td>
+                    <td class="rt_ctype">currency2</td>
+                    <td class="rt_clabel">PO Receipt Cost</td>
+                </tr>
+                    <tr id="column_preferredstocklevel">
+                    <td class="rt_cname">preferredstocklevel</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Preferred Stock Level</td>
+                </tr>
+                    <tr id="column_reorderpoint">
+                    <td class="rt_cname">reorderpoint</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Reorder Point</td>
+                </tr>
+                    <tr id="column_rescheduleindays">
+                    <td class="rt_cname">rescheduleindays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Reschedule In Days</td>
+                </tr>
+                    <tr id="column_rescheduleoutdays">
+                    <td class="rt_cname">rescheduleoutdays</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Reschedule Out Days</td>
+                </tr>
+                    <tr id="column_safetystocklevel">
+                    <td class="rt_cname">safetystocklevel</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Safety Stock Level</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+                    <tr id="column_supplylotsizingmethod">
+                    <td class="rt_cname">supplylotsizingmethod</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Lot Sizing Method</td>
+                </tr>
+                    <tr id="column_supplytimefence">
+                    <td class="rt_cname">supplytimefence</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Planning Time Fence</td>
+                </tr>
+                    <tr id="column_supplytype">
+                    <td class="rt_cname">supplytype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Supply Type</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

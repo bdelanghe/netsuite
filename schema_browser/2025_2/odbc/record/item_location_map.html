@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__item_location_map','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__item_location_map','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Item_location_map
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Item Fields custom field is available for the Item Location Map table.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ATP_LEAD_TIME">
+            <td class="rt_fname">atp_lead_time</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">APT lead time</td>
+        </tr>
+        <tr id="field_AVAILABLE_COUNT">
+            <td class="rt_fname">available_count</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Available count</td>
+        </tr>
+        <tr id="field_AVERAGE_COST">
+            <td class="rt_fname">average_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Average cost</td>
+        </tr>
+        <tr id="field_BACKWARD_CONSUMPTION_DAYS">
+            <td class="rt_fname">backward_consumption_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Backward consumption days</td>
+        </tr>
+        <tr id="field_COST_0">
+            <td class="rt_fname">cost_0</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost</td>
+        </tr>
+        <tr id="field_COST_ACCOUNTING_STATUS">
+            <td class="rt_fname">cost_accounting_status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost accounting status</td>
+        </tr>
+        <tr id="field_COSTING_LOT_SIZE">
+            <td class="rt_fname">costing_lot_size</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Costing lot size</td>
+        </tr>
+        <tr id="field_DEFAULT_RETURN_COST">
+            <td class="rt_fname">default_return_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Default return cost</td>
+        </tr>
+        <tr id="field_DEMAND_SOURCE">
+            <td class="rt_fname">demand_source</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Demand source</td>
+        </tr>
+        <tr id="field_DEMAND_TIME_FENCE">
+            <td class="rt_fname">demand_time_fence</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Demand time fence</td>
+        </tr>
+        <tr id="field_FIXED_LOT_SIZE">
+            <td class="rt_fname">fixed_lot_size</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fixed lot size</td>
+        </tr>
+        <tr id="field_FORWARD_CONSUMPTION_DAYS">
+            <td class="rt_fname">forward_consumption_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Forward consumption days</td>
+        </tr>
+        <tr id="field_IN_TRANSIT_COUNT">
+            <td class="rt_fname">in_transit_count</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">18</td>
+            <td class="rt_fscale">8</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">In transit count</td>
+        </tr>
+        <tr id="field_INVENTORY_COST_TEMPLATE">
+            <td class="rt_fname">inventory_cost_template</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Inventory cost template</td>
+        </tr>
+        <tr id="field_INVT_COUNT_CLASSIFICATION">
+            <td class="rt_fname">invt_count_classification</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Inventory count classification</td>
+        </tr>
+        <tr id="field_INVT_COUNT_INTERVAL">
+            <td class="rt_fname">invt_count_interval</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Inventory count interval</td>
+        </tr>
+        <tr id="field_ITEM_ID">
+            <td class="rt_fname">item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item ID</td>
+        </tr>
+        <tr id="field_LAST_INVT_COUNT_DATE">
+            <td class="rt_fname">last_invt_count_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last inventory count date</td>
+        </tr>
+        <tr id="field_LAST_PURCHASE_PRICE">
+            <td class="rt_fname">last_purchase_price</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Last purchase price</td>
+        </tr>
+        <tr id="field_LOCATION_ID">
+            <td class="rt_fname">location_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Location ID</td>
+        </tr>
+        <tr id="field_LOT_SIZING_METHOD">
+            <td class="rt_fname">lot_sizing_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Lot sizing method</td>
+        </tr>
+        <tr id="field_NEXT_INVT_COUNT_DATE">
+            <td class="rt_fname">next_invt_count_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Next inventory count date</td>
+        </tr>
+        <tr id="field_NS_LEAD_TIME">
+            <td class="rt_fname">ns_lead_time</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">NetSuite lead time</td>
+        </tr>
+        <tr id="field_ON_HAND_COUNT">
+            <td class="rt_fname">on_hand_count</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">On hand count</td>
+        </tr>
+        <tr id="field_ON_HAND_VALUE">
+            <td class="rt_fname">on_hand_value</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">29</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">On hand value</td>
+        </tr>
+        <tr id="field_ON_ORDER_COUNT">
+            <td class="rt_fname">on_order_count</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">On order count</td>
+        </tr>
+        <tr id="field_PERIODIC_LOT_SIZE_DAYS">
+            <td class="rt_fname">periodic_lot_size_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Periodic lot size days</td>
+        </tr>
+        <tr id="field_PERIODIC_LOT_SIZE_TYPE">
+            <td class="rt_fname">periodic_lot_size_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Periodic lot size type</td>
+        </tr>
+        <tr id="field_PREF_STOCK_LEVEL">
+            <td class="rt_fname">pref_stock_level</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Preferred stock level</td>
+        </tr>
+        <tr id="field_QUANTITYBACKORDERED">
+            <td class="rt_fname">quantitybackordered</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Quantity back-ordered</td>
+        </tr>
+        <tr id="field_REORDER_POINT">
+            <td class="rt_fname">reorder_point</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">21</td>
+            <td class="rt_fscale">11</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reorder point</td>
+        </tr>
+        <tr id="field_RESCHEDULE_IN_DAYS">
+            <td class="rt_fname">reschedule_in_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reschedule in days</td>
+        </tr>
+        <tr id="field_RESCHEDULE_OUT_DAYS">
+            <td class="rt_fname">reschedule_out_days</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reschedule out days</td>
+        </tr>
+        <tr id="field_SAFETY_STOCK_LEVEL">
+            <td class="rt_fname">safety_stock_level</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Safety stock level</td>
+        </tr>
+        <tr id="field_SUPPLY_TIME_FENCE">
+            <td class="rt_fname">supply_time_fence</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Supply time fence</td>
+        </tr>
+        <tr id="field_SUPPLY_TYPE">
+            <td class="rt_fname">supply_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Supply type</td>
+        </tr>
+        <tr id="field_WIP">
+            <td class="rt_fname">wip</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">WIP</td>
+        </tr>
+    </table>
+
+
+
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

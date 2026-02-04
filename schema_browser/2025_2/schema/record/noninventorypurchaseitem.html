@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__noninventorypurchaseitem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__noninventorypurchaseitem','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>NonInventoryPurchaseItem</H1>
+
+
+    Namespace: <a href="../../schema/record/noninventorypurchaseitem.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemaccountingbookdetaillist.html?mode=package">ItemAccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amortizationPeriod</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amortization Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of periods over which the purchase amount should be amortized. For example, enter 60 to amortize the amount over 60 periods starting from the amortization start date.
+ 
+Note: The starting period is specified by the amortization start date on bills.  If no amortization start date is specified, the posting date of the bill is the amortization start date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amortizationTemplate</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amortization Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an amortization template to create the recognition schedule for the cost of this item.
+ 
+This template is used by default on purchase transactions. You can still select a different template on transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">availableToPartners</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Available to Adv. Partners</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If true, this item is available in the Advanced Partner Center.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billExchRateVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPriceVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Price Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billQtyVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quantity Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consumptionUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Consumption Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use the Multiple Units of Measure feature, select the default unit of measure for inventory.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">cost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the price you pay for this item.
+
+If you do not enter a price, purchase orders for this item show the most recent purchase price by default.
+
+If you select a preferred vendor for this item, the price is shown in the currency selected on the vendor's record. If no preferred vendor is selected, the price is shown in your base currency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costCategory</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a cost category to associate with this item.
+
+View existing cost categories at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists.
+
+For more details, click Help and read Creating Cost Categories.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field. If a preferred vendor has been specified in vendorName, the field returns the currency set on that vendor record. Otherwise, the base currency for the company is returned.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferralAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferred Expense</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a deferred expense account if you want to amortize expenses instead of posting to a standard expense account.
+ 
+Note: If you do not select a deferred expense account for an item, you can associate an amortization template with the item on transactions only if the template identifies a specific deferred expense account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set a department to associate with this item. For details on existing department records, in the UI go to Setup &gt; Company &gt; Departments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Display Name/Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an optional name of up to 250 characters for this item in addition to the item name. If you are integrating with a Yahoo! store, this field is imported from Yahoo!. The display name prints in the Item column of the sales form when Basic printing is used. If this item is a member of a kit, this name appears in the Item column when the Print Items box is checked. If you do not set a display name, then item name appears on printed forms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expenseAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">generateAccruals</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Generate Accruals</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to automatically generate and post an accrual to the General Ledger.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hierarchyVersionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/noninventorypurchaseitemhierarchyversionslist.html?mode=package">NonInventoryPurchaseItemHierarchyVersionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeChildren</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include Children</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Include Children box to share the item with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.
+
+Note: When sharing items across subsidiaries, all of the options selected on the item record must be compatible across subsidiaries.
+ 
+For example, when entering an inventory item to be shared across subsidiaries, you should select Income and Asset accounts on the item record that are also shared across the same subsidiaries.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isFulfillable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Can be Fulfilled</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Can be Fulfilled/Received box to enable this item to be received and fulfilled during order processing.
+
+Clear this box if this item does not require being received and fulfilled.
+
+Note: Once this item has been added to transactions, this setting cannot be changed.
+
+This field is used when the Advanced Billing and Advanced Shipping features are both enabled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the item as inactive. By default, this field is set to false.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">issueProduct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Product</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the product this item is associated with.
+
+Product records are tracked with versions and builds for issue management.
+
+To create product records, go to Setup &gt; Issues &gt; Products &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the item is subject to sales tax.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Name/Number</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter up to 250 characters for the name of this item. This name appears in lists on transactions. If you have the option of entering a display name and do not, the item name prints in the Item column of sales forms. If you have the option to enter a vendor name and do not, the item name prints in the Item column of purchase forms when Basic printing is used. If you have entered a display name, it will print on purchases instead of the item name when Basic printing is used.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemOptionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemoptionslist.html?mode=package">ItemOptionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemVendorList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemvendorlist.html?mode=package">ItemVendorList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a location to associate with this item.
+To use a location, the Multi-Location Inventory feature must be enabled.
+
+    * If the Multi-Location Inventory feature is not enabled:
+
+      Selecting an item record location limits the items that certain roles can access.
+      For example, Role A is set up to access only items associated with Location One. Therefore, employees who have Role A can access only items associated with Location One.
+
+      Note: If the Multi-Location Inventory feature is not enabled, you cannot use this field to track inventory by locations. For example, you cannot track how many widgets you have in stock in Location One.
+
+      For more information click here.
+
+    * If the Multi-Location Inventory feature is enabled:
+
+      Selecting an item record location classifies the item by that location to limit the items that certain roles can access. To track inventory per location, use the Locations subtab at the bottom of this form.
+
+      For more information click here.
+
+Select New to enter a new location record.
+
+Go to Setup &gt; Company &gt; Locations for details about existing location records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixItemNameTemplate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Matrix Item Name Template</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is used to control how the matrix item will be displayed in the Matrix Item Name/Number field.
+
+Compose the order in which attributes and matrix options are displayed by selecting from the Insert Item Attribute and Insert Matrix Option dropdown lists.
+
+Add custom separator characters to easier distinguish the various options. 
+
+Example: Item Name: Fabric / Color / Waist / Length [Location]</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixOptionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/matrixoptionlist.html?mode=package">MatrixOptionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemmatrixtype.html?mode=package">ItemMatrixType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Matrix Type</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subitem of</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing item record. Only required if the item is a child of another item. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the description of this item that is displayed on vendor orders. You should include the unit of measure in this description.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Purchase Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the unit you use to purchase this item from the vendor.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">residual</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Residual</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an amount or percentage to remain in the deferral account and not be amortized. A residual amount generally represents the salvage value of a fixed asset.
+ 
+Note: A residual amount entered on a transaction overrides a residual amount entered on an item record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Tax Code</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is required for customers subscribing to International versions on NetSuite. Sets the default tax code to be used on sales transactions. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Schedule</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the tax schedule you want to apply to this item.
+
+You can create new tax schedules at Setup &gt; Accounting &gt; Taxes &gt; Tax Schedules &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">translationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/translationlist.html?mode=package">TranslationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">unitsType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Units Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">upcCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">UPC Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defines whether this is a unv part code. Bar codes for items are generated in Code 128 by default. If you prefer to use the UPC code format, set this field to True on each item record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vendor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Preferred Vendor</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vendorName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Name/Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the preferred vendor for this item. If the Multiple Vendors feature is enabled, this field is unavailable and you must set the preferred vendor in the itemVendorsList.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

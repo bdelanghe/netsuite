@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__itemfulfillment','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__itemfulfillment','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Item_fulfillments
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ACCOUNTING_PERIOD_ID">
+            <td class="rt_fname">accounting_period_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Accounting period ID</td>
+        </tr>
+        <tr id="field_ANCILLARY_ENDORSEMENT">
+            <td class="rt_fname">ancillary_endorsement</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Ancillary endorsement</td>
+        </tr>
+        <tr id="field_B13A_FILLING_OPTION">
+            <td class="rt_fname">b13a_filling_option</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">24</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">B13a filling option</td>
+        </tr>
+        <tr id="field_B13A_STATEMENT_DATA">
+            <td class="rt_fname">b13a_statement_data</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">B13a statement data</td>
+        </tr>
+        <tr id="field_BACKUP_SHIP_NOTIFICATION_EMAIL">
+            <td class="rt_fname">backup_ship_notification_email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Backup ship notification email</td>
+        </tr>
+        <tr id="field_BILLADDRESS">
+            <td class="rt_fname">billaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bill address</td>
+        </tr>
+        <tr id="field_BOOKING_CONFIRMATION_NUMBER">
+            <td class="rt_fname">booking_confirmation_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">64</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Booking confirmation number</td>
+        </tr>
+        <tr id="field_CARRIER_IDENTIFICATION_CODE">
+            <td class="rt_fname">carrier_identification_code</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Carrier identification code</td>
+        </tr>
+        <tr id="field_CREATED_BY_ID">
+            <td class="rt_fname">created_by_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Created by ID</td>
+        </tr>
+        <tr id="field_CURRENCY_ID">
+            <td class="rt_fname">currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Currency ID</td>
+        </tr>
+        <tr id="field_DATE_BLANKET_PERIOD_END">
+            <td class="rt_fname">date_blanket_period_end</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date blanket period end</td>
+        </tr>
+        <tr id="field_DATE_BLANKET_PERIOD_START">
+            <td class="rt_fname">date_blanket_period_start</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date blanket period start</td>
+        </tr>
+        <tr id="field_DATE_CLOSED">
+            <td class="rt_fname">date_closed</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date closed</td>
+        </tr>
+        <tr id="field_DATE_CREATED">
+            <td class="rt_fname">date_created</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date created</td>
+        </tr>
+        <tr id="field_DATE_FUTURE_SHIPPING">
+            <td class="rt_fname">date_future_shipping</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date future shipping</td>
+        </tr>
+        <tr id="field_DATE_HOME_DELIVERY">
+            <td class="rt_fname">date_home_delivery</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date home delivery</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified</td>
+        </tr>
+        <tr id="field_DATE_LICENSE">
+            <td class="rt_fname">date_license</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date license</td>
+        </tr>
+        <tr id="field_DATE_SALES_EFFECTIVE">
+            <td class="rt_fname">date_sales_effective</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date the sales is effective</td>
+        </tr>
+        <tr id="field_DATE_TRANSACTION">
+            <td class="rt_fname">date_transaction</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction date</td>
+        </tr>
+        <tr id="field_DELIVERY_INSTRUCTIONS">
+            <td class="rt_fname">delivery_instructions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">64</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Delivery instrcutions</td>
+        </tr>
+        <tr id="field_ECCN">
+            <td class="rt_fname">eccn</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">8</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">ECCN</td>
+        </tr>
+        <tr id="field_EMAIL">
+            <td class="rt_fname">email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">256</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Email</td>
+        </tr>
+        <tr id="field_ENTITY_ID">
+            <td class="rt_fname">entity_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Entity ID. The customer or job associated with this transaction appears here. For details on existing customers and projects, go to Customers.</td>
+        </tr>
+        <tr id="field_ENTRY_NUMBER">
+            <td class="rt_fname">entry_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Entry number</td>
+        </tr>
+        <tr id="field_EXCHANGE_RATE">
+            <td class="rt_fname">exchange_rate</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Exchange rate</td>
+        </tr>
+        <tr id="field_EXPORT_TYPE">
+            <td class="rt_fname">export_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">22</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Export type</td>
+        </tr>
+        <tr id="field_FAX">
+            <td class="rt_fname">fax</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fax</td>
+        </tr>
+        <tr id="field_FEDEX_SHIP_ALERT">
+            <td class="rt_fname">fedex_ship_alert</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fedex ship alert</td>
+        </tr>
+        <tr id="field_FOB">
+            <td class="rt_fname">fob</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">13</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Free on Board</td>
+        </tr>
+        <tr id="field_HANDLING_COST">
+            <td class="rt_fname">handling_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Handling cost</td>
+        </tr>
+        <tr id="field_HAS_CERT_OF_ORIGIN">
+            <td class="rt_fname">has_cert_of_origin</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Has Certification of origin</td>
+        </tr>
+        <tr id="field_HAS_COMMERCIAL_INVOICE">
+            <td class="rt_fname">has_commercial_invoice</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Has commercial invoice</td>
+        </tr>
+        <tr id="field_HAS_NAFTA_CERT_OF_ORIGIN">
+            <td class="rt_fname">has_nafta_cert_of_origin</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Has NAFTA certification or origin</td>
+        </tr>
+        <tr id="field_HAS_PRO_FORMA_INVOICE">
+            <td class="rt_fname">has_pro_forma_invoice</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Has promo forma invoice</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_ADDRESS_ONE">
+            <td class="rt_fname">hold_at_location_address_one</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location address one</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_ADDRESS_THREE">
+            <td class="rt_fname">hold_at_location_address_three</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location address three</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_ADDRESS_TWO">
+            <td class="rt_fname">hold_at_location_address_two</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location address two</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_CITY">
+            <td class="rt_fname">hold_at_location_city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location city</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_COUNTRY">
+            <td class="rt_fname">hold_at_location_country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location country</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_LOC_PHONE">
+            <td class="rt_fname">hold_at_location_loc_phone</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_PHONE">
+            <td class="rt_fname">hold_at_location_phone</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location phone</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_STATE">
+            <td class="rt_fname">hold_at_location_state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location state</td>
+        </tr>
+        <tr id="field_HOLD_AT_LOCATION_ZIP">
+            <td class="rt_fname">hold_at_location_zip</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Hold at location zip code</td>
+        </tr>
+        <tr id="field_HOME_DELIVERY_TYPE">
+            <td class="rt_fname">home_delivery_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">16</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Home delivery type</td>
+        </tr>
+        <tr id="field_IN_BOND_CODE">
+            <td class="rt_fname">in_bond_code</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">2</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">In bond code</td>
+        </tr>
+        <tr id="field_INTERNATIONAL_EXEMPTION_NUMBER">
+            <td class="rt_fname">international_exemption_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">International exemption number</td>
+        </tr>
+        <tr id="field_IS_CERTIFIED_MAIL">
+            <td class="rt_fname">is_certified_mail</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is certified mail</td>
+        </tr>
+        <tr id="field_IS_FDX_SIGNATURE_HOME_DELIVERY">
+            <td class="rt_fname">is_fdx_signature_home_delivery</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is fedex signature home delivery</td>
+        </tr>
+        <tr id="field_IS_HELD_AT_LOCATION">
+            <td class="rt_fname">is_held_at_location</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is held at location</td>
+        </tr>
+        <tr id="field_IS_HOLIDAY_DELIVERY">
+            <td class="rt_fname">is_holiday_delivery</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is holiday delivery</td>
+        </tr>
+        <tr id="field_IS_INSIDE_DELIVERY">
+            <td class="rt_fname">is_inside_delivery</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">is inside delivery</td>
+        </tr>
+        <tr id="field_IS_INSIDE_PICKUP">
+            <td class="rt_fname">is_inside_pickup</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is inside pickup</td>
+        </tr>
+        <tr id="field_IS_INTERCOMPANY">
+            <td class="rt_fname">is_intercompany</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is intercompany</td>
+        </tr>
+        <tr id="field_IS_MEMORIZED">
+            <td class="rt_fname">is_memorized</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is memorized</td>
+        </tr>
+        <tr id="field_IS_ONLINE_BILL_PAY">
+            <td class="rt_fname">is_online_bill_pay</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is online bill pay</td>
+        </tr>
+        <tr id="field_IS_RELATED_PARTIES_TRANSACTION">
+            <td class="rt_fname">is_related_parties_transaction</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is related parties transaction</td>
+        </tr>
+        <tr id="field_IS_ROUTED_EXPORT_TRANSACTION">
+            <td class="rt_fname">is_routed_export_transaction</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is routed export transaction</td>
+        </tr>
+        <tr id="field_IS_SATURDAY_DELIVERY">
+            <td class="rt_fname">is_saturday_delivery</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is Saturday delivery</td>
+        </tr>
+        <tr id="field_IS_SATURDAY_PICKUP">
+            <td class="rt_fname">is_saturday_pickup</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is Saturday pickup</td>
+        </tr>
+        <tr id="field_IS_SATURDAY_SERVICE">
+            <td class="rt_fname">is_saturday_service</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is Saturday service</td>
+        </tr>
+        <tr id="field_IS_TAX_REG_OVERRIDE">
+            <td class="rt_fname">is_tax_reg_override</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is tax region override</td>
+        </tr>
+        <tr id="field_IS_VISIBLE_IN_CUSTOMER_CENTER">
+            <td class="rt_fname">is_visible_in_customer_center</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is visible in customer center</td>
+        </tr>
+        <tr id="field_IS_WEEKEND_DELIVERY">
+            <td class="rt_fname">is_weekend_delivery</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is weekend delivery</td>
+        </tr>
+        <tr id="field_LICENSE_EXCEPTION">
+            <td class="rt_fname">license_exception</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">License exception</td>
+        </tr>
+        <tr id="field_LICENSE_NUMBER">
+            <td class="rt_fname">license_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">35</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">License number</td>
+        </tr>
+        <tr id="field_MEMO">
+            <td class="rt_fname">memo</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Memo. Enter an optional memo with additional information about this fulfillment. What you enter here can be used in searches and shows on reports.</td>
+        </tr>
+        <tr id="field_MESSAGE">
+            <td class="rt_fname">message</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Message</td>
+        </tr>
+        <tr id="field_METHOD_OF_TRANSPORT">
+            <td class="rt_fname">method_of_transport</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">64</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Method of transport</td>
+        </tr>
+        <tr id="field_NEEDS_BILL">
+            <td class="rt_fname">needs_bill</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Needs bill</td>
+        </tr>
+        <tr id="field_NOTIFICATION_EMAIL_MESSAGE">
+            <td class="rt_fname">notification_email_message</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">500</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Notification email message</td>
+        </tr>
+        <tr id="field_PROMOTION_CODE_ID">
+            <td class="rt_fname">promotion_code_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Promotion code ID</td>
+        </tr>
+        <tr id="field_REASON_FOR_EXPORT">
+            <td class="rt_fname">reason_for_export</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reason for export</td>
+        </tr>
+        <tr id="field_RECIPIENT_CUSTOMS_ID">
+            <td class="rt_fname">recipient_customs_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">64</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Recipient customs ID</td>
+        </tr>
+        <tr id="field_RECIPIENT_CUSTOMS_ID_TYPE">
+            <td class="rt_fname">recipient_customs_id_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Recipient customs ID type</td>
+        </tr>
+        <tr id="field_RECIPIENT_TAX_ID">
+            <td class="rt_fname">recipient_tax_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">15</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Recipient tax ID</td>
+        </tr>
+        <tr id="field_RELATED_TRANID">
+            <td class="rt_fname">related_tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Related Transaction ID</td>
+        </tr>
+        <tr id="field_RETURN_TYPE">
+            <td class="rt_fname">return_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return type</td>
+        </tr>
+        <tr id="field_RETURN_TYPE_DESCRIPTION">
+            <td class="rt_fname">return_type_description</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">30</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return type description</td>
+        </tr>
+        <tr id="field_SHIP_NOTIFICATION_EMAIL">
+            <td class="rt_fname">ship_notification_email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Ship notification email</td>
+        </tr>
+        <tr id="field_SHIP_NOTIFICATION_EMAIL_TWO">
+            <td class="rt_fname">ship_notification_email_two</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Ship notification email 2</td>
+        </tr>
+        <tr id="field_SHIPADDRESS">
+            <td class="rt_fname">shipaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Ship address</td>
+        </tr>
+        <tr id="field_SHIPPING_COST">
+            <td class="rt_fname">shipping_cost</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping cost</td>
+        </tr>
+        <tr id="field_SHIPPING_ITEM_ID">
+            <td class="rt_fname">shipping_item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping item ID</td>
+        </tr>
+        <tr id="field_STATUS">
+            <td class="rt_fname">status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Status</td>
+        </tr>
+        <tr id="field_TAX_REG_ID">
+            <td class="rt_fname">tax_reg_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">This field is no longer supported.</td>
+        </tr>
+        <tr id="field_TERMS_FREIGHT_CHARGE">
+            <td class="rt_fname">terms_freight_charge</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Terms freight charge</td>
+        </tr>
+        <tr id="field_TERMS_INSURANCE_CHARGE">
+            <td class="rt_fname">terms_insurance_charge</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Terms of insurance charge</td>
+        </tr>
+        <tr id="field_TERMS_OF_SALE">
+            <td class="rt_fname">terms_of_sale</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">32</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Terms of sale</td>
+        </tr>
+        <tr id="field_TITLE">
+            <td class="rt_fname">title</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">200</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Title</td>
+        </tr>
+        <tr id="field_TOTAL_PACKAGE_WEIGHT_IN_LBS">
+            <td class="rt_fname">total_package_weight_in_lbs</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Total package weight in pounds</td>
+        </tr>
+        <tr id="field_TRANID">
+            <td class="rt_fname">tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Tran ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_EXTID">
+            <td class="rt_fname">transaction_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction Extension ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_ID">
+            <td class="rt_fname">transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction ID</td>
+        </tr>
+        <tr id="field_TRANSFER_LOCATION_ID">
+            <td class="rt_fname">transfer_location_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transfer location ID</td>
+        </tr>
+        <tr id="field_USE_BACKUP_EMAIL">
+            <td class="rt_fname">use_backup_email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Use backup email</td>
+        </tr>
+        <tr id="field_USE_FEDEX_SHIP_ALERT">
+            <td class="rt_fname">use_fedex_ship_alert</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Use fedex ship alert</td>
+        </tr>
+        <tr id="field_USE_SHIP_NOTIFICATION_EMAIL">
+            <td class="rt_fname">use_ship_notification_email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Use ship notification email</td>
+        </tr>
+    </table>
+
+
+
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

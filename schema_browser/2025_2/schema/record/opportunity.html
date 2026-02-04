@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__opportunity','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__opportunity','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Opportunity</H1>
+
+
+    Namespace: <a href="../../schema/record/opportunity.html?mode=package">urn:sales.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">actionItem</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Action Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Record the next step in the negotiation process.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altSalesRangeHigh</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Sales Range High</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be greater than or equal to the amount in the projaltsalesamt field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altSalesRangeLow</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Sales Range Low</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be lower than or equal to the projected amount in the projaltsalesamt field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the address associated with the selection for billAddress. If explicitly set via web services, this acts as a custom address and overrides for this transaction only. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">buyingReason</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Buying Reason</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the prospect or customer's reason for buying from your company. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">buyingTimeFrame</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Buying Time Frame</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the time frame for the prospect or customer to purchase. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences. If you are using a customForm that has class customized at the body level, you can NOT set this field at the item level. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">closeDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Close</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field corresponds to the date that the Opportunity entityStatus is set to Closed Won. Note that this field is read-only in both the UI and in Web services.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">competitorsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/opportunitycompetitorslist.html?mode=package">OpportunityCompetitorsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contribPct</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contribution Percentage</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this transaction for is shown here.
+
+If you use the Multi-Currency Customers feature, select the transaction currency you want to create this transaction in. This customer's primary currency is selected by default.
+
+If you have already selected items on this transaction, selecting a new currency refreshes them to show the price in the new currency (except for items you entered custom prices for) and recalculates tax and gross profit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Lists &gt; Accounting &gt; Currencies.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">daysOpen</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Days Open</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the number of days this opportunity has been open.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Departments. If you are using a customForm that has department customized at the body level, you can NOT set this field at the item level. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References a company record that already exists in your account. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status (Customer)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Sales &gt; Setup Tasks &gt; Customer Statuses. Defaults to the value set at Setup &gt; Sales &gt; Preferences &gt; Sales Preferences. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the customer's tax registration number associated with this opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit: Read-only field that equals the revenue amount minus the Est. Cost. At the transaction level, it equals the gross profit of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfitPercent</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit Percent</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit Margin, as a percentage: Read-only field that equals the Est. Gross Profit divided by revenue, expressed as a percentage. At the transaction level, it equals the gross profit percent of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedBudget</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Budget</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the estimated budget the prospect or customer has for this opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Defaults to the current exchange rate for the currency associated with the company referenced in the entity field. This can only be provided for an add.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expectedCloseDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expected Close Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required when default preferences are turned off. Defaults to the current Date/Time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">forecastType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Forecast Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing Forecast Type defined at Setup &gt; Sales &gt; Sales Preferences &gt; Forecasts (subtab on Preferences page). Note that although the display name for each forecast type can be customized, the actual internal ID associated with each forecast type is static as follows: Low Forecast Name: 1 Medium Forecast Name: 2 High Forecast Name: 3</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isBudgetApproved</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Budget Approved</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the budget for this opportunity has been approved by the prospect or customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/opportunityitemlist.html?mode=package">OpportunityItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">job</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the project associated with this opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">leadSource</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lead Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a lead source that is already defined in your account. If a value is not provided, the field is populated with the lead source associated with the company referenced in the entity field (if a lead source exists for that company). In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the location associated with this opportunity.
+
+Select New to create a new location record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Details</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter additional information about the opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Nexus</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the nexus of the transaction. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different nexus in the dropdown list, the corresponding tax registration number is automatically selected in the Subsidiary Tax Reg. Number field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">oneTime</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">One Time</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Partner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a partner record that already exists in your account. If a value is not provided, the field is populated with the partner associated with the company referenced in the entity field (if a partner exists for that company). In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/opportunitypartnerslist.html?mode=package">OpportunityPartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">probability</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Probability (%)</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">If the value for probability is not provided, a calculated value based on the Status populates the field. If the value for probability is set, it overrides the slaved value depending on the default settings. For example: If conditional defaults are ON, on update the probability changes if the status changes and the probability is NOT specified in the request. If conditional defaults are OFF, on update the probability does NOT change if status changes. If conditional defaults are ON, and a value for both status and probability are submitted, then the submitted values are set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projAltSalesAmt</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Projected Alt. Sales Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the projected alternate sales amount of the opportunity based on the items selected on the opportunity and the estimates associated with the opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">projectedTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Projected Total</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is required when there are no items in the itemList field. When items are listed and a value is not provided, the field is calculated. Provided values may be overridden by the system. See Projected Total, Range High and Range Low Fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rangeHigh</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Range High</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If not provided, this field is calculated. Provided values may be overridden by the system. See Projected Total, Range High and Range Low Fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rangeLow</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Range Low</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If not provided, this field is calculated. Provided values may be overridden by the system. See Projected Total, Range High and Range Low Fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurAnnually</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Annually</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurMonthly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Monthly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurQuarterly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quarterly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurWeekly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Weekly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Choose Team</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When team selling is enabled, this references a user defined sales team group at Lists &gt; Relationships &gt; Groups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesReadiness</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Readiness</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose how close the prospect or customer is to purchasing. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesRep</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an employee record that already exists in your account. If a value is not provided, the field is populated with the sales representative associated with the company referenced in the entity field (if a sales representative exists for that company). The referenced employee record must have a status set as sales rep or an error is thrown. This field is NOT available when the Team Selling feature is enabled. If Team Selling is enabled, you must define sales reps in the OpportunityItemList list. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTeamList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/opportunitysalesteamlist.html?mode=package">OpportunitySalesTeamList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the address associated with the selection for shipAddress. If explicitly set via web services, this acts as a custom address and overrides for this transaction only. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipIsResidential</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping address is residential</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">source</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Source</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the subsidiary associated with this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the tax registration number of the transaction nexus. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different tax registration number in the dropdown list, the corresponding nexus is automatically selected in the Nexus field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncPartnerTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the partner team on the customer record with the changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncSalesTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the sales team on the customer record with the changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tax2Total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/taxdetailslist.html?mode=package">TaxDetailsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Details Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the tax information on the Tax Details subtab of the transaction. Only roles with at least the Edit level of the Tax Details Tab permission can override the tax details.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxPointDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Point Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Tax point date is a legal requirement in many countries. It is the date of transaction that determines the taxability. It may be different from the transaction date that determines the GL impact. Specific rules then consider the reporting of transactions based on tax point date and other factors.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Registration Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the values in the Nexus and Subsidiary Tax Reg. Number fields. Only roles with at least the Edit level of the Tax Details Tab permission can override the values that NetSuite automatically selects in these fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Total</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the value of the title displayed on lists, reports and on the Opportunities subtab of the record the opportunity is associated with.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">totalCostEstimate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Cost: Estimated cost of the specific number of items; estimated rate x quantity = estimated cost.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required when default preferences are turned off. Defaults to the current Date/Time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opportunity #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets a unique ID number for the transaction. If a value is not provided, the system assigns a number. If the value is not unique an error is thrown. By default, any autonumbering of opportunity records is allowed to be overridden. However, if you are explicitly setting a value for tranID and that value is NOT being set in the system, you may have the Allow Override disabled. To enable overriding of autonumbering, go to Set Up &gt; Company &gt; Set up Auto-Generated Numbers &gt; Transactions tab. Then check Allow Override in the Opportunity row and click Save.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vatRegNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">VAT Registration</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">weightedTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Weighted Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to a calculated value that is dependent on total amounts associated with items in itemList.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">winLossReason</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Win/Loss Reason</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Sales &gt; CRM Lists &gt; Win/Loss Reason. For details on how to modify this list via Web services, see WinLossReason. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

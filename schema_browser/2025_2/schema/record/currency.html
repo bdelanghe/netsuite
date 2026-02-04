@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__currency','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__currency','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Currency</H1>
+
+
+    Namespace: <a href="../../schema/record/currency.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">currencyPrecision</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/currencycurrencyprecision.html?mode=package">CurrencyCurrencyPrecision</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency Precision</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Displays the precision of the currency, which designates the number of digits to the right of the decimal point used in currency transactions. Precision can be zero or two.
+
+The level of decimal precision indicated is used for inventory costing calculations to maintains consistency between inventory costing and reporting. Values in report results are rounded to the base currency precision. This rounding applies to currency values and non-currency values, including formula column values.
+
+To change this read-only field to a dropdown list through which you can change the precision from zero or two, contact NetSuite Technical Support.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displaySymbol</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Symbol</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the currency symbol and text to use for this currency. Include spaces if you want to separate the symbol from the currency value.
+
+For example, $ USD or $CAD.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter an exchange rate for this currency against the base currency of this company, or if you use OneWorld, for this currency against the base currency of the root parent subsidiary.
+
+The exchange rate is equal to the base currency amount divided by the foreign currency amount.
+
+For example, if your company is located in Canada (base currency) and you are defining the U.S. dollar (foreign currency), and the current exchange rate is 1.02 Canadian dollars to 1.00 U.S. dollar, the Default Exchange Rate for the U.S. dollar is 1.02/1.00, or 1.02.
+
+This rate is the basis for rates in the Currency Exchange Rates table that are used in foreign currency transactions. If you use OneWorld, this rate also is the basis for rates in the Consolidated Exchange Rates table that are used in consolidated financials. For more information, see the help topic Currency Exchange Rates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">formatSample</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Format Sample</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field that displays a sample value formatted according to the value set in the locale field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fxRateUpdateTimezone</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/currencyfxrateupdatetimezone.html?mode=package">CurrencyFxRateUpdateTimezone</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Time Zone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Update currency exchange rates daily at approximately 6 am in this time zone.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inclInFxRateUpdates</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isBaseCurrency</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Is Base Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates that this currency is the company's base currency or in OneWorld accounts, the base currency for a subsidiary.
+
+Note: After you have entered transactions in foreign currencies, you cannot change a base currency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is false by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">locale</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/currencylocale.html?mode=package">CurrencyLocale</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Locale</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Set the locale for the field. Determines the default values for the formatSample and ISO Code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a unique name for the currency.
+
+Because many countries use the same name for their currencies, you should use a combined name that includes the country name or abbreviation as well as the name of the currency. For example, pesos are the currency in the Philippines, Uruguay, and Mexico. In the Name field, you might enter “Mexican peso.”
+
+This name appears in the Currency field on records and transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overrideCurrencyFormat</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Override Currency Format</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to customize the currency format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">symbol</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ISO Code</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Determines the way currency figures appear on reports and printed transactions. Defaults to the symbol associated with the value set in the locale field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">symbolPlacement</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/currencysymbolplacement.html?mode=package">CurrencySymbolPlacement</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Symbol Placement</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether the symbol appears before or after the number.
+
+Note: The symbol position you select in the Symbol Placement field appears only on transaction records. It does not appear on reports.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

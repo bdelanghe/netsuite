@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__inboundshipment','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__inboundshipment','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Inbound Shipment</H1>
+    <H3>Internal ID: inboundshipment</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_actualdeliverydate">
+                <td class="rt_fname">actualdeliverydate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Actual Delivery Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use the picker to input the actual date the shipment arrived at the receiving location.
+
+The expected and actual dates can be used for the reporting of variances and setting performance metrics.</td>
+            </tr>
+                <tr id="field_actualshippingdate">
+                <td class="rt_fname">actualshippingdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Actual Shipping Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Input a date when the consignment was actually shipped.
+
+The expected and actual dates can be used for the reporting of variances and setting performance metrics.</td>
+            </tr>
+                <tr id="field_billoflading">
+                <td class="rt_fname">billoflading</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Bill Of Lading</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the number from your bill of lading documentation in this field.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_expecteddeliverydate">
+                <td class="rt_fname">expecteddeliverydate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Expected Delivery Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use the picker to add the date when the shipment is expected to be delivered to the receiving location.</td>
+            </tr>
+                <tr id="field_expectedshippingdate">
+                <td class="rt_fname">expectedshippingdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Expected Shipping Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use the date picker to insert the date for when the shipment is expected to leave. The field can be edited to reflect changing circumstances.</td>
+            </tr>
+                <tr id="field_externaldocumentnumber">
+                <td class="rt_fname">externaldocumentnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External Document Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Add the identifying number for the shipment as supplied by your shipping company here.
+
+You can customize the Inbound Shipments list page to include this field for easy identification of the shipment.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_internalid">
+                <td class="rt_fname">internalid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is a system generation read only field.</td>
+            </tr>
+                <tr id="field_shipmentbasecurrency">
+                <td class="rt_fname">shipmentbasecurrency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Base Currency</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shipmentbillingstatus">
+                <td class="rt_fname">shipmentbillingstatus</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Billing Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shipmentcreateddate">
+                <td class="rt_fname">shipmentcreateddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is a read only field.</td>
+            </tr>
+                <tr id="field_shipmentmemo">
+                <td class="rt_fname">shipmentmemo</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use this field to highlight key, or frequently used information.
+
+It is best practice to add a User Note in the Communications subtab to log call other types of communication relating to the shipment.</td>
+            </tr>
+                <tr id="field_shipmentnumber">
+                <td class="rt_fname">shipmentnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Shipment Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is a system generated number. The format can be customized by updating the Inbound Shipment field at: 
+
+Setup &gt; Company &gt; Auto-Generated Numbers &gt; Transaction Numbers.</td>
+            </tr>
+                <tr id="field_shipmentstatus">
+                <td class="rt_fname">shipmentstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is field reflects the progress of the shipment. The five statuses are:
+    * To be Shipped
+    * In Transit
+    * Partially Received
+    * Received
+    * Closed</td>
+            </tr>
+                <tr id="field_vesselnumber">
+                <td class="rt_fname">vesselnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Vessel Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Input the vessel's IMO number, or other identifying reference in this field.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_items_">items - Inbound Shipment Item</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_items_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_currencyprecision">
+                        <td class="rt_sname">currencyprecision</td>
+                        <td class="rt_stype">posinteger</td>
+                        <td class="rt_slabel">Currency Precision</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_expectedrate">
+                        <td class="rt_sname">expectedrate</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Expected Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_id">
+                        <td class="rt_sname">id</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">ID</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_inboundshipment">
+                        <td class="rt_sname">inboundshipment</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Inbound Shipment</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_incoterm">
+                        <td class="rt_sname">incoterm</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Incoterm</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_inventorydetail">
+                        <td class="rt_sname">inventorydetail</td>
+                        <td class="rt_stype"><a href="inventorydetail.html">summary</a></td>
+                        <td class="rt_slabel">Inventory Detail</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_pocurrency">
+                        <td class="rt_sname">pocurrency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_porate">
+                        <td class="rt_sname">porate</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">PO Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_povendor">
+                        <td class="rt_sname">povendor</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Vendor</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_purchaseorder">
+                        <td class="rt_sname">purchaseorder</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">PO</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_quantitybilled">
+                        <td class="rt_sname">quantitybilled</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Quantity Billed</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_quantityexpected">
+                        <td class="rt_sname">quantityexpected</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Quantity Expected</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_quantityreceived">
+                        <td class="rt_sname">quantityreceived</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Quantity Received</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_quantityremaining">
+                        <td class="rt_sname">quantityremaining</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Quantity Remaining</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_receivinglocation">
+                        <td class="rt_sname">receivinglocation</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Receiving Location</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipmentitem">
+                        <td class="rt_sname">shipmentitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Item</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipmentitemamount">
+                        <td class="rt_sname">shipmentitemamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipmentitemdescription">
+                        <td class="rt_sname">shipmentitemdescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipmentitemeffectivedate">
+                        <td class="rt_sname">shipmentitemeffectivedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Effective Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipmentitemexchangerate">
+                        <td class="rt_sname">shipmentitemexchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_totalunitcost">
+                        <td class="rt_sname">totalunitcost</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Total Unit Cost</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_unit">
+                        <td class="rt_sname">unit</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Unit</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_unitlandedcost">
+                        <td class="rt_sname">unitlandedcost</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Unit Landed Cost</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_vendor">
+                        <td class="rt_sname">vendor</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Vendor</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_vendorid">
+                        <td class="rt_sname">vendorid</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Vendor</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_landedcost_">landedcost - Inbound Shipment Landed Cost</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_landedcost_landedcostallocationmethod">
+                        <td class="rt_sname">landedcostallocationmethod</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Allocation Method</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcostamount">
+                        <td class="rt_sname">landedcostamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcostcostcategory">
+                        <td class="rt_sname">landedcostcostcategory</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Cost Category</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcostcurrency">
+                        <td class="rt_sname">landedcostcurrency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcosteffectivedate">
+                        <td class="rt_sname">landedcosteffectivedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Effective Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcostexchangerate">
+                        <td class="rt_sname">landedcostexchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_landedcost_landedcostshipmentitems">
+                        <td class="rt_sname">landedcostshipmentitems</td>
+                        <td class="rt_stype">multiselect</td>
+                        <td class="rt_slabel">Shipment Items</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_item">
+                    <td class="rt_jid">item</td>
+                    <td class="rt_jlabel">Item</td>
+                    <td class="rt_jname">Item</td>
+                </tr>
+                    <tr id="join_itemreceipt">
+                    <td class="rt_jid">itemreceipt</td>
+                    <td class="rt_jlabel">Item Receipt</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_purchaseorder">
+                    <td class="rt_jid">purchaseorder</td>
+                    <td class="rt_jlabel">Purchase Order</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_vendor">
+                    <td class="rt_jid">vendor</td>
+                    <td class="rt_jlabel">Vendor</td>
+                    <td class="rt_jname">Vendor</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_actualdeliverydate">
+                    <td class="rt_iname">actualdeliverydate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Actual Delivery Date</td>
+                </tr>
+                    <tr id="filter_actualshippingdate">
+                    <td class="rt_iname">actualshippingdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Actual Shipping Date</td>
+                </tr>
+                    <tr id="filter_billoflading">
+                    <td class="rt_iname">billoflading</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Bill Of Lading</td>
+                </tr>
+                    <tr id="filter_createddate">
+                    <td class="rt_iname">createddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_description">
+                    <td class="rt_iname">description</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Description</td>
+                </tr>
+                    <tr id="filter_expecteddeliverydate">
+                    <td class="rt_iname">expecteddeliverydate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Expected Delivery Date</td>
+                </tr>
+                    <tr id="filter_expectedrate">
+                    <td class="rt_iname">expectedrate</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Expected Rate</td>
+                </tr>
+                    <tr id="filter_expectedshippingdate">
+                    <td class="rt_iname">expectedshippingdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Expected Shipping Date</td>
+                </tr>
+                    <tr id="filter_externaldocumentnumber">
+                    <td class="rt_iname">externaldocumentnumber</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External Document Number</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_incoterm">
+                    <td class="rt_iname">incoterm</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Incoterm</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal Id</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal Id Number</td>
+                </tr>
+                    <tr id="filter_item">
+                    <td class="rt_iname">item</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item</td>
+                </tr>
+                    <tr id="filter_landedcostallocationmethod">
+                    <td class="rt_iname">landedcostallocationmethod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Landed Cost - Allocation Method</td>
+                </tr>
+                    <tr id="filter_landedcostamount">
+                    <td class="rt_iname">landedcostamount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Landed Cost - Amount</td>
+                </tr>
+                    <tr id="filter_landedcostcostcategory">
+                    <td class="rt_iname">landedcostcostcategory</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Landed Cost - Cost Category</td>
+                </tr>
+                    <tr id="filter_landedcostcurrency">
+                    <td class="rt_iname">landedcostcurrency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Landed Cost - Currency</td>
+                </tr>
+                    <tr id="filter_landedcosteffectivedate">
+                    <td class="rt_iname">landedcosteffectivedate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Landed Cost - Effective Date</td>
+                </tr>
+                    <tr id="filter_landedcostexchangerate">
+                    <td class="rt_iname">landedcostexchangerate</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Landed Cost - Exchange Rate</td>
+                </tr>
+                    <tr id="filter_memo">
+                    <td class="rt_iname">memo</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Memo</td>
+                </tr>
+                    <tr id="filter_poamount">
+                    <td class="rt_iname">poamount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Amount</td>
+                </tr>
+                    <tr id="filter_porate">
+                    <td class="rt_iname">porate</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">PO Rate</td>
+                </tr>
+                    <tr id="filter_purchaseorder">
+                    <td class="rt_iname">purchaseorder</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">PO</td>
+                </tr>
+                    <tr id="filter_quantityexpected">
+                    <td class="rt_iname">quantityexpected</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Quantity Expected</td>
+                </tr>
+                    <tr id="filter_quantityreceived">
+                    <td class="rt_iname">quantityreceived</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Quantity Received</td>
+                </tr>
+                    <tr id="filter_quantityremaining">
+                    <td class="rt_iname">quantityremaining</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Quantity Remaining</td>
+                </tr>
+                    <tr id="filter_receivinglocation">
+                    <td class="rt_iname">receivinglocation</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Receiving Location</td>
+                </tr>
+                    <tr id="filter_shipmentbasecurrency">
+                    <td class="rt_iname">shipmentbasecurrency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Base Currency</td>
+                </tr>
+                    <tr id="filter_shipmentnumber">
+                    <td class="rt_iname">shipmentnumber</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipment Number</td>
+                </tr>
+                    <tr id="filter_status">
+                    <td class="rt_iname">status</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_unit">
+                    <td class="rt_iname">unit</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Unit</td>
+                </tr>
+                    <tr id="filter_vendor">
+                    <td class="rt_iname">vendor</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Vendor</td>
+                </tr>
+                    <tr id="filter_vesselnumber">
+                    <td class="rt_iname">vesselnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Vessel Number</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_actualdeliverydate">
+                    <td class="rt_cname">actualdeliverydate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Actual Delivery Date</td>
+                </tr>
+                    <tr id="column_actualshippingdate">
+                    <td class="rt_cname">actualshippingdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Actual Shipping Date</td>
+                </tr>
+                    <tr id="column_billoflading">
+                    <td class="rt_cname">billoflading</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Bill Of Lading</td>
+                </tr>
+                    <tr id="column_createddate">
+                    <td class="rt_cname">createddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_description">
+                    <td class="rt_cname">description</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Description</td>
+                </tr>
+                    <tr id="column_expecteddeliverydate">
+                    <td class="rt_cname">expecteddeliverydate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Expected Delivery Date</td>
+                </tr>
+                    <tr id="column_expectedrate">
+                    <td class="rt_cname">expectedrate</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Expected Rate</td>
+                </tr>
+                    <tr id="column_expectedshippingdate">
+                    <td class="rt_cname">expectedshippingdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Expected Shipping Date</td>
+                </tr>
+                    <tr id="column_externaldocumentnumber">
+                    <td class="rt_cname">externaldocumentnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">External Document Number</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_incoterm">
+                    <td class="rt_cname">incoterm</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Incoterm</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Internal Id</td>
+                </tr>
+                    <tr id="column_internalidnumber">
+                    <td class="rt_cname">internalidnumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Internal Id Number</td>
+                </tr>
+                    <tr id="column_item">
+                    <td class="rt_cname">item</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Item</td>
+                </tr>
+                    <tr id="column_landedcostallocationmethod">
+                    <td class="rt_cname">landedcostallocationmethod</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Landed Cost - Allocation Method</td>
+                </tr>
+                    <tr id="column_landedcostamount">
+                    <td class="rt_cname">landedcostamount</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Landed Cost - Amount</td>
+                </tr>
+                    <tr id="column_landedcostcostcategory">
+                    <td class="rt_cname">landedcostcostcategory</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Landed Cost - Cost Category</td>
+                </tr>
+                    <tr id="column_landedcostcurrency">
+                    <td class="rt_cname">landedcostcurrency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Landed Cost - Currency</td>
+                </tr>
+                    <tr id="column_landedcosteffectivedate">
+                    <td class="rt_cname">landedcosteffectivedate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Landed Cost - Effective Date</td>
+                </tr>
+                    <tr id="column_landedcostexchangerate">
+                    <td class="rt_cname">landedcostexchangerate</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Landed Cost - Exchange Rate</td>
+                </tr>
+                    <tr id="column_memo">
+                    <td class="rt_cname">memo</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Memo</td>
+                </tr>
+                    <tr id="column_poamount">
+                    <td class="rt_cname">poamount</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Amount</td>
+                </tr>
+                    <tr id="column_porate">
+                    <td class="rt_cname">porate</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">PO Rate</td>
+                </tr>
+                    <tr id="column_purchaseorder">
+                    <td class="rt_cname">purchaseorder</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">PO</td>
+                </tr>
+                    <tr id="column_quantitybilled">
+                    <td class="rt_cname">quantitybilled</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Quantity Billed</td>
+                </tr>
+                    <tr id="column_quantityexpected">
+                    <td class="rt_cname">quantityexpected</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Quantity Expected</td>
+                </tr>
+                    <tr id="column_quantityreceived">
+                    <td class="rt_cname">quantityreceived</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Quantity Received</td>
+                </tr>
+                    <tr id="column_quantityremaining">
+                    <td class="rt_cname">quantityremaining</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Quantity Remaining</td>
+                </tr>
+                    <tr id="column_receivinglocation">
+                    <td class="rt_cname">receivinglocation</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Receiving Location</td>
+                </tr>
+                    <tr id="column_shipmentbasecurrency">
+                    <td class="rt_cname">shipmentbasecurrency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Base Currency</td>
+                </tr>
+                    <tr id="column_shipmentnumber">
+                    <td class="rt_cname">shipmentnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipment Number</td>
+                </tr>
+                    <tr id="column_status">
+                    <td class="rt_cname">status</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_unit">
+                    <td class="rt_cname">unit</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Unit</td>
+                </tr>
+                    <tr id="column_vendor">
+                    <td class="rt_cname">vendor</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Vendor</td>
+                </tr>
+                    <tr id="column_vesselnumber">
+                    <td class="rt_cname">vesselnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Vessel Number</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

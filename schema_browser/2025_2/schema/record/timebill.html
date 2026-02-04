@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__timebill','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__timebill','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TimeBill</H1>
+
+
+    Namespace: <a href="../../schema/record/timebill.html?mode=package">urn:employees.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">approvalStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Approval Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an approval status for this time entry.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">caseTaskEvent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Task</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set this field to a case, task or event associated with the employee. You must first perform a search on the employee to get a list of associated cases, tasks, or events.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customer</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing customer. If you select a customer or job, you must also select a service item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of form to use.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Departments. This field is required when Make Departments Mandatory is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">employee</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Employee</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References an existing employee record. Required on Add.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hours</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Duration</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isBillable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If set to TRUE, the time entered can be billed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">item</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Service Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing service item record. This field is required when the customer field is set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Company &gt; Classifications &gt; Locations. This field is required when Make Locations Mandatory is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you want, enter a memo for this time transaction.
+
+If you are billing this time back to a customer or job, this memo appears as a description for this line item on the customer invoice.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overrideRate</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lock this Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you're billing this time back to a customer, check this box to lock the rate you enter so it's not affected by rate changes that happen before the customer is billed.
+
+If you're entering time for a charge-based project and there are time-based charge rules, the rate is determined by the applied charge rule. Any rates entered on time records are discarded.
+
+If you are entering time for a payroll item like vacation time, leave this field blank.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paidExternally</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Paid Externally</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to TRUE to designate that this time will be or has been paid to the employee outside of NetSuite. This removes the time entry from NetSuite payroll lists and transactions but still keeps the time available for billing back to the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">payrollItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payroll Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing payroll item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">price</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Price Level</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you've set up a custom price level for your customer, it appears here. Otherwise, Sales Price 1 on the service item's record appears.
+
+If you want to change the price level, select one from the list. Select Custom to enter a new price in the Rate field.
+
+If you're entering time for a payroll item like vacation time, leave this field blank.
+
+If you're entering time for a charge-based project and there are time-based charge rules, any price level selected in this field will be overridden by the applied charge rule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you selected a price in the Price Level field, it automatically appears here.
+
+If you don't use multiple prices or if you selected Custom in the Price Level field, enter a rate for this time transaction.
+
+If you're entering time for a payroll item like vacation time, leave this field blank.
+
+If you're entering time for a charge-based project and there are time-based charge rules, any rate entered in this field will be overridden by the applied charge rule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rejectionNote</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rejection Note</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you are rejecting this time entry, enter a rejection note for this time entry. Rejection notes are used to explain why an entry was rejected.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The subsidiary associated with the employee is displayed here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supervisorApproval</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Supervisor Approval</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Can only be set for roles that have approval permissions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">temporaryLocalJurisdiction</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">temporaryStateJurisdiction</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeModified</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time Modified</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Displays a check mark if the time on the bill was modified.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeSheet</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Timesheet</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Returns the employee and the time period of the timesheet. The returned information is a link to the employee's specific timesheet record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/timebilltimetype.html?mode=package">TimeBillTimeType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The type of time transaction is displayed here. 
+
+Actual time is time that has been worked by an employee. Planned time is time that has been accounted for when planning a project. Allocated time is time that has been assigned due to a resource allocation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workplace</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/timebillsearch.html?mode=package">TimeBillSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/timebillsearchadvanced.html?mode=package">TimeBillSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/timebillsearchbasic.html?mode=package">TimeBillSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/timebillsearchrow.html?mode=package">TimeBillSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/timebillsearchrowbasic.html?mode=package">TimeBillSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

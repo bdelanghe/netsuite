@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__account','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__account','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Accounts
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+
+    
+    The Other Custom Fields &gt; Account custom field is available for the Accounts table. <div class="th_note"><b>Note: </b>To obtain the subsidiaries for accounts, use the <a class="keepDomain" title="Account_subsidiary_map" href="../../odbc/record/account_subsidiary_map.html?mode=">Account_subsidiary_map</a> table.</div>
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ACCOUNT_EXTID">
+            <td class="rt_fname">account_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account external ID</td>
+        </tr>
+        <tr id="field_ACCOUNT_ID" class="primaryKeyField">
+            <td class="rt_fname">account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account ID*</td>
+        </tr>
+        <tr id="field_ACCOUNTNUMBER">
+            <td class="rt_fname">accountnumber</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account number</td>
+        </tr>
+        <tr id="field_CASHFLOW_RATE_TYPE">
+            <td class="rt_fname">cashflow_rate_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">10</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cash flow rate type</td>
+        </tr>
+        <tr id="field_CATEGORY_1099_MISC">
+            <td class="rt_fname">category_1099_misc</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">1099-MISC category</td>
+        </tr>
+        <tr id="field_CATEGORY_1099_MISC_MTHRESHOLD">
+            <td class="rt_fname">category_1099_misc_mthreshold</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">1099-MISC category</td>
+        </tr>
+        <tr id="field_CLASS_ID" class="foreignKeyField">
+            <td class="rt_fname">class_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                class_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__classes" href="../../odbc/record/classes.html?mode=">Classes</a><br/>
+            </td>
+            <td class="rt_fhelp">Restrict to class</td>
+        </tr>
+        <tr id="field_CURRENCY_ID" class="foreignKeyField">
+            <td class="rt_fname">currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                currency_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a><br/>
+            </td>
+            <td class="rt_fhelp">Currency ID</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified</td>
+        </tr>
+        <tr id="field_DEFERRAL_ACCOUNT_ID" class="foreignKeyField">
+            <td class="rt_fname">deferral_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                account_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a><br/>
+            </td>
+            <td class="rt_fhelp">Deferral account ID</td>
+        </tr>
+        <tr id="field_DEPARTMENT_ID" class="foreignKeyField">
+            <td class="rt_fname">department_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                department_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__department" href="../../odbc/record/department.html?mode=">Departments</a><br/>
+            </td>
+            <td class="rt_fhelp">Restrict to department</td>
+        </tr>
+        <tr id="field_DESCRIPTION">
+            <td class="rt_fname">description</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">25</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Description</td>
+        </tr>
+        <tr id="field_FULL_DESCRIPTION">
+            <td class="rt_fname">full_description</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full description</td>
+        </tr>
+        <tr id="field_FULL_NAME">
+            <td class="rt_fname">full_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full name</td>
+        </tr>
+        <tr id="field_GENERAL_RATE_TYPE">
+            <td class="rt_fname">general_rate_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">10</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">General rate type</td>
+        </tr>
+        <tr id="field_IS_BALANCESHEET">
+            <td class="rt_fname">is_balancesheet</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is balance sheet</td>
+        </tr>
+        <tr id="field_IS_INCLUDED_IN_ELIMINATION">
+            <td class="rt_fname">is_included_in_elimination</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Include in elimination</td>
+        </tr>
+        <tr id="field_IS_INCLUDED_IN_REVAL">
+            <td class="rt_fname">is_included_in_reval</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Include in revaluation</td>
+        </tr>
+        <tr id="field_IS_INCLUDING_CHILD_SUBS">
+            <td class="rt_fname">is_including_child_subs</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether includes child subsidiaries</td>
+        </tr>
+        <tr id="field_IS_LEFTSIDE">
+            <td class="rt_fname">is_leftside</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is debit</td>
+        </tr>
+        <tr id="field_IS_SUMMARY">
+            <td class="rt_fname">is_summary</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether is a summary account</td>
+        </tr>
+        <tr id="field_ISINACTIVE">
+            <td class="rt_fname">isinactive</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account is inactive</td>
+        </tr>
+        <tr id="field_LEGAL_NAME">
+            <td class="rt_fname">legal_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">400</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Legal name</td>
+        </tr>
+        <tr id="field_LOCATION_ID" class="foreignKeyField">
+            <td class="rt_fname">location_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                location_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__location" href="../../odbc/record/location.html?mode=">Locations</a><br/>
+            </td>
+            <td class="rt_fhelp">Restrict to location</td>
+        </tr>
+        <tr id="field_NAME">
+            <td class="rt_fname">name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">93</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name</td>
+        </tr>
+        <tr id="field_OPENBALANCE">
+            <td class="rt_fname">openbalance</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Opening balance</td>
+        </tr>
+        <tr id="field_PARENT_ID" class="foreignKeyField">
+            <td class="rt_fname">parent_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                account_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a><br/>
+            </td>
+            <td class="rt_fhelp">Subaccount of</td>
+        </tr>
+        <tr id="field_TYPE_NAME">
+            <td class="rt_fname">type_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">128</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Type name</td>
+        </tr>
+        <tr id="field_TYPE_SEQUENCE">
+            <td class="rt_fname">type_sequence</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Type sequence</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">account_id</td>
+        </tr>
+    </table>
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_accounts_fk</td>
+            <td class="rt_tfkcolumn_name">deferral_account_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_accounts_fk_2</td>
+            <td class="rt_tfkcolumn_name">parent_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_classes_fk</td>
+            <td class="rt_tfkcolumn_name">class_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__classes" href="../../odbc/record/classes.html?mode=">Classes</a></td>
+            <td class="rt_tpkcolumn_name">class_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_currencies_fk</td>
+            <td class="rt_tfkcolumn_name">currency_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a></td>
+            <td class="rt_tpkcolumn_name">currency_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_departments_fk</td>
+            <td class="rt_tfkcolumn_name">department_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__department" href="../../odbc/record/department.html?mode=">Departments</a></td>
+            <td class="rt_tpkcolumn_name">department_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">accounts_locations_fk</td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__location" href="../../odbc/record/location.html?mode=">Locations</a></td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>Foreign keys referencing this table</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tfktable_name">FK Table Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_activity_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_activity" href="../../odbc/record/account_activity.html?mode=">Account_activity</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_period_activity_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_period_activity" href="../../odbc/record/account_period_activity.html?mode=">Account_period_activity</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Account_period_activity_pe_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account_period_activity_pe" href="../../odbc/record/account_period_activity_pe.html?mode=">Account_period_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Accounts_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tfkcolumn_name">deferral_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Accounts_accounts_fk_2</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tfkcolumn_name">parent_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Amortization_sched_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__amortization_sched_lines" href="../../odbc/record/amortization_sched_lines.html?mode=">Amortization_sched_lines</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Budget_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__budget" href="../../odbc/record/budget.html?mode=">Budget</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Customers_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__customer" href="../../odbc/record/customer.html?mode=">Customers</a></td>
+            <td class="rt_tfkcolumn_name">default_receivables_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employees_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee" href="../../odbc/record/employee.html?mode=">Employees</a></td>
+            <td class="rt_tfkcolumn_name">def_acct_corp_card_expenses_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_accounts_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_accounts" href="../../odbc/record/expense_accounts.html?mode=">Expense_accounts</a></td>
+            <td class="rt_tfkcolumn_name">expense_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_amortization_rules_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_amortization_rules" href="../../odbc/record/expense_amortization_rules.html?mode=">Expense_amortization_rules</a></td>
+            <td class="rt_tfkcolumn_name">contra_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_plan_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_plan_lines" href="../../odbc/record/expense_plan_lines.html?mode=">Expense_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">deferred_expense_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_plan_lines_accounts_fk_1</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_plan_lines" href="../../odbc/record/expense_plan_lines.html?mode=">Expense_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">expense_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_account_map_accounts_fk_1</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__global_account_map" href="../../odbc/record/global_account_map.html?mode=">Global_account_map</a></td>
+            <td class="rt_tfkcolumn_name">destination_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_account_map_accounts_fk_2</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__global_account_map" href="../../odbc/record/global_account_map.html?mode=">Global_account_map</a></td>
+            <td class="rt_tfkcolumn_name">source_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Income_accounts_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__income_accounts" href="../../odbc/record/income_accounts.html?mode=">Income_accounts</a></td>
+            <td class="rt_tfkcolumn_name">income_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_account_map_accounts_fk_1</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_account_map" href="../../odbc/record/item_account_map.html?mode=">Item_account_map</a></td>
+            <td class="rt_tfkcolumn_name">destination_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_account_map_accounts_fk_2</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_account_map" href="../../odbc/record/item_account_map.html?mode=">Item_account_map</a></td>
+            <td class="rt_tfkcolumn_name">source_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Opportunity_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__opportunity_lines" href="../../odbc/record/opportunity_lines.html?mode=">Opportunity_lines</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity" href="../../odbc/record/posting_account_activity.html?mode=">Posting_account_activity</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_pe_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity_pe" href="../../odbc/record/posting_account_activity_pe.html?mode=">Posting_account_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revaluation_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revaluation" href="../../odbc/record/revaluation.html?mode=">Revaluation</a></td>
+            <td class="rt_tfkcolumn_name">variance_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_lines" href="../../odbc/record/revenue_plan_lines.html?mode=">Revenue_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">deferral_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_lines_accounts_fk_1</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_lines" href="../../odbc/record/revenue_plan_lines.html?mode=">Revenue_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">recognition_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_version_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_version_lines" href="../../odbc/record/revenue_plan_version_lines.html?mode=">Revenue_plan_version_lines</a></td>
+            <td class="rt_tfkcolumn_name">deferral_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_version_lines_accounts_fk_1</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_version_lines" href="../../odbc/record/revenue_plan_version_lines.html?mode=">Revenue_plan_version_lines</a></td>
+            <td class="rt_tfkcolumn_name">recognition_account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revrecschedulelines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revrecschedulelines" href="../../odbc/record/revrecschedulelines.html?mode=">Revrecschedulelines</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Sales_reps_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__sales_reps" href="../../odbc/record/sales_reps.html?mode=">Sales_reps</a></td>
+            <td class="rt_tfkcolumn_name">def_acct_corp_card_expenses_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Support_reps_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__support_reps" href="../../odbc/record/support_reps.html?mode=">Support_reps</a></td>
+            <td class="rt_tfkcolumn_name">def_acct_corp_card_expenses_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_history_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_history" href="../../odbc/record/transaction_history.html?mode=">Transaction_history</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_line_book_map_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_line_book_map" href="../../odbc/record/transaction_line_book_map.html?mode=">Transaction_line_book_map</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_lines_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_lines" href="../../odbc/record/transaction_lines.html?mode=">Transaction_lines</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_tax_detail_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_tax_detail" href="../../odbc/record/transaction_tax_detail.html?mode=">Transaction_tax_detail</a></td>
+            <td class="rt_tfkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transactions_accounts_fk</td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction" href="../../odbc/record/transaction.html?mode=">Transactions</a></td>
+            <td class="rt_tfkcolumn_name">acct_corp_card_expenses_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>This table is included in the following domains</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tpkcolumn_name">Domains</th>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=expense_amortization">Expense_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=general_accounting">General_accounting</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=invoice_with_amortization">Invoice_with_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=multibooks">Multibooks</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=revenue_recognition">Revenue_recognition</a>
+            </td>
+        </tr>
+    </table>
+
+
+    <H2>Domain diagrams</H2>
+        <div class="diagramholder">
+            Expense_amortization<br />
+            <a href="../diagrams/expense_amortization.png"><img class="diagram" alt="" src="../diagrams/expense_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            General_accounting<br />
+            <a href="../diagrams/general_accounting.png"><img class="diagram" alt="" src="../diagrams/general_accounting.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Invoice_with_amortization<br />
+            <a href="../diagrams/invoice_with_amortization.png"><img class="diagram" alt="" src="../diagrams/invoice_with_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Multibooks<br />
+            <a href="../diagrams/multibooks.png"><img class="diagram" alt="" src="../diagrams/multibooks.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Revenue_recognition<br />
+            <a href="../diagrams/revenue_recognition.png"><img class="diagram" alt="" src="../diagrams/revenue_recognition.png" height=330  /></a>
+        </div>
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

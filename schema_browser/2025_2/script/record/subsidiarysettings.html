@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__subsidiarysettings','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__subsidiarysettings','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Subsidiary Settings</H1>
+    <H3>Internal ID: subsidiarysettings</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_accountingbooks">
+                <td class="rt_fname">accountingbooks</td>
+                <td class="rt_ftype">multiselect</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Accounting Books</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you use Multi-Book Accounting, you can enable Period End Journal Entries for each accounting book and subsidiary combination to which you have access.
+
+In the list, select the subsidiary's accounting books to use with the Period End Journal Entries feature.
+
+Note: When you enable the Period End Journal Entries feature for a subsidiary, you can edit the accounting books assigned to that subsidiary. However, you may not be able to disable Period End Journal Entries for the subsidiary because another user selected an accounting book that you cannot access.
+
+Accounting books that you cannot access do not appear for selection or exclusion.</td>
+            </tr>
+                <tr id="field_allowperiodendjournalentries">
+                <td class="rt_fname">allowperiodendjournalentries</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Enable Period End Journal Entries</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to enable the Period End Journal Entries feature for this subsidiary.</td>
+            </tr>
+                <tr id="field_balancesheetclosingaccount">
+                <td class="rt_fname">balancesheetclosingaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Balance Sheet Closing Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the appropriate equity account as the balance sheet closing account.</td>
+            </tr>
+                <tr id="field_balancesheetopeningaccount">
+                <td class="rt_fname">balancesheetopeningaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Balance Sheet Opening Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the appropriate equity account for the balance sheet opening account.</td>
+            </tr>
+                <tr id="field_createbscloseandopenjournals">
+                <td class="rt_fname">createbscloseandopenjournals</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Create Balance Sheet Closing and Opening Journals</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, NetSuite adds a step to the Create Period End Journals task on the Period Close Checklist. The Balance Sheet Closing step follows the Income Closing step at the fiscal year end of the subsidiary. This step creates a balance sheet closing journal. This journal reduces the balance of balance sheets accounts to zero and posts any necessary balance amount to the account you specify. This balance sheet closing journal is the last period end journal in the fiscal year. Unless you have selected segments in the Group by These Segments list, the amount posted to the balance sheet closing account should be zero. In the same step, to reopen the balance sheet, NetSuite reverses the balance sheet closing journal on the first day of the next fiscal year.</td>
+            </tr>
+                <tr id="field_createincomesummaryjournals">
+                <td class="rt_fname">createincomesummaryjournals</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Create Income Summary Journals</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, NetSuite creates two period end journals in the Income Statement Closing step. This step is part of the Create Period End Journals task on the Period Close Checklist. (NetSuite creates more journals when you create period end journals by segment.) The first journal (or journals) reduces the income and expense accounts to zero and posts the net income to the account defined for income summary profit or loss. If the net income is a gain, the offset posts to the income summary profit account. If the net income is a loss, the offset posts to the income summary loss account. The second journal (or journals) moves the balance from the income summary account used in the first journal, to the retained earnings account.</td>
+            </tr>
+                <tr id="field_excludebsfromglnumbering">
+                <td class="rt_fname">excludebsfromglnumbering</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Exclude Balance Sheet Closing Journals From GL Numbering</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When the GL Audit Numbering feature is enabled, the Exclude Balance Sheet Closing Journals from GL Numbering box appears. Check this box to skip numbering for the balance sheet closing journals.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_groupbythesesegments">
+                <td class="rt_fname">groupbythesesegments</td>
+                <td class="rt_ftype">multiselect</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Group By These Segments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This multi-select list displays all the segment types that impact the general ledger. Possible segment types are class, department, location, and all custom segments with general ledger impact.
+
+Select the segment types for which you want to generate separate period end journals, if any. NetSuite generates separate period end journals for each selected segment type combination included in the source transactions for this subsidiary.</td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_incomesummarylossaccount">
+                <td class="rt_fname">incomesummarylossaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Income Summary Loss Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the appropriate equity account for the income summary loss account.</td>
+            </tr>
+                <tr id="field_incomesummaryprofitaccount">
+                <td class="rt_fname">incomesummaryprofitaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Income Summary Profit Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the appropriate equity account for the income summary profit account.</td>
+            </tr>
+                <tr id="field_requirememoonperiodendjournals">
+                <td class="rt_fname">requirememoonperiodendjournals</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Require Memo on Period End Journals</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, period end journals cannot be created or saved without a value in the Memo fields in the header and lines. The value entered in the Memo field during the journal creation process automatically populates the Memo fields in the header and lines of the period end journal.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the subsidiary for which settings are defined. Click the subsidiary name link to open the subsidiary record.</td>
+            </tr>
+        </table>
+
+
+
+
+
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__price_book_line_intervals','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__price_book_line_intervals','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Price_book_line_intervals
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    This table includes the price intervals associated with the Price Book record. It represents the pricing-related data of subscription plan lines in a given time period.<br />The table's data is available only for accounts with the SuiteBilling feature enabled.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_CHARGE_FREQUENCY_ID">
+            <td class="rt_fname">charge_frequency_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Charge frequency ID</td>
+        </tr>
+        <tr id="field_DISCOUNT">
+            <td class="rt_fname">discount</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Discount</td>
+        </tr>
+        <tr id="field_IS_DISCOUNT_PERCENTAGE">
+            <td class="rt_fname">is_discount_percentage</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the discount is a percentage</td>
+        </tr>
+        <tr id="field_IS_OVERAGE_DISCOUNT_PERCENTAGE">
+            <td class="rt_fname">is_overage_discount_percentage</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_OVERAGE_CHARGE_FREQUENCY_ID">
+            <td class="rt_fname">overage_charge_frequency_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">20</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_OVERAGE_DISCOUNT">
+            <td class="rt_fname">overage_discount</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_OVERAGE_PRICE_PLAN_ID" class="foreignKeyField">
+            <td class="rt_fname">overage_price_plan_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                price_plan_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__priceplan" href="../../odbc/record/priceplan.html?mode=">Price_plans</a><br/>
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_OVERAGE_REPEAT_EVERY">
+            <td class="rt_fname">overage_repeat_every</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_PBLI_ID" class="primaryKeyField">
+            <td class="rt_fname">pbli_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Price book line interval ID</td>
+        </tr>
+        <tr id="field_PLAN_LINE_ID" class="foreignKeyField">
+            <td class="rt_fname">plan_line_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                plan_line_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__subscription_plan_lines" href="../../odbc/record/subscription_plan_lines.html?mode=">Subscription_plan_lines</a><br/>
+            </td>
+            <td class="rt_fhelp">Plan line ID</td>
+        </tr>
+        <tr id="field_PLAN_LINE_NUMBER">
+            <td class="rt_fname">plan_line_number</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Plan line number</td>
+        </tr>
+        <tr id="field_PRICE_BOOK_ID" class="foreignKeyField">
+            <td class="rt_fname">price_book_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                price_book_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__pricebook" href="../../odbc/record/pricebook.html?mode=">Price_books</a><br/>
+            </td>
+            <td class="rt_fhelp">Price book ID</td>
+        </tr>
+        <tr id="field_PRICE_PLAN_ID" class="foreignKeyField">
+            <td class="rt_fname">price_plan_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                price_plan_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__priceplan" href="../../odbc/record/priceplan.html?mode=">Price_plans</a><br/>
+            </td>
+            <td class="rt_fhelp">Price plan ID</td>
+        </tr>
+        <tr id="field_PRORATE_BY">
+            <td class="rt_fname">prorate_by</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">10</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp"></td>
+        </tr>
+        <tr id="field_REPEAT_EVERY">
+            <td class="rt_fname">repeat_every</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Repeat every</td>
+        </tr>
+        <tr id="field_START_OFFSET">
+            <td class="rt_fname">start_offset</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">70</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Start offset</td>
+        </tr>
+        <tr id="field_USAGE_MULTIPLIER_LINE_ID" class="foreignKeyField">
+            <td class="rt_fname">usage_multiplier_line_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                plan_line_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__subscription_plan_lines" href="../../odbc/record/subscription_plan_lines.html?mode=">Subscription_plan_lines</a><br/>
+            </td>
+            <td class="rt_fhelp">Usage multiplier line ID</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">pbli_id</td>
+        </tr>
+    </table>
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">price_book_line_intervals_price_books_fk</td>
+            <td class="rt_tfkcolumn_name">price_book_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__pricebook" href="../../odbc/record/pricebook.html?mode=">Price_books</a></td>
+            <td class="rt_tpkcolumn_name">price_book_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">price_book_line_intervals_price_plans_fk</td>
+            <td class="rt_tfkcolumn_name">price_plan_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__priceplan" href="../../odbc/record/priceplan.html?mode=">Price_plans</a></td>
+            <td class="rt_tpkcolumn_name">price_plan_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">price_book_line_intervals_price_plans_fk_2</td>
+            <td class="rt_tfkcolumn_name">overage_price_plan_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__priceplan" href="../../odbc/record/priceplan.html?mode=">Price_plans</a></td>
+            <td class="rt_tpkcolumn_name">price_plan_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">price_book_line_intervals_subscription_plan_lines_fk</td>
+            <td class="rt_tfkcolumn_name">plan_line_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__subscription_plan_lines" href="../../odbc/record/subscription_plan_lines.html?mode=">Subscription_plan_lines</a></td>
+            <td class="rt_tpkcolumn_name">plan_line_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">price_book_line_intervals_subscription_plan_lines_fk_2</td>
+            <td class="rt_tfkcolumn_name">usage_multiplier_line_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__subscription_plan_lines" href="../../odbc/record/subscription_plan_lines.html?mode=">Subscription_plan_lines</a></td>
+            <td class="rt_tpkcolumn_name">plan_line_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

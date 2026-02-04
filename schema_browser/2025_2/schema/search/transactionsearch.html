@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__transactionsearch','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__transactionsearch','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TransactionSearch</H1>
+    Namespace: urn:sales.transactions.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">accountingPeriodJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/accountingperiodsearchbasic.html?mode=package">AccountingPeriodSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Accounting Period</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/accountingtransactionsearchbasic.html?mode=package">AccountingTransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Multi-Book Accounting Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">accountJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/accountsearchbasic.html?mode=package">AccountSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">advanceToApplyAccountJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/accountsearchbasic.html?mode=package">AccountSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Advance to Apply Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">appliedToTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applied To Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">applyingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Applying Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">assemblyJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/itemsearchbasic.html?mode=package">ItemSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Assembly</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">basic</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingAddressJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/addresssearchbasic.html?mode=package">AddressSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">binNumberJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/binsearchbasic.html?mode=package">BinSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Bin Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bomJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/bomsearchbasic.html?mode=package">BomSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Bill of Materials</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bomRevisionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/bomrevisionsearchbasic.html?mode=package">BomRevisionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Bill of Materials Revision</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">callJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/phonecallsearchbasic.html?mode=package">PhoneCallSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Call</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">caseJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/supportcasesearchbasic.html?mode=package">SupportCaseSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Case</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">classJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/classificationsearchbasic.html?mode=package">ClassificationSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Class</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cogsPurchaseJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">COGS Purchase</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cogsSaleJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">COGS Sale</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contactPrimaryJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/contactsearchbasic.html?mode=package">ContactSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Contact (Primary)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">createdFromJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Created From</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customerJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/customersearchbasic.html?mode=package">CustomerSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Customer</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customerMainJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/customersearchbasic.html?mode=package">CustomerSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Customer (Main Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customSearchJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/other/customsearchjoin.html?mode=package">CustomSearchJoin</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">departmentJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/departmentsearchbasic.html?mode=package">DepartmentSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Department</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">depositTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Deposit/Refund Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">employeeJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/employeesearchbasic.html?mode=package">EmployeeSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Employee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">eventJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/calendareventsearchbasic.html?mode=package">CalendarEventSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Event</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseCategoryJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/expensecategorysearchbasic.html?mode=package">ExpenseCategorySearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fileJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/filesearchbasic.html?mode=package">FileSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">File</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fromLocationJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/locationsearchbasic.html?mode=package">LocationSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">From Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fulfillingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fulfilling/Receiving Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">headerBillingAccountJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/billingaccountsearchbasic.html?mode=package">BillingAccountSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Header Billing Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">installmentJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/installmentsearchbasic.html?mode=package">InstallmentSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Installment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">inventoryDetailJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/inventorydetailsearchbasic.html?mode=package">InventoryDetailSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Inventory Detail</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/itemsearchbasic.html?mode=package">ItemSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemNumberJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/inventorynumbersearchbasic.html?mode=package">InventoryNumberSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Item Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/jobsearchbasic.html?mode=package">JobSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobMainJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/jobsearchbasic.html?mode=package">JobSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job (Main Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">leadSourceJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/campaignsearchbasic.html?mode=package">CampaignSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Lead Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lineBillingAccountJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/billingaccountsearchbasic.html?mode=package">BillingAccountSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Line Billing Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lineFileJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/filesearchbasic.html?mode=package">FileSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">File (Line)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/locationsearchbasic.html?mode=package">LocationSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manufacturingOperationTaskJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/manufacturingoperationtasksearchbasic.html?mode=package">ManufacturingOperationTaskSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Manufacturing Operation Task</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">messagesJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/messagesearchbasic.html?mode=package">MessageSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Messages</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextApproverJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/entitysearchbasic.html?mode=package">EntitySearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Next Approver</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">opportunityJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/opportunitysearchbasic.html?mode=package">OpportunitySearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Opportunity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">outsourcingVendorJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/vendorsearchbasic.html?mode=package">VendorSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Outsourcing Vendor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paidTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Paid Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/partnersearchbasic.html?mode=package">PartnerSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Partner</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Paying Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentInstrumentJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/paymentinstrumentsearchbasic.html?mode=package">PaymentInstrumentSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Instrument</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">paymentOptionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/paymentoptionsearchbasic.html?mode=package">PaymentOptionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payment Option</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payrollItemJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/payrollitemsearchbasic.html?mode=package">PayrollItemSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Payroll Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">projectTaskJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/projecttasksearchbasic.html?mode=package">ProjectTaskSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Project task</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Purchase Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">requestorJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/employeesearchbasic.html?mode=package">EmployeeSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Requestor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revCommittingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Revenue Committing Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revisionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/itemrevisionsearchbasic.html?mode=package">ItemRevisionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Revision</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">revRecScheduleJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/revrecschedulesearchbasic.html?mode=package">RevRecScheduleSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Rev Rec Schedule</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">rgPostingTransactionJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Realized Gain Posting Transaction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesOrderJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Order of Deposit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesRepJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/employeesearchbasic.html?mode=package">EmployeeSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Rep</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shippingAddressJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/addresssearchbasic.html?mode=package">AddressSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Shipping Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiaryJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/subsidiarysearchbasic.html?mode=package">SubsidiarySearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taskJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/tasksearchbasic.html?mode=package">TaskSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Task</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxCodeJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/salestaxitemsearchbasic.html?mode=package">SalesTaxItemSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxDetailJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/taxdetailsearchbasic.html?mode=package">TaxDetailSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Detail</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxItemJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/salestaxitemsearchbasic.html?mode=package">SalesTaxItemSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Tax Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">timeJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/timebillsearchbasic.html?mode=package">TimeBillSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Posted Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">toLocationJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/locationsearchbasic.html?mode=package">LocationSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">To Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">userJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/employeesearchbasic.html?mode=package">EmployeeSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">User</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">userNotesJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/notesearchbasic.html?mode=package">NoteSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">User Notes</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/vendorsearchbasic.html?mode=package">VendorSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Vendor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vendorLineJoin</td>
+                    <td class="sst_ftype"><a href="../../schema/search/vendorsearchbasic.html?mode=package">VendorSearchBasic</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Vendor (Line)</td>
+            </tr>
+    </table>
+
+
+    <H2>Related Record(s)</H2>
+    <table class="jtable">
+        <tr><th class="sst_slabel">Name</th></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/assemblybuild.html?mode=package">AssemblyBuild</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/assemblyunbuild.html?mode=package">AssemblyUnbuild</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/bintransfer.html?mode=package">BinTransfer</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/binworksheet.html?mode=package">BinWorksheet</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/cashrefund.html?mode=package">CashRefund</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/cashsale.html?mode=package">CashSale</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/check.html?mode=package">Check</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/creditmemo.html?mode=package">CreditMemo</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerdeposit.html?mode=package">CustomerDeposit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerpayment.html?mode=package">CustomerPayment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customerrefund.html?mode=package">CustomerRefund</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/custompurchase.html?mode=package">CustomPurchase</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customsale.html?mode=package">CustomSale</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/deposit.html?mode=package">Deposit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/depositapplication.html?mode=package">DepositApplication</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/estimate.html?mode=package">Estimate</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/expensereport.html?mode=package">ExpenseReport</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/intercompanyjournalentry.html?mode=package">InterCompanyJournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventoryadjustment.html?mode=package">InventoryAdjustment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventorycostrevaluation.html?mode=package">InventoryCostRevaluation</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/inventorytransfer.html?mode=package">InventoryTransfer</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/invoice.html?mode=package">Invoice</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/itemfulfillment.html?mode=package">ItemFulfillment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/itemreceipt.html?mode=package">ItemReceipt</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/journalentry.html?mode=package">JournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/opportunity.html?mode=package">Opportunity</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/paycheckjournal.html?mode=package">PaycheckJournal</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/purchaseorder.html?mode=package">PurchaseOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/returnauthorization.html?mode=package">ReturnAuthorization</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/salesorder.html?mode=package">SalesOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/statisticaljournalentry.html?mode=package">StatisticalJournalEntry</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/transferorder.html?mode=package">TransferOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorbill.html?mode=package">VendorBill</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorcredit.html?mode=package">VendorCredit</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorpayment.html?mode=package">VendorPayment</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/vendorreturnauthorization.html?mode=package">VendorReturnAuthorization</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorder.html?mode=package">WorkOrder</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorderclose.html?mode=package">WorkOrderClose</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workordercompletion.html?mode=package">WorkOrderCompletion</a></td></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/workorderissue.html?mode=package">WorkOrderIssue</a></td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

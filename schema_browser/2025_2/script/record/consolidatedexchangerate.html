@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__consolidatedexchangerate','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__consolidatedexchangerate','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Consolidated Exchange Rate</H1>
+    <H3>Internal ID: consolidatedexchangerate</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_accountingbook">
+                <td class="rt_fname">accountingbook</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Accounting Book</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If the Multi-Book Accounting feature is provisioned in your account, this is the accounting book associated with this consolidated exchange rate.</td>
+            </tr>
+                <tr id="field_averagerate">
+                <td class="rt_fname">averagerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Average Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the average exchange rate. This rate is calculated from a weighted average of the exchange rates for transactions applied during the period to accounts with a general rate type of Average. This rate is used to translate accounts in the income statement and to build retained earnings.</td>
+            </tr>
+                <tr id="field_currentrate">
+                <td class="rt_fname">currentrate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Current Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the current exchange rate. Also referred to as ending rate. This rate is based on the currency exchange rate that is effective at the end of the reported upon period. This rate is used for most asset and liability accounts in the balance sheet.</td>
+            </tr>
+                <tr id="field_fromcurrency">
+                <td class="rt_fname">fromcurrency</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">From Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the currency from which the exchange rate is calculated.</td>
+            </tr>
+                <tr id="field_fromsubsidiary">
+                <td class="rt_fname">fromsubsidiary</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">From Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the subsidiary from which the exchange rate is calculated.</td>
+            </tr>
+                <tr id="field_historicalrate">
+                <td class="rt_fname">historicalrate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Historical Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the historical exchange rate. This rate is calculated from a weighted average of the exchange rates for transactions applied during the period to accounts with a general rate type of Historical. This rate is used for equity accounts, or owner's investments, in the balance sheet.</td>
+            </tr>
+                <tr id="field_isderived">
+                <td class="rt_fname">isderived</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate Derived</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this box is checked, the exchange rate is indirect. Indirect rates are rates set between subsidiaries more than one hierarchical level removed from each other, such as a child and grandchild. Indirect rates are always set by the system and cannot be edited or auto calculated by users.</td>
+            </tr>
+                <tr id="field_iseliminationsubsidiary">
+                <td class="rt_fname">iseliminationsubsidiary</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Is Elimination Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this box is checked, the subsidiary associated with this consolidated exchange rate is an elimination subsidiary. You cannot edit the rates for an elimination subsidiary.</td>
+            </tr>
+                <tr id="field_isperiodclosed">
+                <td class="rt_fname">isperiodclosed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Period Closed</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this box is checked, the accounting period is closed.</td>
+            </tr>
+                <tr id="field_postingperiod">
+                <td class="rt_fname">postingperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Posting Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the posting period for this exchange rate.</td>
+            </tr>
+                <tr id="field_tocurrency">
+                <td class="rt_fname">tocurrency</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">To Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the currency into which the exchange rate is calculated.</td>
+            </tr>
+                <tr id="field_tosubsidiary">
+                <td class="rt_fname">tosubsidiary</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">To Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the subsidiary to which the exchange rate is calculated.</td>
+            </tr>
+        </table>
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_accountingbook">
+                    <td class="rt_iname">accountingbook</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Accounting Book</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fromsubsidiary">
+                    <td class="rt_iname">fromsubsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">From Subsidiary</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isderivedrate">
+                    <td class="rt_iname">isderivedrate</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Derived Rate</td>
+                </tr>
+                    <tr id="filter_period">
+                    <td class="rt_iname">period</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Period</td>
+                </tr>
+                    <tr id="filter_periodstartdate">
+                    <td class="rt_iname">periodstartdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Period Start Date</td>
+                </tr>
+                    <tr id="filter_tosubsidiary">
+                    <td class="rt_iname">tosubsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">To Subsidiary</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accountingbook">
+                    <td class="rt_cname">accountingbook</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Accounting Book</td>
+                </tr>
+                    <tr id="column_averagerate">
+                    <td class="rt_cname">averagerate</td>
+                    <td class="rt_ctype">rate</td>
+                    <td class="rt_clabel">Average</td>
+                </tr>
+                    <tr id="column_closed">
+                    <td class="rt_cname">closed</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Closed</td>
+                </tr>
+                    <tr id="column_currentrate">
+                    <td class="rt_cname">currentrate</td>
+                    <td class="rt_ctype">rate</td>
+                    <td class="rt_clabel">Current</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fromcurrency">
+                    <td class="rt_cname">fromcurrency</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">From Currency</td>
+                </tr>
+                    <tr id="column_fromsubsidiary">
+                    <td class="rt_cname">fromsubsidiary</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">From Subsidiary</td>
+                </tr>
+                    <tr id="column_historicalrate">
+                    <td class="rt_cname">historicalrate</td>
+                    <td class="rt_ctype">rate</td>
+                    <td class="rt_clabel">Historical</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_periodenddate">
+                    <td class="rt_cname">periodenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Period End Date</td>
+                </tr>
+                    <tr id="column_periodname">
+                    <td class="rt_cname">periodname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Period</td>
+                </tr>
+                    <tr id="column_periodstartdate">
+                    <td class="rt_cname">periodstartdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Period Start Date</td>
+                </tr>
+                    <tr id="column_tocurrency">
+                    <td class="rt_cname">tocurrency</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">To Currency</td>
+                </tr>
+                    <tr id="column_tosubsidiary">
+                    <td class="rt_cname">tosubsidiary</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">To Subsidiary</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

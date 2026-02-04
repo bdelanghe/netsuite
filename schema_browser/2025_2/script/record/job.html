@@ -1,0 +1,2354 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__job','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__job','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Project</H1>
+    <H3>Internal ID: job</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_accountnumber">
+                <td class="rt_fname">accountnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you assign account numbers for projects, enter the account number here.</td>
+            </tr>
+                <tr id="field_actualtime">
+                <td class="rt_fname">actualtime</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Actual Work</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the actual time entered for the project, including open, pending approval, approved, unapproved, and rejected time transactions. This total includes time transactions entered against project tasks and the project as a whole without a specified task.
+
+If this project is set to include CRM tasks in project totals, then Actual Work also includes time entered for CRM tasks associated with this project.</td>
+            </tr>
+                <tr id="field_allowallresourcesfortasks">
+                <td class="rt_fname">allowallresourcesfortasks</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Display All Resources for ProjectTask Assignment</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to allow any employee or vendor designated as a project resource on the entity record or any employee or vendor that has previously been assigned to a project to be assigned to a project task.
+
+When you enable this preference, any resource that has been previously assigned to a project appears in the list of available resources. This allows for the possibility that an employee or vendor no longer designated as a project resource can still be assigned to a new project task.
+
+Clear the box if you want to restrict project task assignment to resources you add to the Resources subtab.
+
+If you use Resource Allocations, enabling this preference overrides the need to allocate resources prior to making task assignments. Disabling this preference requires you to allocate defined resources prior to making task assignments. Generic resources are available for task assignments regardless of project allocation.</td>
+            </tr>
+                <tr id="field_allowexpenses">
+                <td class="rt_fname">allowexpenses</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Allow Expenses</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to allow expenses to be entered for this project.
+
+If the Limit Time Entry to Assignees field is also checked, then only resources listed on the Resource subtab will be able to see this project in the Customer/Project select list for Expense Reporting.</td>
+            </tr>
+                <tr id="field_allowtime">
+                <td class="rt_fname">allowtime</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Allow Time Entry</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to enable time to be entered for this project.
+
+If the Limit Time Entry to Assignees field is checked, the project appears only in the Customer/Project dropdown for resources listed on the Resource tab of the project.</td>
+            </tr>
+                <tr id="field_applyprojectexpensetypetoall">
+                <td class="rt_fname">applyprojectexpensetypetoall</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Apply to all time entries</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to apply the selected project expense type to all time entries for this project. This preference overrides any other project expense type for time transactions recorded for this project.</td>
+            </tr>
+                <tr id="field_autoname">
+                <td class="rt_fname">autoname</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Auto</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Clear the box to manually enter an ID for this project. If you leave the box checked, then NetSuite copies the project name to create the ID.</td>
+            </tr>
+                <tr id="field_bbudgetshowcalculatedlines">
+                <td class="rt_fname">bbudgetshowcalculatedlines</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Show Calculated Lines</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to show calculated budgets for each category.</td>
+            </tr>
+                <tr id="field_bbudgetusecalculatedvalues">
+                <td class="rt_fname">bbudgetusecalculatedvalues</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Use Calculated Values for all Billing Budgets</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to use calculated values for billing budget categories. You will no longer be able to manually enter amounts.
+Billing budgets will not be calculated for non-billable tasks.</td>
+            </tr>
+                <tr id="field_billingratecard">
+                <td class="rt_fname">billingratecard</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Billing Rate Card</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a Billing Rate Card for this project. New Rate Card can be customer specific.</td>
+            </tr>
+                <tr id="field_billingschedule">
+                <td class="rt_fname">billingschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Schedule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">A billing schedule determines when and how to bill a customer over the duration of the project.
+
+Billing schedules for Fixed Bid, Interval and Time and Materials projects are public schedules and can be shared across projects. A Fixed Bid, Milestone billing schedule is private and used only for the project it is created for.</td>
+            </tr>
+                <tr id="field_calculatedenddate">
+                <td class="rt_fname">calculatedenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Calculated End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite calculates the end date for the project as the date that all project tasks will be complete according to the current project schedule.
+
+Calculated End Date changes as the project schedule changes.</td>
+            </tr>
+                <tr id="field_calculatedenddatebaseline">
+                <td class="rt_fname">calculatedenddatebaseline</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Calculated End Date Baseline</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Calculated End Date when the baseline was set.</td>
+            </tr>
+                <tr id="field_calculatedstartdate">
+                <td class="rt_fname">calculatedstartdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Calculated Start Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you selected Backward in the Scheduling Method field, NetSuite displays the calculated start date of your project here.</td>
+            </tr>
+                <tr id="field_category">
+                <td class="rt_fname">category</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Category</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the category that applies to this customer.
+
+To add choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Customer Category.
+
+For example, you might create categories of wholesale, retail, and online.</td>
+            </tr>
+                <tr id="field_cbudgetshowcalculatedlines">
+                <td class="rt_fname">cbudgetshowcalculatedlines</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Show Calculated Lines</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to show calculated amounts for all categories.</td>
+            </tr>
+                <tr id="field_cbudgetusecalculatedvalues">
+                <td class="rt_fname">cbudgetusecalculatedvalues</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Use Calculated Values for all Cost Budgets</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to automatically calculate labor budgets. You will no longer be able to enter budget amounts manually.</td>
+            </tr>
+                <tr id="field_comments">
+                <td class="rt_fname">comments</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Comments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter other information about this project.</td>
+            </tr>
+                <tr id="field_companyname">
+                <td class="rt_fname">companyname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Project Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a unique project name.
+
+If you use Auto-Generated Numbering, it is important to enter the project name here because the Project ID does not include the project name.</td>
+            </tr>
+                <tr id="field_contact">
+                <td class="rt_fname">contact</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Primary Contact</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the contact for this project.</td>
+            </tr>
+                <tr id="field_createchargerule">
+                <td class="rt_fname">createchargerule</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Create Charge Rule</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The customer's currency is shown here. This is the currency used for all transactions and records created for this project.
+
+If you use the Multi-Currency Customers feature, select the customer's transaction currency you want to use for this project and its associated records and transactions.</td>
+            </tr>
+                <tr id="field_currencyprecision">
+                <td class="rt_fname">currencyprecision</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency Precision</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Returns the precision for the job's currency. For example, if the currency is U.S. dollars, the precision would be 2, for two digits behind the period, as in $100.00.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the form you want to use to enter this record.
+
+Select Standard Project Form to continue using this form, select a custom project form you have already created, or select New to create a custom project form.</td>
+            </tr>
+                <tr id="field_datecreated">
+                <td class="rt_fname">datecreated</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the date the project was created.</td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Actual End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the date the project is finished.</td>
+            </tr>
+                <tr id="field_entityid">
+                <td class="rt_fname">entityid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Project ID</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">NetSuite copies the Project Name as the Project ID.
+
+If you want to manually enter a Project ID, clear the Auto check box next to the field and enter the ID.
+
+If you use Auto-Generated Numbering, then NetSuite creates this ID automatically based on your settings at Setup &gt; Company Set Up Auto-Generated Numbers.</td>
+            </tr>
+                <tr id="field_entitystatus">
+                <td class="rt_fname">entitystatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the progress of the project.
+
+When creating a new project, select the status that best indicates the progress of the project.
+
+You can create new statuses at Setup &gt; Accounting &gt; Accounting Lists &gt; New, and click Project Status.</td>
+            </tr>
+                <tr id="field_estimatedcost">
+                <td class="rt_fname">estimatedcost</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Cost</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the projected cost to complete this project.</td>
+            </tr>
+                <tr id="field_estimatedgrossprofit">
+                <td class="rt_fname">estimatedgrossprofit</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Gross Profit</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Estimated Gross Profit is calculated as follows:
+
+For projects with the Job Costing and Project Budgeting feature, Estimated Cost and Estimated Revenue disabled: For Fix Bid projects: [Project Price - Estimated Labor Cost]; for all other cases: [Estimated Labor Revenue - Estimated Labor Cost].
+
+For projects with the Job Costing and Project Budgeting feature disabled, Estimated Cost, or Estimated Revenue enabled: [Estimated Revenue - Estimated Cost]. Note: The field that you do not use gets a 0 value.
+
+For projects with the Job Costing and Project Budgeting feature enabled: [Estimated Revenue - Estimated Cost]</td>
+            </tr>
+                <tr id="field_estimatedgrossprofitpercent">
+                <td class="rt_fname">estimatedgrossprofitpercent</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Gross Profit Percent</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Shows the expected profit percentage, calculated as:
+
+For Time and Materials projects:
+[Estimated Gross Profit / Estimated Labor Revenue
+
+For Fixed Bid projects:
+[Estimated Gross Profit / Project Price]</td>
+            </tr>
+                <tr id="field_estimatedlaborcost">
+                <td class="rt_fname">estimatedlaborcost</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Labor Cost</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Estimated Labor Cost is the total amount expected to be spent on labor for the project.</td>
+            </tr>
+                <tr id="field_estimatedlaborcostbaseline">
+                <td class="rt_fname">estimatedlaborcostbaseline</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Labor Cost Baseline</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value of Estimated Labor Cost when the baseline was set.</td>
+            </tr>
+                <tr id="field_estimatedlaborrevenue">
+                <td class="rt_fname">estimatedlaborrevenue</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Labor Revenue</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the projected revenue to be billed for work performed on this project.</td>
+            </tr>
+                <tr id="field_estimatedrevenue">
+                <td class="rt_fname">estimatedrevenue</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Revenue</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the projected revenue to be billed for work performed on this project.</td>
+            </tr>
+                <tr id="field_estimatedtime">
+                <td class="rt_fname">estimatedtime</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Initial Time Budget</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the sum of the initial time budgeted for the CRM Tasks that are included in this project.</td>
+            </tr>
+                <tr id="field_estimatedtimeoverride">
+                <td class="rt_fname">estimatedtimeoverride</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Work</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Estimated Work is the sum of the estimated work for all project tasks.
+
+Estimated Work also includes the Current Time Budget amounts for all CRM tasks if the Include CRM Tasks in Project Totals check box is selected for this project.</td>
+            </tr>
+                <tr id="field_estimatedtimeoverridebaseline">
+                <td class="rt_fname">estimatedtimeoverridebaseline</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated Work Baseline</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The value in the Estimated Work field when the baseline was set.</td>
+            </tr>
+                <tr id="field_estimaterevrectemplate">
+                <td class="rt_fname">estimaterevrectemplate</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Rev Rec Forecast Template</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a revenue recognition template created for the project. The template generates a schedule forecasting expected revenue to be recognized for the project.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Returns the job's external ID, if one is assigned.</td>
+            </tr>
+                <tr id="field_fxrate">
+                <td class="rt_fname">fxrate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Shows the currency's exchange rate when you create the project.
+
+You can edit the rate for this project if you want to use a different rate for cost and labor estimates.</td>
+            </tr>
+                <tr id="field_includecrmtasksintotals">
+                <td class="rt_fname">includecrmtasksintotals</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Include CRM Tasks in Project Totals</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to allow CRM tasks to be included in costs, planned time, and actual time for this project.</td>
+            </tr>
+                <tr id="field_isbasecurrency">
+                <td class="rt_fname">isbasecurrency</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Base Currency</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isexempttime">
+                <td class="rt_fname">isexempttime</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Classify Time as Exempt</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Exempt time is excluded when calculating utilization. It is not included in the numerator or denominator of the utilization formula.</td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you check this box, then the project no longer appears on the list of projects.
+ 
+You cannot edit or make any changes to a project marked inactive.
+Check the Show Inactives box at the bottom of the List page to view inactive projects.</td>
+            </tr>
+                <tr id="field_isjob">
+                <td class="rt_fname">isjob</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isproductivetime">
+                <td class="rt_fname">isproductivetime</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Classify Time as Productive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Productive time is time worked on a project but not included when calculating revenue for the project.
+
+Productive time is not billed to the customer.
+
+Training and pre-sales support are examples of productive time.</td>
+            </tr>
+                <tr id="field_isutilizedtime">
+                <td class="rt_fname">isutilizedtime</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Classify Time as Utilized</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Utilized time directly contributes to the revenue for a project.</td>
+            </tr>
+                <tr id="field_jobbillingtype">
+                <td class="rt_fname">jobbillingtype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a method to bill project costs to the customer.
+
+Charge-Based: billable amounts are represented by charges. Charges are generated based on charge rules based on fixed dates, milestones, project progress, or time entries. This option requires that you have enabled the Charge-Based Billing feature.
+
+Fixed Bid, Interval: bill customers at predefined intervals for a portion of the fixed amount based on project percent complete.
+
+Fixed Bid Milestone: bill customers as milestones are completed for the percentage of the total project amount specified for the milestone.
+
+Time and Materials: bill customers for time and expenses entered against the project.</td>
+            </tr>
+                <tr id="field_jobitem">
+                <td class="rt_fname">jobitem</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Item</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the service item to appear on transactions billed to the customer.</td>
+            </tr>
+                <tr id="field_jobprice">
+                <td class="rt_fname">jobprice</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Project Price</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the price billed to the customer on transactions.
+
+Project Price is also used to calculate the gross profit margin for the project.</td>
+            </tr>
+                <tr id="field_jobtype">
+                <td class="rt_fname">jobtype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Project Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the project type. Project types are user-defined values to classify projects in a way meaningful to your company.</td>
+            </tr>
+                <tr id="field_language">
+                <td class="rt_fname">language</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Language</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the language to use to display all project records and invoices.</td>
+            </tr>
+                <tr id="field_lastbaselinedate">
+                <td class="rt_fname">lastbaselinedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Baseline Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The date when the last project baseline was set.</td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Modified Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Returns the date on which the job record was last modified.</td>
+            </tr>
+                <tr id="field_limittimetoassignees">
+                <td class="rt_fname">limittimetoassignees</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Limit Time Entry to Assignees</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to allow only resources listed on the Resources subtab for the project to enter time and expenses.
+
+Clearing this box allows any project resource to track time against this project and its project tasks.
+
+Only resources listed on the Resource tab will be able to see the project in Project select lists for time and expenses.
+
+Note: Regardless of whether this box is marked, in the Vendor Center, this project will only show if the vendor is listed as a resource of the project.</td>
+            </tr>
+                <tr id="field_materializetime">
+                <td class="rt_fname">materializetime</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Create Planned Time Entries</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to generate time entries for planned work on project tasks.
+
+Resources assigned to this project will be able to see their planned time in Time Tracking or Timesheets.
+
+If you use Project Budgets, planned time entries are required to generate calculated costs.</td>
+            </tr>
+                <tr id="field_otherrelationships">
+                <td class="rt_fname">otherrelationships</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Other Relationships</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_parent">
+                <td class="rt_fname">parent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the name of the customer for this project. If you are creating a subproject, then enter a customer and project in this field.</td>
+            </tr>
+                <tr id="field_percentcomplete">
+                <td class="rt_fname">percentcomplete</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Percent Complete</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an estimate of how much of the total project work is complete.
+ 
+This percentage is not calculated or updated by NetSuite.</td>
+            </tr>
+                <tr id="field_percenttimecomplete">
+                <td class="rt_fname">percenttimecomplete</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Percent Work Complete</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Shows the percent of the total planned project time that has been completed.
+
+Percent Work Complete is calculated by dividing the total number of actual hours worked and reported in Time Tracking by the number of hours entered in the Estimated Work field for each project task.
+
+The percentage is 100% when the status of all project tasks is Completed.</td>
+            </tr>
+                <tr id="field_plannedwork">
+                <td class="rt_fname">plannedwork</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Planned Work</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Total of all planned time entered for project tasks. This field is not updated when time is entered outside the planned time. Planned time can only be updated by manually adding addition time to project tasks.</td>
+            </tr>
+                <tr id="field_plannedworkbaseline">
+                <td class="rt_fname">plannedworkbaseline</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Planned Work Baseline</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_projectedenddate">
+                <td class="rt_fname">projectedenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the date you plan to complete all project tasks by. You can update this date at any time.
+ 
+If you use Advanced Projects, NetSuite calculates an end date based on the project schedule and displays it in Calculated End Date.</td>
+            </tr>
+                <tr id="field_projectedenddatebaseline">
+                <td class="rt_fname">projectedenddatebaseline</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Estimated End Date Baseline</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Estimated End Date when the baseline was set.
+ 
+Baseline information is available only if you use Advanced Projects.</td>
+            </tr>
+                <tr id="field_projectexpensetype">
+                <td class="rt_fname">projectexpensetype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Project Expense Type</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a project expense type for this project.
+
+The project expense type determines which account is debited when posting time transactions recorded for this project.</td>
+            </tr>
+                <tr id="field_projectmanager">
+                <td class="rt_fname">projectmanager</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Project Manager</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Project Manager for this project. The project resource must be designated as Project Manager on the employee record.</td>
+            </tr>
+                <tr id="field_scheduledenddate">
+                <td class="rt_fname">scheduledenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Scheduled End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you selected Backward in the Scheduling Method field, enter the end date for your project.</td>
+            </tr>
+                <tr id="field_schedulingmethod">
+                <td class="rt_fname">schedulingmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Scheduling Method</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select how you want to plan the schedule for your project.
+
+    * Forward – Select a start date for your project and plan tasks forward in time from the start date. NetSuite calculates the end date for your project based on the tasks you enter.
+    * Backward – Select an end date for your project and plan tasks backward in time from the end date. NetSuite calculates the start date for your project based on the tasks you enter.</td>
+            </tr>
+                <tr id="field_sourceserviceitemfromratecard">
+                <td class="rt_fname">sourceserviceitemfromratecard</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Source Service Item to Task Assignments from Rate Card</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Displays a check mark if the Source Service Item to Task Assignments from Rate Card box is checked on the job record.</td>
+            </tr>
+                <tr id="field_stage">
+                <td class="rt_fname">stage</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the estimated date work will start on the project. You can change this date at any time during the life of the project.
+
+NetSuite schedules all project tasks without predecessors to start on this date.</td>
+            </tr>
+                <tr id="field_startdatebaseline">
+                <td class="rt_fname">startdatebaseline</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Date Baseline</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Start Date when the baseline was set.
+
+Baseline information is available only if you use Advanced Projects.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The subsidiary for this project is displayed here.</td>
+            </tr>
+                <tr id="field_timeapproval">
+                <td class="rt_fname">timeapproval</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Time Approval</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select how you want time to be approved for this project.
+
+The following options are available:
+    * Approve time automatically – Project time is approved automatically when entered.
+    * Default Time Approver – Project time can be approved only by each employee’s supervisor or time approver defined on the employee record.
+    * Project Time Approver – Project time can be approved only by project resources with project time approval permission defined on the project resource role.
+    * Project Time Approver or Default Time Approver – Both project time approvers and default time approvers can approve project time. This option is selected by default.
+Note: The Time Approval preference does not override roles with full time permissions. Any role that has full time permissions and unrestricted employee permissions will be able to approve and reject time entries for any employee regardless of the selection made in this field.</td>
+            </tr>
+                <tr id="field_timeremaining">
+                <td class="rt_fname">timeremaining</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Remaining Work</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Indicates the time for work yet to be done on all project tasks, calculated as:
+
+[Estimated Work(all tasks) - Actual Work (all tasks)]</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_bbudget_">bbudget - Billing Budget</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_bbudget_costcategoryref">
+                        <td class="rt_sname">costcategoryref</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bbudget_costcategorysubtype">
+                        <td class="rt_sname">costcategorysubtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bbudget_costcategorytype">
+                        <td class="rt_sname">costcategorytype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bbudget_selectline">
+                        <td class="rt_sname">selectline</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Select</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bbudget_totalamount">
+                        <td class="rt_sname">totalamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Project Total</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_cbudget_">cbudget - Cost Budget</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_cbudget_costcategoryref">
+                        <td class="rt_sname">costcategoryref</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_cbudget_costcategorysubtype">
+                        <td class="rt_sname">costcategorysubtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_cbudget_costcategorytype">
+                        <td class="rt_sname">costcategorytype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_cbudget_selectline">
+                        <td class="rt_sname">selectline</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Select</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_cbudget_totalamount">
+                        <td class="rt_sname">totalamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Project Total</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_jobresources_">jobresources - Resource Details</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_jobresources_defaultcost">
+                        <td class="rt_sname">defaultcost</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Default Cost</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_jobresources_email">
+                        <td class="rt_sname">email</td>
+                        <td class="rt_stype">email</td>
+                        <td class="rt_slabel">Email</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_jobresources_jobresource">
+                        <td class="rt_sname">jobresource</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Name</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_jobresources_overridencost">
+                        <td class="rt_sname">overridencost</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Cost Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_jobresources_role">
+                        <td class="rt_sname">role</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Role</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_percentcompleteoverride_">percentcompleteoverride - Rev Rec Percent Complete Override</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_percentcompleteoverride_comments">
+                        <td class="rt_sname">comments</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Comments</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_percentcompleteoverride_percent">
+                        <td class="rt_sname">percent</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Cumulative Percent Complete</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_percentcompleteoverride_period">
+                        <td class="rt_sname">period</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Accounting Period</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_plstatement_">plstatement - P&amp;L</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_plstatement_costcategoryref">
+                        <td class="rt_sname">costcategoryref</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plstatement_costcategorysubtype">
+                        <td class="rt_sname">costcategorysubtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_plstatement_costcategorytype">
+                        <td class="rt_sname">costcategorytype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_address">
+                <td class="rt_tname">address</td>
+                <td class="rt_tlabel">Address</td>
+            </tr>
+                <tr id="tab_budget">
+                <td class="rt_tname">budget</td>
+                <td class="rt_tlabel">Budget</td>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_financial">
+                <td class="rt_tname">financial</td>
+                <td class="rt_tlabel">Financial</td>
+            </tr>
+                <tr id="tab_general">
+                <td class="rt_tname">general</td>
+                <td class="rt_tlabel">General</td>
+            </tr>
+                <tr id="tab_info">
+                <td class="rt_tname">info</td>
+                <td class="rt_tlabel">Info</td>
+            </tr>
+                <tr id="tab_pl">
+                <td class="rt_tname">pl</td>
+                <td class="rt_tlabel">P&amp;L</td>
+            </tr>
+                <tr id="tab_resources">
+                <td class="rt_tname">resources</td>
+                <td class="rt_tlabel">Resources</td>
+            </tr>
+                <tr id="tab_schedule">
+                <td class="rt_tname">schedule</td>
+                <td class="rt_tlabel">Schedule</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_billingschedule">
+                    <td class="rt_jid">billingschedule</td>
+                    <td class="rt_jlabel">Billing Schedule</td>
+                    <td class="rt_jname">Billing Schedule</td>
+                </tr>
+                    <tr id="join_campaignresponse">
+                    <td class="rt_jid">campaignresponse</td>
+                    <td class="rt_jlabel">Campaign Response</td>
+                    <td class="rt_jname">Campaign</td>
+                </tr>
+                    <tr id="join_contactprimary">
+                    <td class="rt_jid">contactprimary</td>
+                    <td class="rt_jlabel">Contact (Primary)</td>
+                    <td class="rt_jname">Contact</td>
+                </tr>
+                    <tr id="join_customer">
+                    <td class="rt_jid">customer</td>
+                    <td class="rt_jlabel">Customer</td>
+                    <td class="rt_jname">Customer</td>
+                </tr>
+                    <tr id="join_messages">
+                    <td class="rt_jid">messages</td>
+                    <td class="rt_jlabel">Messages</td>
+                    <td class="rt_jname">Message</td>
+                </tr>
+                    <tr id="join_messagesfrom">
+                    <td class="rt_jid">messagesfrom</td>
+                    <td class="rt_jlabel">Messages From</td>
+                    <td class="rt_jname">Message</td>
+                </tr>
+                    <tr id="join_messagesto">
+                    <td class="rt_jid">messagesto</td>
+                    <td class="rt_jlabel">Messages To</td>
+                    <td class="rt_jname">Message</td>
+                </tr>
+                    <tr id="join_projecttask">
+                    <td class="rt_jid">projecttask</td>
+                    <td class="rt_jlabel">Project Task</td>
+                    <td class="rt_jname">ProjectTask</td>
+                </tr>
+                    <tr id="join_task">
+                    <td class="rt_jid">task</td>
+                    <td class="rt_jlabel">Task</td>
+                    <td class="rt_jname">Task</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_accountnumber">
+                    <td class="rt_iname">accountnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Account</td>
+                </tr>
+                    <tr id="filter_actualtime">
+                    <td class="rt_iname">actualtime</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Actual Work</td>
+                </tr>
+                    <tr id="filter_address">
+                    <td class="rt_iname">address</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Address</td>
+                </tr>
+                    <tr id="filter_addressee">
+                    <td class="rt_iname">addressee</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Addressee</td>
+                </tr>
+                    <tr id="filter_addresslabel">
+                    <td class="rt_iname">addresslabel</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Address Label</td>
+                </tr>
+                    <tr id="filter_addressphone">
+                    <td class="rt_iname">addressphone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Address Phone</td>
+                </tr>
+                    <tr id="filter_allocatepayrollexpenses">
+                    <td class="rt_iname">allocatepayrollexpenses</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Allocate Payroll Expenses</td>
+                </tr>
+                    <tr id="filter_allowallresourcesfortasks">
+                    <td class="rt_iname">allowallresourcesfortasks</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Display All Resources for ProjectTask Assignment</td>
+                </tr>
+                    <tr id="filter_allowexpenses">
+                    <td class="rt_iname">allowexpenses</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Allow Expenses</td>
+                </tr>
+                    <tr id="filter_allowtime">
+                    <td class="rt_iname">allowtime</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Allow Time Entry</td>
+                </tr>
+                    <tr id="filter_applyprojectexpensetypetoall">
+                    <td class="rt_iname">applyprojectexpensetypetoall</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Apply to all time entries</td>
+                </tr>
+                    <tr id="filter_attention">
+                    <td class="rt_iname">attention</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Attention</td>
+                </tr>
+                    <tr id="filter_billingratecard">
+                    <td class="rt_iname">billingratecard</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Rate Card</td>
+                </tr>
+                    <tr id="filter_billingschedule">
+                    <td class="rt_iname">billingschedule</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Schedule</td>
+                </tr>
+                    <tr id="filter_calculatedenddate">
+                    <td class="rt_iname">calculatedenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Calculated End Date</td>
+                </tr>
+                    <tr id="filter_calculatedenddatebaseline">
+                    <td class="rt_iname">calculatedenddatebaseline</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Calculated End Date Baseline</td>
+                </tr>
+                    <tr id="filter_calculatedstartdate">
+                    <td class="rt_iname">calculatedstartdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Calculated Start Date</td>
+                </tr>
+                    <tr id="filter_category">
+                    <td class="rt_iname">category</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Category</td>
+                </tr>
+                    <tr id="filter_city">
+                    <td class="rt_iname">city</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">City</td>
+                </tr>
+                    <tr id="filter_comments">
+                    <td class="rt_iname">comments</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Comments</td>
+                </tr>
+                    <tr id="filter_contact">
+                    <td class="rt_iname">contact</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Contact</td>
+                </tr>
+                    <tr id="filter_country">
+                    <td class="rt_iname">country</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Country</td>
+                </tr>
+                    <tr id="filter_county">
+                    <td class="rt_iname">county</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">County/State</td>
+                </tr>
+                    <tr id="filter_customer">
+                    <td class="rt_iname">customer</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_email">
+                    <td class="rt_iname">email</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Email</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Actual End Date</td>
+                </tr>
+                    <tr id="filter_entityid">
+                    <td class="rt_iname">entityid</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name/ID</td>
+                </tr>
+                    <tr id="filter_estcost">
+                    <td class="rt_iname">estcost</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Cost</td>
+                </tr>
+                    <tr id="filter_estenddate">
+                    <td class="rt_iname">estenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Projected End Date</td>
+                </tr>
+                    <tr id="filter_estimatedgrossprofit">
+                    <td class="rt_iname">estimatedgrossprofit</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Gross Profit</td>
+                </tr>
+                    <tr id="filter_estimatedgrossprofitpercent">
+                    <td class="rt_iname">estimatedgrossprofitpercent</td>
+                    <td class="rt_itype">percent</td>
+                    <td class="rt_ilabel">Estimated Gross Profit %</td>
+                </tr>
+                    <tr id="filter_estimatedlaborcost">
+                    <td class="rt_iname">estimatedlaborcost</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Labor Cost</td>
+                </tr>
+                    <tr id="filter_estimatedlaborcostbaseline">
+                    <td class="rt_iname">estimatedlaborcostbaseline</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Labor Cost Baseline</td>
+                </tr>
+                    <tr id="filter_estimatedlaborrevenue">
+                    <td class="rt_iname">estimatedlaborrevenue</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Labor Revenue</td>
+                </tr>
+                    <tr id="filter_estimatedtime">
+                    <td class="rt_iname">estimatedtime</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Initial Time Budget</td>
+                </tr>
+                    <tr id="filter_estimatedtimeoverride">
+                    <td class="rt_iname">estimatedtimeoverride</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Estimated Work</td>
+                </tr>
+                    <tr id="filter_estimatedtimeoverridebaseline">
+                    <td class="rt_iname">estimatedtimeoverridebaseline</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Estimated Work Baseline</td>
+                </tr>
+                    <tr id="filter_estrevenue">
+                    <td class="rt_iname">estrevenue</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Revenue</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fax">
+                    <td class="rt_iname">fax</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Fax</td>
+                </tr>
+                    <tr id="filter_formuladate">
+                    <td class="rt_iname">formuladate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Formula (Date)</td>
+                </tr>
+                    <tr id="filter_formulanumeric">
+                    <td class="rt_iname">formulanumeric</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="filter_formulatext">
+                    <td class="rt_iname">formulatext</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Formula (Text)</td>
+                </tr>
+                    <tr id="filter_giveaccess">
+                    <td class="rt_iname">giveaccess</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Login Access</td>
+                </tr>
+                    <tr id="filter_globalsubscriptionstatus">
+                    <td class="rt_iname">globalsubscriptionstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Global Subscription Status</td>
+                </tr>
+                    <tr id="filter_image">
+                    <td class="rt_iname">image</td>
+                    <td class="rt_itype">image</td>
+                    <td class="rt_ilabel">Image</td>
+                </tr>
+                    <tr id="filter_includecrmtasksintotals">
+                    <td class="rt_iname">includecrmtasksintotals</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Include CRM Tasks in Job Totals</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isdefaultbilling">
+                    <td class="rt_iname">isdefaultbilling</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Default Billing Address</td>
+                </tr>
+                    <tr id="filter_isdefaultshipping">
+                    <td class="rt_iname">isdefaultshipping</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Default Shipping Address</td>
+                </tr>
+                    <tr id="filter_isexempttime">
+                    <td class="rt_iname">isexempttime</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Classify Time as Exempt</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_isproductivetime">
+                    <td class="rt_iname">isproductivetime</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Classify Time as Productive</td>
+                </tr>
+                    <tr id="filter_isutilizedtime">
+                    <td class="rt_iname">isutilizedtime</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Classify Time as Utilized</td>
+                </tr>
+                    <tr id="filter_jobbillingtype">
+                    <td class="rt_iname">jobbillingtype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Type</td>
+                </tr>
+                    <tr id="filter_jobitem">
+                    <td class="rt_iname">jobitem</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Item</td>
+                </tr>
+                    <tr id="filter_jobprice">
+                    <td class="rt_iname">jobprice</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Job Price</td>
+                </tr>
+                    <tr id="filter_jobresource">
+                    <td class="rt_iname">jobresource</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Job Resource</td>
+                </tr>
+                    <tr id="filter_jobresourcerole">
+                    <td class="rt_iname">jobresourcerole</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Job Resource Role</td>
+                </tr>
+                    <tr id="filter_jobtype">
+                    <td class="rt_iname">jobtype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Job Type</td>
+                </tr>
+                    <tr id="filter_language">
+                    <td class="rt_iname">language</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Language</td>
+                </tr>
+                    <tr id="filter_lastbaselinedate">
+                    <td class="rt_iname">lastbaselinedate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Last Baseline Date</td>
+                </tr>
+                    <tr id="filter_lastmodifieddate">
+                    <td class="rt_iname">lastmodifieddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Last Modified</td>
+                </tr>
+                    <tr id="filter_level">
+                    <td class="rt_iname">level</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Level</td>
+                </tr>
+                    <tr id="filter_limittimetoassignees">
+                    <td class="rt_iname">limittimetoassignees</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Limit Time and Expenses To Resources</td>
+                </tr>
+                    <tr id="filter_materializetime">
+                    <td class="rt_iname">materializetime</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Create Planned Time Entries</td>
+                </tr>
+                    <tr id="filter_parent">
+                    <td class="rt_iname">parent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sub of</td>
+                </tr>
+                    <tr id="filter_pctcomplete">
+                    <td class="rt_iname">pctcomplete</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Percent Complete</td>
+                </tr>
+                    <tr id="filter_percenttimecomplete">
+                    <td class="rt_iname">percenttimecomplete</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Percent Time Complete</td>
+                </tr>
+                    <tr id="filter_permission">
+                    <td class="rt_iname">permission</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Permission</td>
+                </tr>
+                    <tr id="filter_phone">
+                    <td class="rt_iname">phone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Phone</td>
+                </tr>
+                    <tr id="filter_phoneticname">
+                    <td class="rt_iname">phoneticname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Phonetic Name</td>
+                </tr>
+                    <tr id="filter_plannedwork">
+                    <td class="rt_iname">plannedwork</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Planned Work</td>
+                </tr>
+                    <tr id="filter_plannedworkbaseline">
+                    <td class="rt_iname">plannedworkbaseline</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Planned Work Baseline</td>
+                </tr>
+                    <tr id="filter_projectedenddatebaseline">
+                    <td class="rt_iname">projectedenddatebaseline</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Projected End Date Baseline</td>
+                </tr>
+                    <tr id="filter_projectmanager">
+                    <td class="rt_iname">projectmanager</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Project Manager</td>
+                </tr>
+                    <tr id="filter_representingsubsidiary">
+                    <td class="rt_iname">representingsubsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Represents Subsidiary</td>
+                </tr>
+                    <tr id="filter_scheduledenddate">
+                    <td class="rt_iname">scheduledenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Scheduled End Date</td>
+                </tr>
+                    <tr id="filter_schedulingmethod">
+                    <td class="rt_iname">schedulingmethod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Scheduling Method</td>
+                </tr>
+                    <tr id="filter_sourceserviceitemfromratecard">
+                    <td class="rt_iname">sourceserviceitemfromratecard</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Source Service Item to Task Assignments from Rate Card</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_startdatebaseline">
+                    <td class="rt_iname">startdatebaseline</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date Baseline</td>
+                </tr>
+                    <tr id="filter_state">
+                    <td class="rt_iname">state</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">State/Province</td>
+                </tr>
+                    <tr id="filter_status">
+                    <td class="rt_iname">status</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+                    <tr id="filter_timeapproval">
+                    <td class="rt_iname">timeapproval</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Time Approval</td>
+                </tr>
+                    <tr id="filter_timeremaining">
+                    <td class="rt_iname">timeremaining</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Remaining Work</td>
+                </tr>
+                    <tr id="filter_zipcode">
+                    <td class="rt_iname">zipcode</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Zip</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accountnumber">
+                    <td class="rt_cname">accountnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account</td>
+                </tr>
+                    <tr id="column_actualtime">
+                    <td class="rt_cname">actualtime</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Actual Work</td>
+                </tr>
+                    <tr id="column_address">
+                    <td class="rt_cname">address</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address</td>
+                </tr>
+                    <tr id="column_addressee">
+                    <td class="rt_cname">addressee</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Addressee</td>
+                </tr>
+                    <tr id="column_addressinternalid">
+                    <td class="rt_cname">addressinternalid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address Internal ID</td>
+                </tr>
+                    <tr id="column_addresslabel">
+                    <td class="rt_cname">addresslabel</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address Label</td>
+                </tr>
+                    <tr id="column_addressphone">
+                    <td class="rt_cname">addressphone</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address Phone</td>
+                </tr>
+                    <tr id="column_allocatepayrollexpenses">
+                    <td class="rt_cname">allocatepayrollexpenses</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Allocate Payroll Expenses</td>
+                </tr>
+                    <tr id="column_allowallresourcesfortasks">
+                    <td class="rt_cname">allowallresourcesfortasks</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Display All Resources for ProjectTask Assignment</td>
+                </tr>
+                    <tr id="column_allowexpenses">
+                    <td class="rt_cname">allowexpenses</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Allow Expenses</td>
+                </tr>
+                    <tr id="column_allowtime">
+                    <td class="rt_cname">allowtime</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Allow Time Entry</td>
+                </tr>
+                    <tr id="column_altcontact">
+                    <td class="rt_cname">altcontact</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Alt. Contact</td>
+                </tr>
+                    <tr id="column_altemail">
+                    <td class="rt_cname">altemail</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Alt. Email</td>
+                </tr>
+                    <tr id="column_altname">
+                    <td class="rt_cname">altname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_altphone">
+                    <td class="rt_cname">altphone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Office Phone</td>
+                </tr>
+                    <tr id="column_attention">
+                    <td class="rt_cname">attention</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Attention</td>
+                </tr>
+                    <tr id="column_bbudgetusecalculatedvalues">
+                    <td class="rt_cname">bbudgetusecalculatedvalues</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Use Calculated Values for all Billing Budgets</td>
+                </tr>
+                    <tr id="column_billcountrycode">
+                    <td class="rt_cname">billcountrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Country Code</td>
+                </tr>
+                    <tr id="column_billingratecard">
+                    <td class="rt_cname">billingratecard</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Rate Card</td>
+                </tr>
+                    <tr id="column_billingschedule">
+                    <td class="rt_cname">billingschedule</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Schedule</td>
+                </tr>
+                    <tr id="column_billzipcode">
+                    <td class="rt_cname">billzipcode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Billing Zip</td>
+                </tr>
+                    <tr id="column_calculatedenddate">
+                    <td class="rt_cname">calculatedenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Calculated End Date</td>
+                </tr>
+                    <tr id="column_calculatedenddatebaseline">
+                    <td class="rt_cname">calculatedenddatebaseline</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Calculated End Date Baseline</td>
+                </tr>
+                    <tr id="column_calculatedstartdate">
+                    <td class="rt_cname">calculatedstartdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Calculated Start Date</td>
+                </tr>
+                    <tr id="column_category">
+                    <td class="rt_cname">category</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Category</td>
+                </tr>
+                    <tr id="column_cbudgetlaborbudgetfromalloc">
+                    <td class="rt_cname">cbudgetlaborbudgetfromalloc</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Calculate Labor Budgets from Resource Allocations</td>
+                </tr>
+                    <tr id="column_cbudgetusecalculatedvalues">
+                    <td class="rt_cname">cbudgetusecalculatedvalues</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Use Calculated Values for all Cost Budgets</td>
+                </tr>
+                    <tr id="column_city">
+                    <td class="rt_cname">city</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">City</td>
+                </tr>
+                    <tr id="column_comments">
+                    <td class="rt_cname">comments</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Comments</td>
+                </tr>
+                    <tr id="column_companyname">
+                    <td class="rt_cname">companyname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Job Name</td>
+                </tr>
+                    <tr id="column_contact">
+                    <td class="rt_cname">contact</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Primary Contact</td>
+                </tr>
+                    <tr id="column_country">
+                    <td class="rt_cname">country</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Country</td>
+                </tr>
+                    <tr id="column_countrycode">
+                    <td class="rt_cname">countrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Country Code</td>
+                </tr>
+                    <tr id="column_customer">
+                    <td class="rt_cname">customer</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Customer</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_email">
+                    <td class="rt_cname">email</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Email</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Actual End Date</td>
+                </tr>
+                    <tr id="column_entityid">
+                    <td class="rt_cname">entityid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_entitynumber">
+                    <td class="rt_cname">entitynumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Number</td>
+                </tr>
+                    <tr id="column_entitystatus">
+                    <td class="rt_cname">entitystatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_estimatedcost">
+                    <td class="rt_cname">estimatedcost</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Cost</td>
+                </tr>
+                    <tr id="column_estimatedgrossprofit">
+                    <td class="rt_cname">estimatedgrossprofit</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Gross Profit</td>
+                </tr>
+                    <tr id="column_estimatedgrossprofitpercent">
+                    <td class="rt_cname">estimatedgrossprofitpercent</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Estimated Gross Profit %</td>
+                </tr>
+                    <tr id="column_estimatedlaborcost">
+                    <td class="rt_cname">estimatedlaborcost</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Labor Cost</td>
+                </tr>
+                    <tr id="column_estimatedlaborcostbaseline">
+                    <td class="rt_cname">estimatedlaborcostbaseline</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Labor Cost Baseline</td>
+                </tr>
+                    <tr id="column_estimatedlaborrevenue">
+                    <td class="rt_cname">estimatedlaborrevenue</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Labor Revenue</td>
+                </tr>
+                    <tr id="column_estimatedrevenue">
+                    <td class="rt_cname">estimatedrevenue</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Revenue</td>
+                </tr>
+                    <tr id="column_estimatedtime">
+                    <td class="rt_cname">estimatedtime</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Initial Time Budget</td>
+                </tr>
+                    <tr id="column_estimatedtimeoverride">
+                    <td class="rt_cname">estimatedtimeoverride</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Estimated Work</td>
+                </tr>
+                    <tr id="column_estimatedtimeoverridebaseline">
+                    <td class="rt_cname">estimatedtimeoverridebaseline</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Estimated Work Baseline</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fax">
+                    <td class="rt_cname">fax</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Fax</td>
+                </tr>
+                    <tr id="column_formulacurrency">
+                    <td class="rt_cname">formulacurrency</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Formula (Currency)</td>
+                </tr>
+                    <tr id="column_formuladate">
+                    <td class="rt_cname">formuladate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Formula (Date)</td>
+                </tr>
+                    <tr id="column_formuladatetime">
+                    <td class="rt_cname">formuladatetime</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Formula (Date/Time)</td>
+                </tr>
+                    <tr id="column_formulanumeric">
+                    <td class="rt_cname">formulanumeric</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="column_formulapercent">
+                    <td class="rt_cname">formulapercent</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Formula (Percent)</td>
+                </tr>
+                    <tr id="column_formulatext">
+                    <td class="rt_cname">formulatext</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Formula (Text)</td>
+                </tr>
+                    <tr id="column_globalsubscriptionstatus">
+                    <td class="rt_cname">globalsubscriptionstatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Global Subscription Status</td>
+                </tr>
+                    <tr id="column_image">
+                    <td class="rt_cname">image</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Image</td>
+                </tr>
+                    <tr id="column_includecrmtasksintotals">
+                    <td class="rt_cname">includecrmtasksintotals</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Include CRM Tasks in Job Totals</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isdefaultbilling">
+                    <td class="rt_cname">isdefaultbilling</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Default Billing Address</td>
+                </tr>
+                    <tr id="column_isdefaultshipping">
+                    <td class="rt_cname">isdefaultshipping</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Default Shipping Address</td>
+                </tr>
+                    <tr id="column_isexempttime">
+                    <td class="rt_cname">isexempttime</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Classify Time as Exempt</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_isproductivetime">
+                    <td class="rt_cname">isproductivetime</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Classify Time as Productive</td>
+                </tr>
+                    <tr id="column_isutilizedtime">
+                    <td class="rt_cname">isutilizedtime</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Classify Time as Utilized</td>
+                </tr>
+                    <tr id="column_jobbillingtype">
+                    <td class="rt_cname">jobbillingtype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Type</td>
+                </tr>
+                    <tr id="column_jobitem">
+                    <td class="rt_cname">jobitem</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Item</td>
+                </tr>
+                    <tr id="column_jobprice">
+                    <td class="rt_cname">jobprice</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Job Price</td>
+                </tr>
+                    <tr id="column_jobresource">
+                    <td class="rt_cname">jobresource</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Job Resource</td>
+                </tr>
+                    <tr id="column_jobresourcerole">
+                    <td class="rt_cname">jobresourcerole</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Job Resource Role</td>
+                </tr>
+                    <tr id="column_jobtype">
+                    <td class="rt_cname">jobtype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Job Type</td>
+                </tr>
+                    <tr id="column_language">
+                    <td class="rt_cname">language</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Language</td>
+                </tr>
+                    <tr id="column_lastbaselinedate">
+                    <td class="rt_cname">lastbaselinedate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Last Baseline Date</td>
+                </tr>
+                    <tr id="column_lastmodifieddate">
+                    <td class="rt_cname">lastmodifieddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Modified</td>
+                </tr>
+                    <tr id="column_lastviewed">
+                    <td class="rt_cname">lastviewed</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Viewed</td>
+                </tr>
+                    <tr id="column_level">
+                    <td class="rt_cname">level</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Level</td>
+                </tr>
+                    <tr id="column_limittimetoassignees">
+                    <td class="rt_cname">limittimetoassignees</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Limit Time and Expenses to Resources</td>
+                </tr>
+                    <tr id="column_materializetime">
+                    <td class="rt_cname">materializetime</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Create Planned Time Entries</td>
+                </tr>
+                    <tr id="column_percentcomplete">
+                    <td class="rt_cname">percentcomplete</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Percent Complete</td>
+                </tr>
+                    <tr id="column_percenttimecomplete">
+                    <td class="rt_cname">percenttimecomplete</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Percent Time Complete</td>
+                </tr>
+                    <tr id="column_permission">
+                    <td class="rt_cname">permission</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Permission</td>
+                </tr>
+                    <tr id="column_phone">
+                    <td class="rt_cname">phone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Phone</td>
+                </tr>
+                    <tr id="column_phoneticname">
+                    <td class="rt_cname">phoneticname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Phonetic Name</td>
+                </tr>
+                    <tr id="column_plannedwork">
+                    <td class="rt_cname">plannedwork</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Planned Work</td>
+                </tr>
+                    <tr id="column_plannedworkbaseline">
+                    <td class="rt_cname">plannedworkbaseline</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Planned Work Baseline</td>
+                </tr>
+                    <tr id="column_projectedenddate">
+                    <td class="rt_cname">projectedenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Projected End Date</td>
+                </tr>
+                    <tr id="column_projectedenddatebaseline">
+                    <td class="rt_cname">projectedenddatebaseline</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Projected End Date Baseline</td>
+                </tr>
+                    <tr id="column_projectmanager">
+                    <td class="rt_cname">projectmanager</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Job Manager</td>
+                </tr>
+                    <tr id="column_representingsubsidiary">
+                    <td class="rt_cname">representingsubsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Represents Subsidiary</td>
+                </tr>
+                    <tr id="column_scheduledenddate">
+                    <td class="rt_cname">scheduledenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Scheduled End Date</td>
+                </tr>
+                    <tr id="column_schedulingmethod">
+                    <td class="rt_cname">schedulingmethod</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Scheduling Method</td>
+                </tr>
+                    <tr id="column_shipcountrycode">
+                    <td class="rt_cname">shipcountrycode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Country Code</td>
+                </tr>
+                    <tr id="column_sourceserviceitemfromratecard">
+                    <td class="rt_cname">sourceserviceitemfromratecard</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Source Service Item to Task Assignments from Rate Card</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_startdatebaseline">
+                    <td class="rt_cname">startdatebaseline</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date Baseline</td>
+                </tr>
+                    <tr id="column_state">
+                    <td class="rt_cname">state</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province</td>
+                </tr>
+                    <tr id="column_statedisplayname">
+                    <td class="rt_cname">statedisplayname</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province Display Name</td>
+                </tr>
+                    <tr id="column_subscription">
+                    <td class="rt_cname">subscription</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription</td>
+                </tr>
+                    <tr id="column_subscriptiondate">
+                    <td class="rt_cname">subscriptiondate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Subscription Date</td>
+                </tr>
+                    <tr id="column_subscriptionstatus">
+                    <td class="rt_cname">subscriptionstatus</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Subscription Status</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+                    <tr id="column_subsidiarynohierarchy">
+                    <td class="rt_cname">subsidiarynohierarchy</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary (no hierarchy)</td>
+                </tr>
+                    <tr id="column_timeapproval">
+                    <td class="rt_cname">timeapproval</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Time Approval</td>
+                </tr>
+                    <tr id="column_timeremaining">
+                    <td class="rt_cname">timeremaining</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Remaining Work</td>
+                </tr>
+                    <tr id="column_type">
+                    <td class="rt_cname">type</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Type</td>
+                </tr>
+                    <tr id="column_zipcode">
+                    <td class="rt_cname">zipcode</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Zip Code</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

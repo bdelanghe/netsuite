@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.sales.transactions.webservices.netsuite.com__transactionlinktype','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.sales.transactions.webservices.netsuite.com__transactionlinktype','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>TransactionLinkType</H1>
+    Namespace: urn:types.sales.transactions.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">_advancedCostAmortization</td></tr>
+        <tr><td class="est_vvalue">_advancedExpenseAmortization</td></tr>
+        <tr><td class="est_vvalue">_authorizationDeposit</td></tr>
+        <tr><td class="est_vvalue">_billReceipt</td></tr>
+        <tr><td class="est_vvalue">_blcgaJeFulfillment</td></tr>
+        <tr><td class="est_vvalue">_captureAuthorization</td></tr>
+        <tr><td class="est_vvalue">_closedPeriodFxVariance</td></tr>
+        <tr><td class="est_vvalue">_closeWorkOrder</td></tr>
+        <tr><td class="est_vvalue">_cogsLink</td></tr>
+        <tr><td class="est_vvalue">_collectTegata</td></tr>
+        <tr><td class="est_vvalue">_commission</td></tr>
+        <tr><td class="est_vvalue">_contractCostDeferral</td></tr>
+        <tr><td class="est_vvalue">_contractCostDeferralReversal</td></tr>
+        <tr><td class="est_vvalue">_deferredRevenueReallocation</td></tr>
+        <tr><td class="est_vvalue">_depositApplication</td></tr>
+        <tr><td class="est_vvalue">_depositRefundCheck</td></tr>
+        <tr><td class="est_vvalue">_discountTegata</td></tr>
+        <tr><td class="est_vvalue">_dropShipment</td></tr>
+        <tr><td class="est_vvalue">_endorseTegata</td></tr>
+        <tr><td class="est_vvalue">_estimateInvoicing</td></tr>
+        <tr><td class="est_vvalue">_foreignCurrencyGainLossOnContractAsset</td></tr>
+        <tr><td class="est_vvalue">_fulfillmentRequestFulfillment</td></tr>
+        <tr><td class="est_vvalue">_glImpactAdjustment</td></tr>
+        <tr><td class="est_vvalue">_intercompanyAdjustment</td></tr>
+        <tr><td class="est_vvalue">_inTransitPayment</td></tr>
+        <tr><td class="est_vvalue">_inventoryCountAdjustment</td></tr>
+        <tr><td class="est_vvalue">_kitShipment</td></tr>
+        <tr><td class="est_vvalue">_landedCost</td></tr>
+        <tr><td class="est_vvalue">_linkedReturnCost</td></tr>
+        <tr><td class="est_vvalue">_netContractAssetOrLiabilityPerElement</td></tr>
+        <tr><td class="est_vvalue">_opportunityClose</td></tr>
+        <tr><td class="est_vvalue">_opportunityEstimate</td></tr>
+        <tr><td class="est_vvalue">_orderBillInvoice</td></tr>
+        <tr><td class="est_vvalue">_orderFulfillmentRequest</td></tr>
+        <tr><td class="est_vvalue">_orderPickingPacking</td></tr>
+        <tr><td class="est_vvalue">_outsourcedManufacturing</td></tr>
+        <tr><td class="est_vvalue">_ownershipTransferItemReceipt</td></tr>
+        <tr><td class="est_vvalue">_payment</td></tr>
+        <tr><td class="est_vvalue">_paymentRefund</td></tr>
+        <tr><td class="est_vvalue">_payTegata</td></tr>
+        <tr><td class="est_vvalue">_poToOwnershipTransfer</td></tr>
+        <tr><td class="est_vvalue">_prepaymentApplication</td></tr>
+        <tr><td class="est_vvalue">_purchaseContractOrder</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderPrepayment</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderRequisition</td></tr>
+        <tr><td class="est_vvalue">_purchaseOrderToBlanket</td></tr>
+        <tr><td class="est_vvalue">_purchaseReturn</td></tr>
+        <tr><td class="est_vvalue">_receiptBill</td></tr>
+        <tr><td class="est_vvalue">_receiptFulfillment</td></tr>
+        <tr><td class="est_vvalue">_reimbursement</td></tr>
+        <tr><td class="est_vvalue">_reservationShipment</td></tr>
+        <tr><td class="est_vvalue">_revalueWorkOrder</td></tr>
+        <tr><td class="est_vvalue">_revenueAmortizationRecognition</td></tr>
+        <tr><td class="est_vvalue">_revenueArrangement</td></tr>
+        <tr><td class="est_vvalue">_revenueCommitted</td></tr>
+        <tr><td class="est_vvalue">_rfqToVendorRfq</td></tr>
+        <tr><td class="est_vvalue">_saleReturn</td></tr>
+        <tr><td class="est_vvalue">_salesOrderAuthorization</td></tr>
+        <tr><td class="est_vvalue">_salesOrderDegross</td></tr>
+        <tr><td class="est_vvalue">_salesOrderDeposit</td></tr>
+        <tr><td class="est_vvalue">_salesOrderRevenueRevaluation</td></tr>
+        <tr><td class="est_vvalue">_sourceOfRevenueContract</td></tr>
+        <tr><td class="est_vvalue">_specialOrder</td></tr>
+        <tr><td class="est_vvalue">_systemJournal</td></tr>
+        <tr><td class="est_vvalue">_transferOrderFulfillmentReceipt</td></tr>
+        <tr><td class="est_vvalue">_transformation</td></tr>
+        <tr><td class="est_vvalue">_vendorBillVariance</td></tr>
+        <tr><td class="est_vvalue">_vendorRfqToPurchaseContract</td></tr>
+        <tr><td class="est_vvalue">_waveOrder</td></tr>
+        <tr><td class="est_vvalue">_waveShipment</td></tr>
+        <tr><td class="est_vvalue">_wipBuild</td></tr>
+        <tr><td class="est_vvalue">_workOrderBuild</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__projecttask','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__projecttask','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>ProjectTask</H1>
+
+
+    Namespace: <a href="../../schema/record/projecttask.html?mode=package">urn:scheduling.activities.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">actualWork</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the actual time entered against the task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assigneeList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/projecttaskassigneelist.html?mode=package">ProjectTaskAssigneeList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">company</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Indicates the customer and project that this task belongs to.
+
+All project tasks must be created in the context of a project and cannot be moved from one project to another.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">constraintType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/projecttaskconstrainttype.html?mode=package">ProjectTaskConstraintType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Constraint Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Specifies how to determine the start and end dates for a task.
+
+As Soon As Possible: NetSuite calculates the earliest possible start date for a task based on existing predecessors and sets the end date based on the available work time in the assigned resource's work calendar.
+
+Fixed Date: The task starts on the date you specify. Predecessor relationships are ignored. The task end date is based on the estimated work for the task and the assigned resource's available work time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contact</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contact</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a contact for this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the form you want to use to enter this record.
+
+Select Standard Project Task Form to continue using this form, select a custom project task form you have already created, or select New to create a custom project task form.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the estimated date when work for this task will be completed.
+
+NetSuite derives this date from the estimated work and other task dependencies. This date can change over the life of the project if the amount of work, resources assigned, or task dependencies change.
+
+When the task status is Completed, the end date is the date of the last time entry entered against the task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDateBaseline</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date in the End Date field when the baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedWork</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Work for a project task is the total of all completed and planned work for this task.
+
+NetSuite calculates this field by summing the estimated work entered for the resources. If you enter a value in this field, then NetSuite distributes the amount equally to all resources assigned to this task.
+
+If you also use Resource Allocations and the Allow Allocated Resources to Enter Time to All Tasks preference is enabled for this project, the estimated work field is updated to add any time tracked against tasks by allocated resources.
+
+When task status is marked Completed, this number is set to equal Actual Work.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedWorkBaseline</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Work Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The value in the Estimated Work field when the baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">eventId</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project Task ID</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">finishByDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Finish No Later Than</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the date this task must be finished by.
+
+This constraint takes precedence over task relationships and start dates are adjusted according to the fixed end date of a task with a Finish No Later Than constraint.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isMilestone</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Milestone</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isOnCriticalPath</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">On Critical Path</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lateEnd</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lateStart</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter any comments for the task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nonBillableTask</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Non-billable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to designate this task as non-billable.
+
+When time is entered against this task, it is automatically marked as non-billable and cannot be changed to billable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">order</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">To place the new task in the proper order in the schedule, select the task that follows it.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Created By</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The name of the employee who created this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parent Task</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a parent task if the task you are creating is part of a group of tasks.
+ 
+The parent task summarizes data for all of its subordinate tasks.
+ 
+You cannot assign resources to a parent task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentTimeComplete</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Percent Complete</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Shows the percent of planned project task time that has been completed.
+
+Percent Complete is calculated as follows:
+[Actual Work / Estimated Work]
+
+Percent Complete is 100% when the task status is Completed and Estimated Work is set to Actual Work.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">plannedWork</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Planned Work</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Total planned work entered for the assigned resources. Time tracked against this task outside of the planned work is not added to this total.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">plannedWorkBaseline</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Planned Work Baseline</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">predecessorList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/projecttaskpredecessorlist.html?mode=package">ProjectTaskPredecessorList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">priority</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Priority</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicate how important the task is.
+ 
+Tasks with higher priorities should be worked on before tasks with lower priorities. 
+ 
+Task priority does not affect the project schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">remainingWork</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Remaining Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Remaining Work is calculated as:
+[Estimated Work - Actual Work]
+
+Before work starts on a task, Remainng Work is the same as Estimated Work.
+
+When a task is marked Completed, Estimated Work is set to equal Actual Work and Remaining Work is 0.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">slackMinutes</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Slack Minutes</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Indicates the estimated date to begin work on the task.
+
+If the task constraint is Fixed Date, enter the date to begin work on the task.
+
+If the constraint is As Soon As Possible, NetSuite determines the Start Date based on the schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDateBaseline</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date Baseline</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date in the State Date field when the baseline was set.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/projecttaskstatus.html?mode=package">ProjectTaskStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The status for a task can be:
+
+Completed - task has been finished
+In Progress - task is being worked on
+Not Started - task has not been started
+
+You must have permission to edit a task record to change the status.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeItemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/projecttasktimeitemlist.html?mode=package">ProjectTaskTimeItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a name for the project task.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/projecttasksearch.html?mode=package">ProjectTaskSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/projecttasksearchadvanced.html?mode=package">ProjectTaskSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/projecttasksearchbasic.html?mode=package">ProjectTaskSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/projecttasksearchrow.html?mode=package">ProjectTaskSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/projecttasksearchrowbasic.html?mode=package">ProjectTaskSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

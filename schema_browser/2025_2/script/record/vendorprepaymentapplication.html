@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__vendorprepaymentapplication','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__vendorprepaymentapplication','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Vendor Prepayment Application</H1>
+    <H3>Internal ID: vendorprepaymentapplication</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">A/P Account</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select an active Accounts Payable account for this vendor prepayment application.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Optionally, enter a class for this transaction. Notice that when selecting a subsidiary, only the classes for that subsidiary are available.
+
+In addition to departments, classes are a classification you can use to segment records such as financials, transactions, or employees.
+
+For more information about using classes, see Departments and Classes Overview.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the currency for this vendor prepayment application.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a department for this transaction. Notice that when selecting a subsidiary, only the departments for that subsidiary are available.
+
+A department is a classification you can use to segment records such as financials, transactions, or employees.
+
+For more information about using departments, see Departments and Classes Overview.</td>
+            </tr>
+                <tr id="field_entity">
+                <td class="rt_fname">entity</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Payee</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter here the name of the individual or entity the money is to be paid.</td>
+            </tr>
+                <tr id="field_exchangerate">
+                <td class="rt_fname">exchangerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the currency's exchange rate.
+
+The exchange rate depends on the currency selected for the payee, and cannot be changed. If the currency of the Payee is different from your base currency, the Exchange Rate field is updated with the corresponding exchange rate value.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isbasecurrency">
+                <td class="rt_fname">isbasecurrency</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Base Currency</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Date Last Modified</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Optionally, enter a location for this transaction. Notice that when selecting a subsidiary, only the departments for that subsidiary are available.
+
+Locations enable you to track information about employees and transactions for multiple offices or warehouses.
+
+For more information about using locations, see Locations Overview.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">You can optionally enter a memo to describe this vendor prepayment application. The memo will appear on some lists and reports such as the list of vendor prepayment applications. Additionally, you can include this information in SuiteAnalytics Workbooks</td>
+            </tr>
+                <tr id="field_postingperiod">
+                <td class="rt_fname">postingperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Posting Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">&lt;p&gt;Select the accounting period to post this vendor prepayment transaction&lt;/p&gt; &lt;p&gt;You cannot post to a posting period that is closed.&lt;/p&gt;</td>
+            </tr>
+                <tr id="field_prepaymentaccount">
+                <td class="rt_fname">prepaymentaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Prepayment Account</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_prepaymentdate">
+                <td class="rt_fname">prepaymentdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Prepayment Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the date of the initial vendor prepayment transaction.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">You can select a subsidiary other than the default one from the Subsidiary list.</td>
+            </tr>
+                <tr id="field_trandate">
+                <td class="rt_fname">trandate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This field shows today's date by default. This date represents the posting date of this transaction.
+
+You can type or pick another date.</td>
+            </tr>
+                <tr id="field_tranid">
+                <td class="rt_fname">tranid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Document Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Displays the transaction document number.
+
+When you create a transaction, the number field reads To be generated. When you return to the transaction, the number generated shows in this field.</td>
+            </tr>
+                <tr id="field_transactionnumber">
+                <td class="rt_fname">transactionnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Transaction Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field displays the system-generated number associated with this transaction.
+
+When you create a transaction, the number field reads To be generated. When you return to the transaction, the generated number shows in this field.</td>
+            </tr>
+                <tr id="field_vendorprepayment">
+                <td class="rt_fname">vendorprepayment</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Application Of</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Click on this field to open the vendor prepayment transaction for this application</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_bill_">bill - Bill</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_bill_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Payment</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_apply">
+                        <td class="rt_sname">apply</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Apply</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_applydate">
+                        <td class="rt_sname">applydate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_doc">
+                        <td class="rt_sname">doc</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_due">
+                        <td class="rt_sname">due</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amt. Due</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_duedate">
+                        <td class="rt_sname">duedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_line">
+                        <td class="rt_sname">line</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_bill_total">
+                        <td class="rt_sname">total</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Orig. Amt.</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+        <H2>Search Data</H2>
+        <H3><a href="transaction.html">Transaction</a></H3>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

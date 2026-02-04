@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__customerrefund','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__customerrefund','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Customer Refund</H1>
+    <H3>Internal ID: customerrefund</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the bank account you are using for this refund. Click —New— to set up a new account.
+
+For details on accounts, go to Setup &gt; Accounting &gt; Chart of Accounts.</td>
+            </tr>
+                <tr id="field_allowemptycards">
+                <td class="rt_fname">allowemptycards</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credits</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_aracct">
+                <td class="rt_fname">aracct</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">A/R Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Accounts Receivable account that will be affected by this transaction.
+
+Click —New — to set up a new account.</td>
+            </tr>
+                <tr id="field_balance">
+                <td class="rt_fname">balance</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Balance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the current customer balance.</td>
+            </tr>
+                <tr id="field_ccapproved">
+                <td class="rt_fname">ccapproved</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">CC Approved</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Place a check mark in this box only after the credit card refund has been validated outside NetSuite, such as by a card-swipe terminal.
+
+If you have a NetSuite merchant account, then this field is automatically filled as soon as the refund is approved.</td>
+            </tr>
+                <tr id="field_ccexpiredate">
+                <td class="rt_fname">ccexpiredate</td>
+                <td class="rt_ftype">ccexpdate</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Expires (MM/YYYY)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the credit card's expiration date using this format: MM/YYYY.</td>
+            </tr>
+                <tr id="field_cchold">
+                <td class="rt_fname">cchold</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Detail</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ccholdetails">
+                <td class="rt_fname">ccholdetails</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Detail</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ccispurchasecardbin">
+                <td class="rt_fname">ccispurchasecardbin</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Purchase Card BIN</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ccname">
+                <td class="rt_fname">ccname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Name on Card</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite enters the cardholder name from the default credit card on the customer's record.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Financial subtab of the customer's record, verify that the Cardholder Name field contains the correct information.</td>
+            </tr>
+                <tr id="field_ccnumber">
+                <td class="rt_fname">ccnumber</td>
+                <td class="rt_ftype">ccnumber</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credit Card #</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If refund is by credit card, enter the card number here. Enter numbers only, without spaces.
+
+NetSuite is a secure site. If a NetSuite merchant gives a customer access to view payment information, only that merchant and that customer will be able to see this number.</td>
+            </tr>
+                <tr id="field_ccprocessoraccount">
+                <td class="rt_fname">ccprocessoraccount</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credit Card Processing Profile</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ccstreet">
+                <td class="rt_fname">ccstreet</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Card Street</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite enters the street address from the customer's billing address.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Address subtab of the customer's record, make sure the default billing address contains the correct street address.</td>
+            </tr>
+                <tr id="field_cczipcode">
+                <td class="rt_fname">cczipcode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Card Zip Code</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite enters the zip or postal code from the customer's billing address.
+
+If the field contains no value or the wrong value, check the customer's record at Lists &gt; Relationships &gt; Customers. On the Address subtab of the customer's record, make sure the default billing address contains the correct zip or postal code.</td>
+            </tr>
+                <tr id="field_chargeit">
+                <td class="rt_fname">chargeit</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Process Credit Card</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If refund is by credit card, place a check mark in this box to process the credit to the customer's charge account over the Internet. You must have previously set up a NetSuite merchant account for this to work.</td>
+            </tr>
+                <tr id="field_checknumber">
+                <td class="rt_fname">checknumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Check #</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a class for this customer refund.</td>
+            </tr>
+                <tr id="field_cleared">
+                <td class="rt_fname">cleared</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Cleared</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_cleareddate">
+                <td class="rt_fname">cleareddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Date Cleared</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_consolidatebalance">
+                <td class="rt_fname">consolidatebalance</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Consolidated Balance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The total of all open invoices for the entire customer-subcustomer hierarchy.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_creditcard">
+                <td class="rt_fname">creditcard</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credit Card Select</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a credit card stored on the customer record to use as the method to refund the payment for this sale.
+
+Click New to enter a new credit card.</td>
+            </tr>
+                <tr id="field_creditcardprocessor">
+                <td class="rt_fname">creditcardprocessor</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credit Card Processor</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the credit card processor you want to use for this transaction.
+
+You can set up credit card processors at Setup &gt; Accounting &gt; Payment Processing Profiles &gt; New.</td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this transaction for is shown here.
+
+If you use the Multi-Currency Customers feature, select the currency of the credits or deposits you want to refund. The currency selected in the Currency field filters the list of credits and deposits on the Apply subtab.</td>
+            </tr>
+                <tr id="field_currencyname">
+                <td class="rt_fname">currencyname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This customer's currency is shown in this field.
+
+All currency amounts on this transaction are shown in this currency.</td>
+            </tr>
+                <tr id="field_currencysymbol">
+                <td class="rt_fname">currencysymbol</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency Symbol</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customer">
+                <td class="rt_fname">customer</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the customer for this refund. If you are using projects, select the appropriate project rather than the master customer account.
+
+Click —New— to set up a new customer.
+
+Go to Lists &gt; Relationships &gt; Customers for details about existing customers and projects.</td>
+            </tr>
+                <tr id="field_customercode">
+                <td class="rt_fname">customercode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer Code</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In this field, enter a Customer Code associated with your company credit card. If you use one credit card across several departments, you can assign a separate code to each department. The code can then be used to track where and how the card is being used.
+
+Note: This field shows only if you have enabled the Display Customer Code Field on Payment Info Page preference on the Set Up Web Site page. This option is available only with Level 2 Credit Card Processing. For more information, see the help topic Setting Up Customer Credit Card Processing.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_debitcardissueno">
+                <td class="rt_fname">debitcardissueno</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Issue No.</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If the card is a debit card, enter the card's issue number.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a department to associate with this transaction.
+
+Click New to enter a new department.
+
+Go to Lists &gt; Departments for details about existing departments.</td>
+            </tr>
+                <tr id="field_dynamicdescriptor">
+                <td class="rt_fname">dynamicdescriptor</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Soft Descriptor</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_entitynexus">
+                <td class="rt_fname">entitynexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_exchangerate">
+                <td class="rt_fname">exchangerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The currency's exchange rate is shown in this field.
+
+You can edit the exchange rate for this transaction only, or you can update the currency record with the exchange rate you enter here.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingmode">
+                <td class="rt_fname">handlingmode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Handling Mode</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_inputauthcode">
+                <td class="rt_fname">inputauthcode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Input Auth. Code</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_inputpnrefnum">
+                <td class="rt_fname">inputpnrefnum</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_inputreferencecode">
+                <td class="rt_fname">inputreferencecode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Input P/N Ref.</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isbasecurrency">
+                <td class="rt_fname">isbasecurrency</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Base Currency</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ispurchasecard">
+                <td class="rt_fname">ispurchasecard</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a location to associate with this transaction.
+
+Select New to enter a new location record.
+
+Go to Lists &gt; Locations for details about existing location records.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an optional memo to describe this refund.
+
+For example, you may want to include the original transaction number on the refund.
+
+This memo appears on issued checks and register reports.</td>
+            </tr>
+                <tr id="field_nexus">
+                <td class="rt_fname">nexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_outputauthcode">
+                <td class="rt_fname">outputauthcode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Auth. Code</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_outputreferencecode">
+                <td class="rt_fname">outputreferencecode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">P/N Ref.</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_overridehold">
+                <td class="rt_fname">overridehold</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_overrideholdchecked">
+                <td class="rt_fname">overrideholdchecked</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_payeeaddress">
+                <td class="rt_fname">payeeaddress</td>
+                <td class="rt_ftype">                        <a href="address.html">summary</a>
+</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_payeeaddresslist">
+                <td class="rt_fname">payeeaddresslist</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address To Select</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymentcardcsc">
+                <td class="rt_fname">paymentcardcsc</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">CSC</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventdate">
+                <td class="rt_fname">paymenteventdate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventholdreason">
+                <td class="rt_fname">paymenteventholdreason</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reason</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventpurchasedatasent">
+                <td class="rt_fname">paymenteventpurchasedatasent</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventresult">
+                <td class="rt_fname">paymenteventresult</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventtype">
+                <td class="rt_fname">paymenteventtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymenteventupdatedby">
+                <td class="rt_fname">paymenteventupdatedby</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Hold</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymentmethod">
+                <td class="rt_fname">paymentmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Refund Method</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the method to refund the payment for this sale.
+
+To add additional choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Payment Method.</td>
+            </tr>
+                <tr id="field_paymentoperation">
+                <td class="rt_fname">paymentoperation</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payment Operation</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymentoption">
+                <td class="rt_fname">paymentoption</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payment Option</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_paymentprocessingprofile">
+                <td class="rt_fname">paymentprocessingprofile</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payment Processing Profile</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_pnrefnum">
+                <td class="rt_fname">pnrefnum</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">P/N Ref.</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you accept credit card payments, the Verisign authentication code appears here once the transaction is approved.</td>
+            </tr>
+                <tr id="field_postingperiod">
+                <td class="rt_fname">postingperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Posting Period</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the period you want to post this refund to.
+
+If a period is closed, you cannot post to that period.</td>
+            </tr>
+                <tr id="field_softdescriptor">
+                <td class="rt_fname">softdescriptor</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Soft Descriptor</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This shows the company or brand name that is listed with this transaction on the customer's credit card statement.
+
+Soft descriptors are set up at Setup &gt; Accounting &gt; Credit Card Soft Descriptors.</td>
+            </tr>
+                <tr id="field_status">
+                <td class="rt_fname">status</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_statusref">
+                <td class="rt_fname">statusref</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the subsidiary associated with this transaction.</td>
+            </tr>
+                <tr id="field_tobeprinted">
+                <td class="rt_fname">tobeprinted</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">To Be Printed</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to queue this refund to be printed.</td>
+            </tr>
+                <tr id="field_total">
+                <td class="rt_fname">total</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Refund Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite updates the refund amount as you check or clear the Apply check boxes at the bottom of the form.</td>
+            </tr>
+                <tr id="field_trandate">
+                <td class="rt_fname">trandate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">NetSuite inserts today's date as the date of this refund. You can type or pick another date.</td>
+            </tr>
+                <tr id="field_tranid">
+                <td class="rt_fname">tranid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Check #</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you are issuing a check, NetSuite supplies the next consecutive number.</td>
+            </tr>
+                <tr id="field_transactionnumber">
+                <td class="rt_fname">transactionnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Transaction Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The number automatically generated for the transaction by NetSuite.</td>
+            </tr>
+                <tr id="field_validfrom">
+                <td class="rt_fname">validfrom</td>
+                <td class="rt_ftype">ccvalidfrom</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Valid From / Start Date (MM/YYYY)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the date when this card first became valid.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_accountingbookdetail_">accountingbookdetail - Accounting Books</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_accountingbookdetail_accountingbook">
+                        <td class="rt_sname">accountingbook</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Secondary Book</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_exchangerate">
+                        <td class="rt_sname">exchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_apply_">apply - Credits</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_apply_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Payment</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_apply">
+                        <td class="rt_sname">apply</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Apply</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_applydate">
+                        <td class="rt_sname">applydate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_createdfrom">
+                        <td class="rt_sname">createdfrom</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_doc">
+                        <td class="rt_sname">doc</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_due">
+                        <td class="rt_sname">due</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount Remaining</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_duedate">
+                        <td class="rt_sname">duedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_internalid">
+                        <td class="rt_sname">internalid</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Hidden</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_line">
+                        <td class="rt_sname">line</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_refnum">
+                        <td class="rt_sname">refnum</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Ref No.</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_apply_total">
+                        <td class="rt_sname">total</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Orig. Amt.</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+NetSuite updates the refund amount as you check or clear the Apply check boxes at the bottom of the form.
+                        </td>
+                    </tr>
+                        <tr id="field_apply_url">
+                        <td class="rt_sname">url</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_deposit_">deposit - Deposits</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_deposit_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Payment</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_apply">
+                        <td class="rt_sname">apply</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Apply</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_depositdate">
+                        <td class="rt_sname">depositdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_doc">
+                        <td class="rt_sname">doc</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_remaining">
+                        <td class="rt_sname">remaining</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount Remaining</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_total">
+                        <td class="rt_sname">total</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Orig. Amt.</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_deposit_url">
+                        <td class="rt_sname">url</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_applications">
+                <td class="rt_tname">applications</td>
+                <td class="rt_tlabel">Applications</td>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_payment">
+                <td class="rt_tname">payment</td>
+                <td class="rt_tlabel">Payment</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+        <H2>Search Data</H2>
+        <H3><a href="transaction.html">Transaction</a></H3>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

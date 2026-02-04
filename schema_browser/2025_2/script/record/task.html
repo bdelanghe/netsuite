@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__task','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__task','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Task</H1>
+    <H3>Internal ID: task</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_accesslevel">
+                <td class="rt_fname">accesslevel</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Private Task</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box so that only the creator of this task or person assigned this task can view the task.
+
+If you don't check this box, this task is considered public and can be viewed on all task lists.</td>
+            </tr>
+                <tr id="field_actualtime">
+                <td class="rt_fname">actualtime</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Actual Time</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Actual Time field shows the total amount of time entered against this task.</td>
+            </tr>
+                <tr id="field_assigned">
+                <td class="rt_fname">assigned</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Assigned To</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The task is assigned to the person who should complete the task.
+
+If you are creating or editing the task, select a person's name to assign the task to the person. When creating a task, your name appears by default in this field.</td>
+            </tr>
+                <tr id="field_company">
+                <td class="rt_fname">company</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Company</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the customer, vendor or partner this task pertains to.
+
+Selecting a company adds this task to the associated record.
+
+You can select additional companies on the Contacts subtab.</td>
+            </tr>
+                <tr id="field_contact">
+                <td class="rt_fname">contact</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Contact</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the contact for this task.
+
+The contacts in this field are the contacts attached to the company selected above. Click Open next to the Company field to add contacts to a company's record.
+
+You can select additional companies and contacts on the Contacts subtab.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the custom task form you want to use to continue entering this record.
+
+To use the default form, select Standard Task Form.
+
+To create a new custom task form, select New or click Customize Form.</td>
+            </tr>
+                <tr id="field_duedate">
+                <td class="rt_fname">duedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Due Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the projected date when this task needs to be complete.</td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the date the task should be completed.
+
+If you are entering or editing the task, type or pick the due date of the task.
+
+This date is included in the email to the assignee.</td>
+            </tr>
+                <tr id="field_endtime">
+                <td class="rt_fname">endtime</td>
+                <td class="rt_ftype">timeofday</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">End Time</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the end time for placing this task on the assignee's calendar.
+
+You must check the Block Out Time box to set a time in this field.</td>
+            </tr>
+                <tr id="field_endtimepicker">
+                <td class="rt_fname">endtimepicker</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_estimatedtime">
+                <td class="rt_fname">estimatedtime</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Initial Time Budget</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Initial Time Budget field, enter your first approximation of the amount of time this task will take. Later, you can increase or decrease your time estimate in the Current Time Budget field.
+ 
+By maintaining an initial time estimate in this field, you can compare your initial estimate to your altered estimate.
+ 
+If you entered a time estimate on a job task template, that amount shows here.</td>
+            </tr>
+                <tr id="field_estimatedtimeoverride">
+                <td class="rt_fname">estimatedtimeoverride</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Current Time Budget</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If your estimate of the time this task will take increases or decreases from your original estimate, enter the altered estimate in the Current Time Budget field.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_group">
+                <td class="rt_fname">group</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_message">
+                <td class="rt_fname">message</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter any comments about this task.
+
+These comments appear in the e-mail sent to the person this task is assigned to.</td>
+            </tr>
+                <tr id="field_milestone">
+                <td class="rt_fname">milestone</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Milestone</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the milestone you want to associate with this task.</td>
+            </tr>
+                <tr id="field_owner">
+                <td class="rt_fname">owner</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Created By</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the person who created this task.
+
+When someone creates a task, that person's name automatically appears in this field.</td>
+            </tr>
+                <tr id="field_parent">
+                <td class="rt_fname">parent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Parent Task</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the parent task if this task is the subordinate of another.
+Note: By identifying this task as a subordinate, the parent task becomes a summary task. A summary task cannot have resources assigned to it because it does not track work, it only tracks information about subordinate tasks.</td>
+            </tr>
+                <tr id="field_percentcomplete">
+                <td class="rt_fname">percentcomplete</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Percent Complete</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Percent Complete field, enter an estimate of how much of the total amount of work for this task is already completed.
+ 
+For example, if half the work toward completion is done, enter 50%.
+ 
+Note: The percentage you enter in this field overrides the auto-calculated figure in the Percent Time Complete field and is used for task calculations.</td>
+            </tr>
+                <tr id="field_percenttimecomplete">
+                <td class="rt_fname">percenttimecomplete</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Percent Time Complete</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The system auto-calculates a value for the Percent Time Complete field, by dividing Actual Time by Current Time Budget (or by Initial Time Budget, if no Current Time Budget has been entered). This value indicates how much of the budgeted time for the task has been completed.
+
+You can override this value by entering a percentage value in the Percent Complete field.</td>
+            </tr>
+                <tr id="field_priority">
+                <td class="rt_fname">priority</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Priority</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is how important the task is. Tasks with higher priorities should be worked on before tasks with lower priorities.
+
+    * High - The task very important. Do before lower priorities.
+    * Medium - The task is moderately important. Do after higher priorities and before lower priorities.
+    * Low - The task is not important. Do after higher priorities.</td>
+            </tr>
+                <tr id="field_reminderminutes">
+                <td class="rt_fname">reminderminutes</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reminder</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the amount of time before the start time for this task when you would like to set a reminder for the assignee.
+
+You must check the Block Out Time box to set a reminder.
+
+You must also select a reminder type to set the reminder.</td>
+            </tr>
+                <tr id="field_remindertype">
+                <td class="rt_fname">remindertype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reminder Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the type of reminder the assignee should receive before the start time of this task.
+
+You must check the Block Out Time box to set a reminder.
+
+Email reminders are sent to the email address on the employee record of the assignee.
+
+Popup reminders appear only if the assignee is logged in to his or her NetSuite account.
+
+You must also set a time in the Reminder field to set a reminder.</td>
+            </tr>
+                <tr id="field_sendemail">
+                <td class="rt_fname">sendemail</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Notify Assignee by Email</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to send an email message to the person this task is assigned to. The person the task is assigned to also receives an e-mail message when this task is updated if the Send e-mail box is checked.
+
+If this person's record does not include an email address, no message will be sent.</td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the date the task should be started.
+
+If you are entering or editing the task, type or pick the start date of the task.
+
+This date is included in the e-mail to the assignee.</td>
+            </tr>
+                <tr id="field_starttime">
+                <td class="rt_fname">starttime</td>
+                <td class="rt_ftype">timeofday</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Time</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the start time for placing this task on the assignee's calendar.
+
+You must check the Block Out Time box to set a time in this field.</td>
+            </tr>
+                <tr id="field_starttimepicker">
+                <td class="rt_fname">starttimepicker</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_status">
+                <td class="rt_fname">status</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The status for the task can be Complete, In Progress or Not Started.
+
+    * Complete – This task has been done.
+    * In Progress – This task is being worked on.
+    * Not Started – This task has not been started.
+
+When status changes, someone with permission to edit the record can change the status.</td>
+            </tr>
+                <tr id="field_supportcase">
+                <td class="rt_fname">supportcase</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Support Case</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this task is related to a support case submitted by the customer, partner or vendor selected in the Company field, select the case number here.
+
+Selecting a case attaches this task record to the case record.</td>
+            </tr>
+                <tr id="field_timedevent">
+                <td class="rt_fname">timedevent</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reserve Time</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to schedule this task on the calendar of the person the task is assigned to.
+
+Enter the start and end times in the From and To fields.
+
+This time is scheduled on the calendar for the start date.</td>
+            </tr>
+                <tr id="field_timeremaining">
+                <td class="rt_fname">timeremaining</td>
+                <td class="rt_ftype">time</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Time Remaining</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Time Remaining field shows the estimated remaining amount of time for this task.
+ 
+Time remaining is calculated as follows:
+
+(Initial Time Budget - Actual Time)
+
+If you have entered a Current Time Budget to update your Initial Time Budget, then the time remaining for the task is calculated as:
+
+(Current Time Budget - Actual Time)</td>
+            </tr>
+                <tr id="field_timezone">
+                <td class="rt_fname">timezone</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_title">
+                <td class="rt_fname">title</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Title</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter a name for this task.
+
+This name is the subject line of the e-mail sent to the assignee if you check the Send e-mail box.
+
+This title also appears to others if the Private Task box is not checked. The title shows on the Tasks list.</td>
+            </tr>
+                <tr id="field_transaction">
+                <td class="rt_fname">transaction</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Transaction</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this task is associated with a transaction, select that transaction here.
+
+If you select a transaction, this task is listed on the History subtab of the transaction.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_timeitem_">timeitem - Time Tracking</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_timeitem_class">
+                        <td class="rt_sname">class</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Class</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_customer">
+                        <td class="rt_sname">customer</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Customer:Project</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_department">
+                        <td class="rt_sname">department</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Department</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_employee">
+                        <td class="rt_sname">employee</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Employee</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_hours">
+                        <td class="rt_sname">hours</td>
+                        <td class="rt_stype">timetrack</td>
+                        <td class="rt_slabel">Duration</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_id">
+                        <td class="rt_sname">id</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_isbillable">
+                        <td class="rt_sname">isbillable</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Billable</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_isexempt">
+                        <td class="rt_sname">isexempt</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_isproductive">
+                        <td class="rt_sname">isproductive</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_isutilized">
+                        <td class="rt_sname">isutilized</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Service Item</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_jobbillingtype">
+                        <td class="rt_sname">jobbillingtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_location">
+                        <td class="rt_sname">location</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Location</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_memo">
+                        <td class="rt_sname">memo</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Memo</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_overriderate">
+                        <td class="rt_sname">overriderate</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Lock this Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_payrollitem">
+                        <td class="rt_sname">payrollitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Payroll Item</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_price">
+                        <td class="rt_sname">price</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Price Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_rate">
+                        <td class="rt_sname">rate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_timetype">
+                        <td class="rt_sname">timetype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Type</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_timeitem_trandate">
+                        <td class="rt_sname">trandate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_communication">
+                <td class="rt_tname">communication</td>
+                <td class="rt_tlabel">Communication</td>
+            </tr>
+                <tr id="tab_contacts">
+                <td class="rt_tname">contacts</td>
+                <td class="rt_tlabel">Contacts</td>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_icalendar">
+                <td class="rt_tname">icalendar</td>
+                <td class="rt_tlabel">Availability</td>
+            </tr>
+                <tr id="tab_media">
+                <td class="rt_tname">media</td>
+                <td class="rt_tlabel">File Cabinet</td>
+            </tr>
+                <tr id="tab_relatedinfo">
+                <td class="rt_tname">relatedinfo</td>
+                <td class="rt_tlabel">Related Info</td>
+            </tr>
+                <tr id="tab_time">
+                <td class="rt_tname">time</td>
+                <td class="rt_tlabel">Time</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_companycustomer">
+                    <td class="rt_jid">companycustomer</td>
+                    <td class="rt_jlabel">Company (Customer)</td>
+                    <td class="rt_jname">Customer</td>
+                </tr>
+                    <tr id="join_contact">
+                    <td class="rt_jid">contact</td>
+                    <td class="rt_jlabel">Contact</td>
+                    <td class="rt_jname">Contact</td>
+                </tr>
+                    <tr id="join_employee">
+                    <td class="rt_jid">employee</td>
+                    <td class="rt_jlabel">Employee</td>
+                    <td class="rt_jname">Employee</td>
+                </tr>
+                    <tr id="join_job">
+                    <td class="rt_jid">job</td>
+                    <td class="rt_jlabel">Job</td>
+                    <td class="rt_jname">Job</td>
+                </tr>
+                    <tr id="join_originatinglead">
+                    <td class="rt_jid">originatinglead</td>
+                    <td class="rt_jlabel">Originating Lead</td>
+                    <td class="rt_jname">Lead</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_actualtime">
+                    <td class="rt_iname">actualtime</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Actual Work</td>
+                </tr>
+                    <tr id="filter_assigned">
+                    <td class="rt_iname">assigned</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Assigned To</td>
+                </tr>
+                    <tr id="filter_company">
+                    <td class="rt_iname">company</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Company</td>
+                </tr>
+                    <tr id="filter_completeddate">
+                    <td class="rt_iname">completeddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date Completed</td>
+                </tr>
+                    <tr id="filter_contact">
+                    <td class="rt_iname">contact</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Contact</td>
+                </tr>
+                    <tr id="filter_createddate">
+                    <td class="rt_iname">createddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Due date</td>
+                </tr>
+                    <tr id="filter_estimatedtime">
+                    <td class="rt_iname">estimatedtime</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Initial Time Budget</td>
+                </tr>
+                    <tr id="filter_estimatedtimeoverride">
+                    <td class="rt_iname">estimatedtimeoverride</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Current Time Budget</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_formuladate">
+                    <td class="rt_iname">formuladate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Formula (Date)</td>
+                </tr>
+                    <tr id="filter_formulanumeric">
+                    <td class="rt_iname">formulanumeric</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="filter_formulatext">
+                    <td class="rt_iname">formulatext</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Formula (Text)</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isjobsummarytask">
+                    <td class="rt_iname">isjobsummarytask</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Job Summary Task</td>
+                </tr>
+                    <tr id="filter_isjobtask">
+                    <td class="rt_iname">isjobtask</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Job Task</td>
+                </tr>
+                    <tr id="filter_isprivate">
+                    <td class="rt_iname">isprivate</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Private</td>
+                </tr>
+                    <tr id="filter_lastmodifieddate">
+                    <td class="rt_iname">lastmodifieddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Last Modified Date</td>
+                </tr>
+                    <tr id="filter_milestone">
+                    <td class="rt_iname">milestone</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Milestone</td>
+                </tr>
+                    <tr id="filter_owner">
+                    <td class="rt_iname">owner</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Created By</td>
+                </tr>
+                    <tr id="filter_percentcomplete">
+                    <td class="rt_iname">percentcomplete</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Percent Complete</td>
+                </tr>
+                    <tr id="filter_percenttimecomplete">
+                    <td class="rt_iname">percenttimecomplete</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Percent Time Complete</td>
+                </tr>
+                    <tr id="filter_priority">
+                    <td class="rt_iname">priority</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Priority</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start date</td>
+                </tr>
+                    <tr id="filter_status">
+                    <td class="rt_iname">status</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_timeremaining">
+                    <td class="rt_iname">timeremaining</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Remaining Work</td>
+                </tr>
+                    <tr id="filter_title">
+                    <td class="rt_iname">title</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Title</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accesslevel">
+                    <td class="rt_cname">accesslevel</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Private</td>
+                </tr>
+                    <tr id="column_actualtime">
+                    <td class="rt_cname">actualtime</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Actual Work</td>
+                </tr>
+                    <tr id="column_assigned">
+                    <td class="rt_cname">assigned</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Assigned To</td>
+                </tr>
+                    <tr id="column_company">
+                    <td class="rt_cname">company</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Company</td>
+                </tr>
+                    <tr id="column_completeddate">
+                    <td class="rt_cname">completeddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date Completed</td>
+                </tr>
+                    <tr id="column_contact">
+                    <td class="rt_cname">contact</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Contact</td>
+                </tr>
+                    <tr id="column_createddate">
+                    <td class="rt_cname">createddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_duedate">
+                    <td class="rt_cname">duedate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Due Date</td>
+                </tr>
+                    <tr id="column_estimatedtime">
+                    <td class="rt_cname">estimatedtime</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Initial Time Budget</td>
+                </tr>
+                    <tr id="column_estimatedtimeoverride">
+                    <td class="rt_cname">estimatedtimeoverride</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Current Time Budget</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_formulacurrency">
+                    <td class="rt_cname">formulacurrency</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Formula (Currency)</td>
+                </tr>
+                    <tr id="column_formuladate">
+                    <td class="rt_cname">formuladate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Formula (Date)</td>
+                </tr>
+                    <tr id="column_formuladatetime">
+                    <td class="rt_cname">formuladatetime</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Formula (Date/Time)</td>
+                </tr>
+                    <tr id="column_formulanumeric">
+                    <td class="rt_cname">formulanumeric</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="column_formulapercent">
+                    <td class="rt_cname">formulapercent</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Formula (Percent)</td>
+                </tr>
+                    <tr id="column_formulatext">
+                    <td class="rt_cname">formulatext</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Formula (Text)</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isjobsummarytask">
+                    <td class="rt_cname">isjobsummarytask</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Job Summary Task</td>
+                </tr>
+                    <tr id="column_isjobtask">
+                    <td class="rt_cname">isjobtask</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Job Task</td>
+                </tr>
+                    <tr id="column_lastmodifieddate">
+                    <td class="rt_cname">lastmodifieddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Modified</td>
+                </tr>
+                    <tr id="column_lastviewed">
+                    <td class="rt_cname">lastviewed</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Last Viewed</td>
+                </tr>
+                    <tr id="column_markdone">
+                    <td class="rt_cname">markdone</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Mark</td>
+                </tr>
+                    <tr id="column_message">
+                    <td class="rt_cname">message</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Comment</td>
+                </tr>
+                    <tr id="column_milestone">
+                    <td class="rt_cname">milestone</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Milestone</td>
+                </tr>
+                    <tr id="column_order">
+                    <td class="rt_cname">order</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Insert</td>
+                </tr>
+                    <tr id="column_owner">
+                    <td class="rt_cname">owner</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Created By</td>
+                </tr>
+                    <tr id="column_percentcomplete">
+                    <td class="rt_cname">percentcomplete</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Pct Complete</td>
+                </tr>
+                    <tr id="column_percenttimecomplete">
+                    <td class="rt_cname">percenttimecomplete</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Percent Time Complete</td>
+                </tr>
+                    <tr id="column_priority">
+                    <td class="rt_cname">priority</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Priority</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_starttime">
+                    <td class="rt_cname">starttime</td>
+                    <td class="rt_ctype">timeofday</td>
+                    <td class="rt_clabel">Start Time</td>
+                </tr>
+                    <tr id="column_status">
+                    <td class="rt_cname">status</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_timeremaining">
+                    <td class="rt_cname">timeremaining</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Remaining Work</td>
+                </tr>
+                    <tr id="column_title">
+                    <td class="rt_cname">title</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Task Title</td>
+                </tr>
+                    <tr id="column_transaction">
+                    <td class="rt_cname">transaction</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Transaction</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

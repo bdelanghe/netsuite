@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__msesubsidiary','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__msesubsidiary','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>MSE Subsidiary</H1>
+    <H3>Internal ID: msesubsidiary</H3>
+        <H3>Search Join only</H3>
+
+
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_account">
+                    <td class="rt_iname">account</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Default Payable Account for Expense Reports</td>
+                </tr>
+                    <tr id="filter_accountingbook">
+                    <td class="rt_iname">accountingbook</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Accounting Book</td>
+                </tr>
+                    <tr id="filter_accountingbookcurrency">
+                    <td class="rt_iname">accountingbookcurrency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Accounting Book Currency</td>
+                </tr>
+                    <tr id="filter_address">
+                    <td class="rt_iname">address</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Address</td>
+                </tr>
+                    <tr id="filter_city">
+                    <td class="rt_iname">city</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">City</td>
+                </tr>
+                    <tr id="filter_country">
+                    <td class="rt_iname">country</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Country</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_effectivefrom">
+                    <td class="rt_iname">effectivefrom</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Effective From</td>
+                </tr>
+                    <tr id="filter_email">
+                    <td class="rt_iname">email</td>
+                    <td class="rt_itype">email</td>
+                    <td class="rt_ilabel">Email</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fax">
+                    <td class="rt_iname">fax</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Fax</td>
+                </tr>
+                    <tr id="filter_fiscalcalendar">
+                    <td class="rt_iname">fiscalcalendar</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Fiscal Calendar</td>
+                </tr>
+                    <tr id="filter_glimpactlocking">
+                    <td class="rt_iname">glimpactlocking</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Gl Impact Locking</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_iselimination">
+                    <td class="rt_iname">iselimination</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Elimination</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_legalname">
+                    <td class="rt_iname">legalname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Legal Name</td>
+                </tr>
+                    <tr id="filter_mossapplies">
+                    <td class="rt_iname">mossapplies</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">MOSS Applies</td>
+                </tr>
+                    <tr id="filter_mossnexus">
+                    <td class="rt_iname">mossnexus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">MOSS Nexus</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nexus">
+                    <td class="rt_iname">nexus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Nexus</td>
+                </tr>
+                    <tr id="filter_parent">
+                    <td class="rt_iname">parent</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Parent Subsidiary</td>
+                </tr>
+                    <tr id="filter_phone">
+                    <td class="rt_iname">phone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Phone</td>
+                </tr>
+                    <tr id="filter_primary">
+                    <td class="rt_iname">primary</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Primary (Y/N)</td>
+                </tr>
+                    <tr id="filter_purchaseorderamount">
+                    <td class="rt_iname">purchaseorderamount</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                </tr>
+                    <tr id="filter_purchaseorderquantity">
+                    <td class="rt_iname">purchaseorderquantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                </tr>
+                    <tr id="filter_purchaseorderquantitydiff">
+                    <td class="rt_iname">purchaseorderquantitydiff</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                </tr>
+                    <tr id="filter_receiptamount">
+                    <td class="rt_iname">receiptamount</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                </tr>
+                    <tr id="filter_receiptquantity">
+                    <td class="rt_iname">receiptquantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                </tr>
+                    <tr id="filter_receiptquantitydiff">
+                    <td class="rt_iname">receiptquantitydiff</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                </tr>
+                    <tr id="filter_serviceitemforforecastreports">
+                    <td class="rt_iname">serviceitemforforecastreports</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Service Item for Forecast Reports</td>
+                </tr>
+                    <tr id="filter_state">
+                    <td class="rt_iname">state</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">State/Province</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Name (select)</td>
+                </tr>
+                    <tr id="filter_taxengine">
+                    <td class="rt_iname">taxengine</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Tax Engine</td>
+                </tr>
+                    <tr id="filter_taxfiscalcalendar">
+                    <td class="rt_iname">taxfiscalcalendar</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Tax Fiscal Calendar</td>
+                </tr>
+                    <tr id="filter_taxidnum">
+                    <td class="rt_iname">taxidnum</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Tax ID</td>
+                </tr>
+                    <tr id="filter_taxregistrationnumber">
+                    <td class="rt_iname">taxregistrationnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Tax Reg. Number</td>
+                </tr>
+                    <tr id="filter_traninternalprefix">
+                    <td class="rt_iname">traninternalprefix</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Internal Transaction Prefix</td>
+                </tr>
+                    <tr id="filter_tranprefix">
+                    <td class="rt_iname">tranprefix</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Transaction Prefix</td>
+                </tr>
+                    <tr id="filter_url">
+                    <td class="rt_iname">url</td>
+                    <td class="rt_itype">url</td>
+                    <td class="rt_ilabel">Web Site</td>
+                </tr>
+                    <tr id="filter_validuntil">
+                    <td class="rt_iname">validuntil</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Valid Until</td>
+                </tr>
+                    <tr id="filter_zip">
+                    <td class="rt_iname">zip</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Zip</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accountingbook">
+                    <td class="rt_cname">accountingbook</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Accounting Book</td>
+                </tr>
+                    <tr id="column_accountingbookcurrency">
+                    <td class="rt_cname">accountingbookcurrency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Accounting Book Currency</td>
+                </tr>
+                    <tr id="column_address1">
+                    <td class="rt_cname">address1</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 1</td>
+                </tr>
+                    <tr id="column_address2">
+                    <td class="rt_cname">address2</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 2</td>
+                </tr>
+                    <tr id="column_address3">
+                    <td class="rt_cname">address3</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Address 3</td>
+                </tr>
+                    <tr id="column_anonymouscustomerinboundemail">
+                    <td class="rt_cname">anonymouscustomerinboundemail</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Anonymous Customer - Inbound Email</td>
+                </tr>
+                    <tr id="column_anonymouscustomeronlineforms">
+                    <td class="rt_cname">anonymouscustomeronlineforms</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Anonymous Customer - Online Forms</td>
+                </tr>
+                    <tr id="column_caseassignmenttemplate">
+                    <td class="rt_cname">caseassignmenttemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Case Assignment</td>
+                </tr>
+                    <tr id="column_caseautomaticclosuretemplate">
+                    <td class="rt_cname">caseautomaticclosuretemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Automatic Case Closure</td>
+                </tr>
+                    <tr id="column_casecopyemployeetemplate">
+                    <td class="rt_cname">casecopyemployeetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Copy Employee</td>
+                </tr>
+                    <tr id="column_casecreationtemplate">
+                    <td class="rt_cname">casecreationtemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Case Creation</td>
+                </tr>
+                    <tr id="column_caseescalationtemplate">
+                    <td class="rt_cname">caseescalationtemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Escalation</td>
+                </tr>
+                    <tr id="column_caseupdatetemplate">
+                    <td class="rt_cname">caseupdatetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Case Update</td>
+                </tr>
+                    <tr id="column_city">
+                    <td class="rt_cname">city</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">City</td>
+                </tr>
+                    <tr id="column_companynameforsupportmessages">
+                    <td class="rt_cname">companynameforsupportmessages</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Company Name for Support Messages</td>
+                </tr>
+                    <tr id="column_country">
+                    <td class="rt_cname">country</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Country</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_defaultadvanceacctforexprept">
+                    <td class="rt_cname">defaultadvanceacctforexprept</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Default Advance to Apply Account for Expense Reports</td>
+                </tr>
+                    <tr id="column_defaultapaccountforexprept">
+                    <td class="rt_cname">defaultapaccountforexprept</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Default Payable Account for Expense Reports</td>
+                </tr>
+                    <tr id="column_defaultcaseprofile">
+                    <td class="rt_cname">defaultcaseprofile</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Default Case Profile</td>
+                </tr>
+                    <tr id="column_effectivefrom">
+                    <td class="rt_cname">effectivefrom</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Effective From</td>
+                </tr>
+                    <tr id="column_email">
+                    <td class="rt_cname">email</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Email</td>
+                </tr>
+                    <tr id="column_employeecaseupdatetemplate">
+                    <td class="rt_cname">employeecaseupdatetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Case Update</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fax">
+                    <td class="rt_cname">fax</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Fax</td>
+                </tr>
+                    <tr id="column_fiscalcalendar">
+                    <td class="rt_cname">fiscalcalendar</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Fiscal Calendar</td>
+                </tr>
+                    <tr id="column_glimpactlocking">
+                    <td class="rt_cname">glimpactlocking</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Gl Impact Locking</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_iselimination">
+                    <td class="rt_cname">iselimination</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Elimination</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_legalname">
+                    <td class="rt_cname">legalname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Legal Name</td>
+                </tr>
+                    <tr id="column_mainsupportemailaddress">
+                    <td class="rt_cname">mainsupportemailaddress</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Main Support Email Address</td>
+                </tr>
+                    <tr id="column_mossapplies">
+                    <td class="rt_cname">mossapplies</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">MOSS Applies</td>
+                </tr>
+                    <tr id="column_mossnexus">
+                    <td class="rt_cname">mossnexus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">MOSS Nexus</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_namenohierarchy">
+                    <td class="rt_cname">namenohierarchy</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name (no hierarchy)</td>
+                </tr>
+                    <tr id="column_nexus">
+                    <td class="rt_cname">nexus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Nexus</td>
+                </tr>
+                    <tr id="column_parent">
+                    <td class="rt_cname">parent</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Parent Subsidiary</td>
+                </tr>
+                    <tr id="column_phone">
+                    <td class="rt_cname">phone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Phone</td>
+                </tr>
+                    <tr id="column_primary">
+                    <td class="rt_cname">primary</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Primary (Y/N)</td>
+                </tr>
+                    <tr id="column_purchaseorderamount">
+                    <td class="rt_cname">purchaseorderamount</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                </tr>
+                    <tr id="column_purchaseorderquantity">
+                    <td class="rt_cname">purchaseorderquantity</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                </tr>
+                    <tr id="column_purchaseorderquantitydiff">
+                    <td class="rt_cname">purchaseorderquantitydiff</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                </tr>
+                    <tr id="column_receiptamount">
+                    <td class="rt_cname">receiptamount</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                </tr>
+                    <tr id="column_receiptquantity">
+                    <td class="rt_cname">receiptquantity</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                </tr>
+                    <tr id="column_receiptquantitydiff">
+                    <td class="rt_cname">receiptquantitydiff</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                </tr>
+                    <tr id="column_serviceitemforforecastreports">
+                    <td class="rt_cname">serviceitemforforecastreports</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Service Item for Forecast Reports</td>
+                </tr>
+                    <tr id="column_state">
+                    <td class="rt_cname">state</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province</td>
+                </tr>
+                    <tr id="column_taxengine">
+                    <td class="rt_cname">taxengine</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Tax Engine</td>
+                </tr>
+                    <tr id="column_taxfiscalcalendar">
+                    <td class="rt_cname">taxfiscalcalendar</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Tax Fiscal Calendar</td>
+                </tr>
+                    <tr id="column_taxidnum">
+                    <td class="rt_cname">taxidnum</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Tax ID</td>
+                </tr>
+                    <tr id="column_taxregistrationnumber">
+                    <td class="rt_cname">taxregistrationnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Tax Reg. Number</td>
+                </tr>
+                    <tr id="column_traninternalprefix">
+                    <td class="rt_cname">traninternalprefix</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Internal Transaction Prefix</td>
+                </tr>
+                    <tr id="column_tranprefix">
+                    <td class="rt_cname">tranprefix</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Transaction Prefix</td>
+                </tr>
+                    <tr id="column_url">
+                    <td class="rt_cname">url</td>
+                    <td class="rt_ctype">url</td>
+                    <td class="rt_clabel">Web Site</td>
+                </tr>
+                    <tr id="column_validuntil">
+                    <td class="rt_cname">validuntil</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Valid Until</td>
+                </tr>
+                    <tr id="column_zip">
+                    <td class="rt_cname">zip</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Zip</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

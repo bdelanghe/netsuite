@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__subsidiary','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__subsidiary','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Subsidiary</H1>
+
+
+    Namespace: <a href="../../schema/record/subsidiary.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/subsidiaryaccountingbookdetaillist.html?mode=package">SubsidiaryAccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addrLanguage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">allowPayroll</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">checkLayout</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Check Default Chart Type</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the check layout you want to use when printing checks from this subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">classTranslationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/classtranslationlist.html?mode=package">ClassTranslationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">country</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the country in which this subsidiary is located.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the base currency used by this subsidiary. If you do not set a currency, the system uses the currency of the parent subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">edition</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Edition</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the edition of NetSuite used by this subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Return Email Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the return email address for this subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the fax number for this subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">federalIdNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Employer Identification Number (EIN)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the appropriate tax identification number for this subsidiary:
+
+    * United States – Employer Identification Number (EIN) or Federal Identification Number (FIN)
+    * Australia – Australian Business Number
+    * United Kingdom – VAT Registration Number
+    * All other locations – VAT Registration Number
+
+This number is required for all businesses with employees or acting as corporations or partnerships for tax purposes. If you think you need a tax identification number or do not know what your number is, contact the tax agency with jurisdiction over this subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fiscalCalendar</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fiscal Calendar</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the calendar to roll up accounting periods. The fiscal calendar determines the start date for the accounting year.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">interCoAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Intercompany Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If the Intercompany Time and Expense feature is enabled in your account, an Intercompany Account is automatically associated with a subsidiary after qualifying transactions are created in the system, such as a journal to eliminate Time and Expense.
+
+This account is determined by the subsidiary’s base currency. It is used to offset the transfer of charges from intercompany time and expenses from this subsidiary to others.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isElimination</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Elimination</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true if this subsidiary record is to be used only for journal entries and transactions between subsidiaries.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary is Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true if this subsidiary is no longer active or used in your account. Inactivated subsidiaries no longer show in the Subsidiary field on records and transactions unless they are currently attached to a record. Web sites of inactive subsidiaries are no longer available online.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">legalName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Legal Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the legal name of this subsidiary as it shoudl appear on tax forms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">logo</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Logo (Forms)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the logo that should appear on printed and emailed transaction forms for this subsidiary. If you do not set a logo here, the logo for the parent subsidiary or company is used. To upload a logo into NetSuite, click Add New next to the Logo field in the UI. Be sure to check the Available Without Login box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mainAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Set the name of this subsidiary the way it should appear on all forms except checks. Note: On checks, your company name is pre-printed with address and MICR information.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexusList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/subsidiarynexuslist.html?mode=package">SubsidiaryNexusList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pageLogo</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Logo (Pages)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the logo image to be displayed on all pages for this subsidiary.
+
+Click New to upload a logo. Logos must be in JPG or GIF format.
+
+Note: The logo selected in this field does not affect printed forms. The logo on printed forms is determined by the selection in the Subsidiary Logo (Forms) field.
+
+To upload a logo, click Add New. Check the Available Without Login box.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parent Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set this field to the direct parent of the subsidiary. In order to retrieve a list of available values for this field, use the GetSelectValue operation. Setting a parent subsidiary sets your company hierarchy which is shown in the subsidiaries list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">returnAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Return Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showSubsidiaryName</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Always Display Subsidiary Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to display only the subsidiary name with your role in the upper right  corner of a page.  In addition, when logging in to an employee center, vendor center, or customer center, the dashboard displays only the logo of the subsidiary, not the company logo.
+
+Clear this box to display the parent and the subsidiary name in your account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ssnOrTin</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">SSN or TIN (Social Security Number, Tax ID Number)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you are a US citizen and are self-employed with no employees, enter your Social Security Number (SSN). If you are not a US citizen but have a Taxpayer Identification Number (TIN) issued by the IRS for purposes of operating a business with no employees, enter your TIN. These numbers are used for tax purposes only.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">state</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">State</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the state or province in which this subsidiary is located.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">state1TaxNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ACN</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter your Australian Company Number if one has been assigned to your company.
+
+For information about the ACN, see http://www.asic.gov.au.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxFiscalCalendar</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Fiscal Calendar</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the calendar to roll up the tax periods. The tax fiscal calendar determines the start date for the tax year.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegistrationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/subsidiarytaxregistrationlist.html?mode=package">SubsidiaryTaxRegistrationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranPrefix</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Document Number Prefix</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When you use auto-generated numbering with NetSuite OneWorld, you can make your document number sequences independent per subsidiary.
+
+Enter up to 8 alphanumeric characters in this field to number transactions with a prefix to signify this subsidiary.
+
+To set up auto-generated numbering, go to Setup &gt; Company &gt; Setup Tasks &gt; Auto-Generated Numbers. On the Document Numbers subtab, check the Use Subsidiary box next to each transaction to which this prefix should be applied.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">url</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Web Site</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set this subsidiary's Web site address or URL.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/subsidiarysearch.html?mode=package">SubsidiarySearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/subsidiarysearchadvanced.html?mode=package">SubsidiarySearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/subsidiarysearchbasic.html?mode=package">SubsidiarySearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/subsidiarysearchrow.html?mode=package">SubsidiarySearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/subsidiarysearchrowbasic.html?mode=package">SubsidiarySearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

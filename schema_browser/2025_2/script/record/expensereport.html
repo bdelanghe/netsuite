@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__expensereport','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__expensereport','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Expense Report</H1>
+    <H3>Internal ID: expensereport</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select an account for this expense.
+Note: This field is available to edit only in the following cases:
+    * You have checked the Accounting Approval box on this form.
+    * You are editing an expense report entered previously.</td>
+            </tr>
+                <tr id="field_accountingapproval">
+                <td class="rt_fname">accountingapproval</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Accounting Approval</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you have the appropriate accounting authority to approve this report indicating it is ready to pay, place a check mark in this box.</td>
+            </tr>
+                <tr id="field_acctcorpcardexp">
+                <td class="rt_fname">acctcorpcardexp</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account for Corporate Card Expenses</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the credit card account to use for corporate card expenses.</td>
+            </tr>
+                <tr id="field_advance">
+                <td class="rt_fname">advance</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Advance To Apply</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter any advance that should be applied to any reimbursement for these expenses.</td>
+            </tr>
+                <tr id="field_amount">
+                <td class="rt_fname">amount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The number NetSuite enters here represents the total of all line items minus any advances and lines marked as non-reimbursable.</td>
+            </tr>
+                <tr id="field_approvalstatus">
+                <td class="rt_fname">approvalstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Approval Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you use SuiteFlow for expense report approvals, the forms now include an Approval Status field. The Approval Status field reflects the state of the transaction in the approval process.
+Expense reports may have one of the following statuses:
+    * Pending Approval – The expense is in the approval queue.
+    * Approved – The expense has been given approval for processing.
+    * Rejected – The expense has not been approved and will not be processed.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a class to associate with this transaction.
+
+Click New to enter a new class.</td>
+            </tr>
+                <tr id="field_complete">
+                <td class="rt_fname">complete</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Complete</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows if this report is complete. Only complete reports are submitted for approval and processing.
+ 
+Note: Once an expense report is marked complete, you can no longer make changes to it.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">To use a different custom form to enter the expense report, select it here.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a department to associate with this transaction.
+
+Click New to enter a new department.</td>
+            </tr>
+                <tr id="field_duedate">
+                <td class="rt_fname">duedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Due</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the due date of the expense report.</td>
+            </tr>
+                <tr id="field_entity">
+                <td class="rt_fname">entity</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Employee</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the name of the employee who incurred these expenses.</td>
+            </tr>
+                <tr id="field_entitynexus">
+                <td class="rt_fname">entitynexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_expensereportcurrency">
+                <td class="rt_fname">expensereportcurrency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a currency for this expense report.</td>
+            </tr>
+                <tr id="field_expensereportexchangerate">
+                <td class="rt_fname">expensereportexchangerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select an exchange rate for this expense report.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a location to associate with this transaction.
+
+Select New to enter a new location record.
+
+Go to Lists &gt; Locations for details about existing location records.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Purpose</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the purpose of the entire expense report.</td>
+            </tr>
+                <tr id="field_nextapprover">
+                <td class="rt_fname">nextapprover</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Next Approver</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you use SuiteFlow for expense approvals, expense reports include a Next Approver field. This field is populated based on the associated workflow.
+For example, in your workflow you may create a state of Pending Approval. In that state you create a formula to set the Next Approver as the employee’s supervisor.</td>
+            </tr>
+                <tr id="field_nexus">
+                <td class="rt_fname">nexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the nexus that you want to associate with the expense report. This field shows the valid nexuses (tax registrations) for the subsidiary on the expense report.</td>
+            </tr>
+                <tr id="field_policyviolated">
+                <td class="rt_fname">policyviolated</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Policy Violated</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_postingperiod">
+                <td class="rt_fname">postingperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Posting Period</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The current period is entered as the posting period for the expense report. If this period is closed before the expense report is approved, the posting period is determined by the accounting preference Default Posting Period When Transaction Date in Closed Periods.
+
+If your transaction is subject to approval, the posting period is set when the transaction is approved. For details, see the help topic Approval Routing, subsection Posting Period for Transactions Subject to Approval.</td>
+            </tr>
+                <tr id="field_status">
+                <td class="rt_fname">status</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_statusRef">
+                <td class="rt_fname">statusRef</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The subsidiary associated with the selected employee is displayed here.
+
+To enter expenses associated with other subsidiaries, the Intercompany Time and Expense feature must be enabled, and journal entries will need to be created to adjust for intercompany expenses.
+
+Automated intercompany adjustments can be generated at Transactions &gt; Financial &gt; Create Intercompany Adjustments.</td>
+            </tr>
+                <tr id="field_subsidiarytaxregnum">
+                <td class="rt_fname">subsidiarytaxregnum</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Reg. Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you select a nexus, the corresponding tax registration number is automatically selected in this field. If there is more than one tax registration number for the nexus, the transaction date (in the Primary Information section) determines the tax registration number to be used based on the validity dates set on the subsidiary record. 
+
+When you select a different tax registration number, the corresponding nexus is automatically selected in the Nexus field.</td>
+            </tr>
+                <tr id="field_supervisorapproval">
+                <td class="rt_fname">supervisorapproval</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Supervisor Approval</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you have the appropriate authority as a supervisor to approve this report, place a check mark in this box.</td>
+            </tr>
+                <tr id="field_taxdetailsoverride">
+                <td class="rt_fname">taxdetailsoverride</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Details Override</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_taxpointdate">
+                <td class="rt_fname">taxpointdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Point Date</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_taxpointdateoverride">
+                <td class="rt_fname">taxpointdateoverride</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_total">
+                <td class="rt_fname">total</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Expenses Total</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite will keep track of the total expenses as you add and edit line items below.</td>
+            </tr>
+                <tr id="field_trandate">
+                <td class="rt_fname">trandate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">NetSuite inserts today's date as the date of this expense report. You can type or pick another date.</td>
+            </tr>
+                <tr id="field_tranid">
+                <td class="rt_fname">tranid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exp. Rept. #</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite increases the largest expense report number by one. If you wish, you can type another number. The next expense number will revert to the standard pattern.
+
+You can enter a maximum of 45 characters in this field.</td>
+            </tr>
+                <tr id="field_usemulticurrency">
+                <td class="rt_fname">usemulticurrency</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Use Multi Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if you want to enter expenses in foreign currencies on this expense report.
+
+This box is checked by default if you have enabled the Use Multicurrency Expense Reports preference on the General subtab at Home &gt; Set Preferences.
+
+Foreign amounts are translated into base currency amounts. Note that exchange rates and converted amounts displayed on expense lines are provided as approximations only. Actual reimbursement amounts will be based on rates at the time of reimbursement.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_accountingbookdetail_">accountingbookdetail - Accounting Books</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_accountingbookdetail_accountingbook">
+                        <td class="rt_sname">accountingbook</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Secondary Book</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_exchangerate">
+                        <td class="rt_sname">exchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_expense_">expense - Expenses</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_expense_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_category">
+                        <td class="rt_sname">category</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Category</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_class">
+                        <td class="rt_sname">class</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Class</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_corporatecreditcard">
+                        <td class="rt_sname">corporatecreditcard</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Corporate Card</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_customer">
+                        <td class="rt_sname">customer</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Customer</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_department">
+                        <td class="rt_sname">department</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Department</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_exchangerate">
+                        <td class="rt_sname">exchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_expenseaccount">
+                        <td class="rt_sname">expenseaccount</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Expense Account</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_expensedate">
+                        <td class="rt_sname">expensedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_foreignamount">
+                        <td class="rt_sname">foreignamount</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Foreign Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_isbillable">
+                        <td class="rt_sname">isbillable</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Billable</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_isnonreimbursable">
+                        <td class="rt_sname">isnonreimbursable</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Non-reimbursable</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_line">
+                        <td class="rt_sname">line</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_location">
+                        <td class="rt_sname">location</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Location</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_memo">
+                        <td class="rt_sname">memo</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Memo</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_receipt">
+                        <td class="rt_sname">receipt</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Receipt</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_taxdetailsreference">
+                        <td class="rt_sname">taxdetailsreference</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Tax Details Reference</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_taxdetails_">taxdetails - Taxes</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_taxdetails_calcdetail">
+                        <td class="rt_sname">calcdetail</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Details</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxamount">
+                        <td class="rt_sname">taxamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Tax Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxbasis">
+                        <td class="rt_sname">taxbasis</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Tax Basis</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxcode">
+                        <td class="rt_sname">taxcode</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Tax Code</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxdetailsreference">
+                        <td class="rt_sname">taxdetailsreference</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Tax Details Reference</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxrate">
+                        <td class="rt_sname">taxrate</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Tax Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxtype">
+                        <td class="rt_sname">taxtype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Tax Type</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_items">
+                <td class="rt_tname">items</td>
+                <td class="rt_tlabel">Items</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+        <H2>Search Data</H2>
+        <H3><a href="transaction.html">Transaction</a></H3>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

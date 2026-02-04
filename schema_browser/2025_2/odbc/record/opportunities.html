@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__opportunities','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__opportunities','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Opportunities
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Transaction Body custom field is available for the Opportunities table.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ACCOUNTING_PERIOD_ID" class="foreignKeyField">
+            <td class="rt_fname">accounting_period_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                accounting_period_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__accountingperiod" href="../../odbc/record/accountingperiod.html?mode=">Accounting_periods</a><br/>
+            </td>
+            <td class="rt_fhelp">Accounting period ID</td>
+        </tr>
+        <tr id="field_ACTION_ITEM">
+            <td class="rt_fname">action_item</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">199</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Action item</td>
+        </tr>
+        <tr id="field_BILLADDRESS">
+            <td class="rt_fname">billaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Billing address</td>
+        </tr>
+        <tr id="field_CLOSED">
+            <td class="rt_fname">closed</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Closed</td>
+        </tr>
+        <tr id="field_COMPANY_STATUS_ID" class="foreignKeyField">
+            <td class="rt_fname">company_status_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                company_status_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__company_status" href="../../odbc/record/company_status.html?mode=">Company_status</a><br/>
+            </td>
+            <td class="rt_fhelp">Company status ID</td>
+        </tr>
+        <tr id="field_CURRENCY_ID" class="foreignKeyField">
+            <td class="rt_fname">currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                currency_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a><br/>
+            </td>
+            <td class="rt_fhelp">Currency ID</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date Last Modified</td>
+        </tr>
+        <tr id="field_EMAIL">
+            <td class="rt_fname">email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">256</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Email</td>
+        </tr>
+        <tr id="field_END_DATE">
+            <td class="rt_fname">end_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">End date</td>
+        </tr>
+        <tr id="field_EXPECTED_CLOSE">
+            <td class="rt_fname">expected_close</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Expected close</td>
+        </tr>
+        <tr id="field_FAX">
+            <td class="rt_fname">fax</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fax</td>
+        </tr>
+        <tr id="field_FOB">
+            <td class="rt_fname">fob</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">13</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">FOB</td>
+        </tr>
+        <tr id="field_FORECAST_TYPE">
+            <td class="rt_fname">forecast_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">384</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Forecast type</td>
+        </tr>
+        <tr id="field_IS_TAX_REG_OVERRIDE">
+            <td class="rt_fname">is_tax_reg_override</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is tax registration override</td>
+        </tr>
+        <tr id="field_LEAD_SOURCE_ID" class="foreignKeyField">
+            <td class="rt_fname">lead_source_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                campaign_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__campaign" href="../../odbc/record/campaign.html?mode=">Campaigns</a><br/>
+            </td>
+            <td class="rt_fhelp">Lead source ID</td>
+        </tr>
+        <tr id="field_MEMO">
+            <td class="rt_fname">memo</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Memo</td>
+        </tr>
+        <tr id="field_MEMORIZED">
+            <td class="rt_fname">memorized</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Memorized</td>
+        </tr>
+        <tr id="field_MESSAGE">
+            <td class="rt_fname">message</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Message</td>
+        </tr>
+        <tr id="field_NEEDS_BILL">
+            <td class="rt_fname">needs_bill</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Needs bill</td>
+        </tr>
+        <tr id="field_PARTNER_ID" class="foreignKeyField">
+            <td class="rt_fname">partner_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                partner_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__partner" href="../../odbc/record/partner.html?mode=">Partners</a><br/>
+            </td>
+            <td class="rt_fhelp">Partner ID</td>
+        </tr>
+        <tr id="field_PAYMENT_TERMS_ID" class="foreignKeyField">
+            <td class="rt_fname">payment_terms_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                payment_terms_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__payment_terms" href="../../odbc/record/payment_terms.html?mode=">Payment_terms</a><br/>
+            </td>
+            <td class="rt_fhelp">Payment terms ID</td>
+        </tr>
+        <tr id="field_PROBABILITY">
+            <td class="rt_fname">probability</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">6</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Probability</td>
+        </tr>
+        <tr id="field_PROJECTED_TOTAL">
+            <td class="rt_fname">projected_total</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Projected total</td>
+        </tr>
+        <tr id="field_PROMOTION_CODE_INSTANCE_ID" class="foreignKeyField">
+            <td class="rt_fname">promotion_code_instance_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                coupon_code_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__couponcode" href="../../odbc/record/couponcode.html?mode=">Coupon_codes</a><br/>
+            </td>
+            <td class="rt_fhelp">Promotion code instance ID</td>
+        </tr>
+        <tr id="field_RELATED_TRANID">
+            <td class="rt_fname">related_tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Related transaction ID</td>
+        </tr>
+        <tr id="field_RENEWAL">
+            <td class="rt_fname">renewal</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Renewal</td>
+        </tr>
+        <tr id="field_REVERSING_TRANSACTION_ID" class="foreignKeyField">
+            <td class="rt_fname">reversing_transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                transaction_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__transaction" href="../../odbc/record/transaction.html?mode=">Transactions</a><br/>
+            </td>
+            <td class="rt_fhelp">Reversing transaction ID</td>
+        </tr>
+        <tr id="field_SALES_REP_ID" class="foreignKeyField">
+            <td class="rt_fname">sales_rep_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                entity_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__entity" href="../../odbc/record/entity.html?mode=">Entity</a><br/>
+            </td>
+            <td class="rt_fhelp">Sales rep ID</td>
+        </tr>
+        <tr id="field_SHIPADDRESS">
+            <td class="rt_fname">shipaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address</td>
+        </tr>
+        <tr id="field_SHIPMENT_RECEIVED">
+            <td class="rt_fname">shipment_received</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipment received</td>
+        </tr>
+        <tr id="field_SHIPPING_ITEM_ID">
+            <td class="rt_fname">shipping_item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping item ID</td>
+        </tr>
+        <tr id="field_START_DATE">
+            <td class="rt_fname">start_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Start date</td>
+        </tr>
+        <tr id="field_STATUS">
+            <td class="rt_fname">status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Status</td>
+        </tr>
+        <tr id="field_TAX_REG_ID">
+            <td class="rt_fname">tax_reg_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">This field is no longer supported.</td>
+        </tr>
+        <tr id="field_TITLE">
+            <td class="rt_fname">title</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">200</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Title</td>
+        </tr>
+        <tr id="field_TRANDATE">
+            <td class="rt_fname">trandate</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction date</td>
+        </tr>
+        <tr id="field_TRANID">
+            <td class="rt_fname">tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Check or document #</td>
+        </tr>
+        <tr id="field_TRANSACTION_EXTID">
+            <td class="rt_fname">transaction_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction external ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_ID">
+            <td class="rt_fname">transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_PARTNER">
+            <td class="rt_fname">transaction_partner</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">40</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction partner</td>
+        </tr>
+        <tr id="field_TRANSACTION_TYPE">
+            <td class="rt_fname">transaction_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">192</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction type</td>
+        </tr>
+        <tr id="field_WEIGHTED_TOTAL">
+            <td class="rt_fname">weighted_total</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Weighted total</td>
+        </tr>
+        <tr id="field_WIN_LOSS_REASON_ID" class="foreignKeyField">
+            <td class="rt_fname">win_loss_reason_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                win_loss_reason_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__winlossreason" href="../../odbc/record/winlossreason.html?mode=">Winlossreason</a><br/>
+            </td>
+            <td class="rt_fhelp">Win loss reason ID</td>
+        </tr>
+    </table>
+
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_accounting_periods_fk</td>
+            <td class="rt_tfkcolumn_name">accounting_period_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__accountingperiod" href="../../odbc/record/accountingperiod.html?mode=">Accounting_periods</a></td>
+            <td class="rt_tpkcolumn_name">accounting_period_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_campaigns_fk</td>
+            <td class="rt_tfkcolumn_name">lead_source_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__campaign" href="../../odbc/record/campaign.html?mode=">Campaigns</a></td>
+            <td class="rt_tpkcolumn_name">campaign_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_company_status_fk</td>
+            <td class="rt_tfkcolumn_name">company_status_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__company_status" href="../../odbc/record/company_status.html?mode=">Company_status</a></td>
+            <td class="rt_tpkcolumn_name">company_status_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_coupon_codes_fk</td>
+            <td class="rt_tfkcolumn_name">promotion_code_instance_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__couponcode" href="../../odbc/record/couponcode.html?mode=">Coupon_codes</a></td>
+            <td class="rt_tpkcolumn_name">coupon_code_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_currencies_fk</td>
+            <td class="rt_tfkcolumn_name">currency_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__currencies" href="../../odbc/record/currencies.html?mode=">Currencies</a></td>
+            <td class="rt_tpkcolumn_name">currency_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_entity_fk</td>
+            <td class="rt_tfkcolumn_name">sales_rep_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__entity" href="../../odbc/record/entity.html?mode=">Entity</a></td>
+            <td class="rt_tpkcolumn_name">entity_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_partners_fk</td>
+            <td class="rt_tfkcolumn_name">partner_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__partner" href="../../odbc/record/partner.html?mode=">Partners</a></td>
+            <td class="rt_tpkcolumn_name">partner_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_payment_terms_fk</td>
+            <td class="rt_tfkcolumn_name">payment_terms_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__payment_terms" href="../../odbc/record/payment_terms.html?mode=">Payment_terms</a></td>
+            <td class="rt_tpkcolumn_name">payment_terms_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_transactions_fk</td>
+            <td class="rt_tfkcolumn_name">reversing_transaction_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__transaction" href="../../odbc/record/transaction.html?mode=">Transactions</a></td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">opportunities_winlossreason_fk</td>
+            <td class="rt_tfkcolumn_name">win_loss_reason_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__winlossreason" href="../../odbc/record/winlossreason.html?mode=">Winlossreason</a></td>
+            <td class="rt_tpkcolumn_name">win_loss_reason_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+
+
+
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

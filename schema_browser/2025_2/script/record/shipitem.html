@@ -1,0 +1,2003 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__shipitem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__shipitem','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Shipping Item</H1>
+    <H3>Internal ID: shipitem</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_accchange">
+                <td class="rt_fname">accchange</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account (Shipping)</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the Income account to record income for charges for this shipping item.
+
+This is a required field.</td>
+            </tr>
+                <tr id="field_accounthandling">
+                <td class="rt_fname">accounthandling</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account (Handling)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the account to record income for handling charges associated with this shipping item.</td>
+            </tr>
+                <tr id="field_costbasis">
+                <td class="rt_fname">costbasis</td>
+                <td class="rt_ftype">radio</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">FedEx Real-Time Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose how you want to charge for shipping:
+
+   1. FedEx/UPS Real-Time Rate - Select a real-time rate option from FedEx or UPS for shipping within the US or internationally. You must register FedEx and UPS accounts at Setup &gt; Set Up Shipping to use this option.
+   2. Flat Rate – Charge a flat rate for shipping on all orders.
+   3. By weight – Enter information to charge by item weight.
+   4. By Item – Charge shipping based on the shipping cost on the item's record. Enter a default amount for items that don't have a shipping cost.
+   5. Percent of Total – Charge shipping as a percent of the total.
+   6. Shipping Table – Charge shipping based on a ranges of order total or order weight. When you select this option, you can enter the value (0) and charge of your first range using the list at the bottom of the page. The charge of the first line applies up to the value of the second line, and so on.</td>
+            </tr>
+                <tr id="field_countries">
+                <td class="rt_fname">countries</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Countries</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select one or more countries to ship to using this shipping item. Otherwise this shipping item is available for all countries.
+
+If you want to specify the countries you DO NOT ship to using this shipping item, select the countries and then check the Excude box.</td>
+            </tr>
+                <tr id="field_description">
+                <td class="rt_fname">description</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a description for this shipping item.</td>
+            </tr>
+                <tr id="field_displayname">
+                <td class="rt_fname">displayname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display Name/Code</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the name for the shipping item that you want to appear on printed invoices, in your Web store, and centers such as the Customer Center.
+
+In all other places, the Ship Name displays.</td>
+            </tr>
+                <tr id="field_doifarrangement">
+                <td class="rt_fname">doifarrangement</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Web Site Rules</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_doiftotal">
+                <td class="rt_fname">doiftotal</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Available If Order Total Is</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to only offer this shipping item online if the order total is more or less than the amount you enter here.</td>
+            </tr>
+                <tr id="field_doiftotalamt">
+                <td class="rt_fname">doiftotalamt</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_doiftotaloperator">
+                <td class="rt_fname">doiftotaloperator</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_doifweight">
+                <td class="rt_fname">doifweight</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Available If Order Weight Is</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to only offer this shipping item online if the total order weight is over or under the weight you enter here.</td>
+            </tr>
+                <tr id="field_doifweightamt">
+                <td class="rt_fname">doifweightamt</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_doifweightoperator">
+                <td class="rt_fname">doifweightoperator</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_doifweightunit">
+                <td class="rt_fname">doifweightunit</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_edition">
+                <td class="rt_fname">edition</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_excludecountries">
+                <td class="rt_fname">excludecountries</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exclude</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make this shipping item NOT available to ship to the countries selected.</td>
+            </tr>
+                <tr id="field_excludesites">
+                <td class="rt_fname">excludesites</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exclude</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make this shipping item NOT available on the Web sites selected.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_fedexdiscountrate">
+                <td class="rt_fname">fedexdiscountrate</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Discount Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">To offer a discounted FedEx rate, enter the discount rate in decimal form. This amount is multiplied by the real-time rate to display the total discounted rate.
+
+For example, if you want to offer a 25% discount, enter 0.75.
+
+Note: To offer free shipping, use promotion codes or create a shipping item with a flat rate of $0.00.</td>
+            </tr>
+                <tr id="field_fedexonerate">
+                <td class="rt_fname">fedexonerate</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">FedEx One Rate®</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if the package qualifies.
+
+FedEx One Rate is flat-rate shipping that doesn't require you to weigh or measure shipments under 50 lbs.</td>
+            </tr>
+                <tr id="field_fedexservicecode">
+                <td class="rt_fname">fedexservicecode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_freeifordertotalisoveramount">
+                <td class="rt_fname">freeifordertotalisoveramount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingaspercentageoftotal">
+                <td class="rt_fname">handlingaspercentageoftotal</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingbyweightamount">
+                <td class="rt_fname">handlingbyweightamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingbyweightperquantity">
+                <td class="rt_fname">handlingbyweightperquantity</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">per</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingbyweightperunit">
+                <td class="rt_fname">handlingbyweightperunit</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingcost">
+                <td class="rt_fname">handlingcost</td>
+                <td class="rt_ftype">radio</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Handling--No Handling Charge</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select how you want to charge for handling:
+
+   1. No Handling Charge - Select this option if you do not charge for handling.
+   2. Flat Rate - Enter the amount to charge for every item you ship.
+   3. By weight - Enter the amount to charge based on item weight.
+   4. Per item - Charge handling based on the handling charge on the item's record. Enter a default amount for items that do not have a handling charge. 
+   5. Percent of total -  Charge handling as a percent of the total.
+   6. Handling Table - Charge handling based on a table of charges you create.</td>
+            </tr>
+                <tr id="field_handlingflatrateamount">
+                <td class="rt_fname">handlingflatrateamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingperitemamount">
+                <td class="rt_fname">handlingperitemamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Charge</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the default handling charge to ship any item.</td>
+            </tr>
+                <tr id="field_handlingtablechargeby">
+                <td class="rt_fname">handlingtablechargeby</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingtableuom">
+                <td class="rt_fname">handlingtableuom</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_handlingtaxcode">
+                <td class="rt_fname">handlingtaxcode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Charge Tax on this handling portion of item</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_hasmaximumshippingcost">
+                <td class="rt_fname">hasmaximumshippingcost</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Maximum shipping amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you want to limit the shipping costs your customers pay to a certain dollar amount, check this box and enter the amount.</td>
+            </tr>
+                <tr id="field_hasminimumshippingcost">
+                <td class="rt_fname">hasminimumshippingcost</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Minimum shipping amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you want to charge a minimum amount for shipping, check this box and enter the dollar amount.</td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_integratedlabelsarrangement">
+                <td class="rt_fname">integratedlabelsarrangement</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Integrated Labels</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_integrationservicecode">
+                <td class="rt_fname">integrationservicecode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_invt_dispname">
+                <td class="rt_fname">invt_dispname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the translation that you want to display for this item, if shoppers can view your site in a different language.</td>
+            </tr>
+                <tr id="field_isfreeifordertotalisover">
+                <td class="rt_fname">isfreeifordertotalisover</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Free if total order is over</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you want to offer free shipping to customers who order over a certain dollar amount, check this box and enter the amount.</td>
+            </tr>
+                <tr id="field_ishandlingbyweightbracketed">
+                <td class="rt_fname">ishandlingbyweightbracketed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">In Whole Increments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">To not allow partial increments, check the In Whole Increments box.</td>
+            </tr>
+                <tr id="field_ishandlingtaxable">
+                <td class="rt_fname">ishandlingtaxable</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Charge Tax on this handling portion of item</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, this shipping item will no longer appear on a list unless you check the Show All box at the bottom of the Shipping Items page.</td>
+            </tr>
+                <tr id="field_isonline">
+                <td class="rt_fname">isonline</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display in Web Site</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make your shipping item available online.
+
+If you charge for shipping, you must provide at least one shipping item for customers to check out from your store.
+
+If you don't want to charge for shipping, clear the Charge for Shipping check box on the Set Up Accounting page.</td>
+            </tr>
+                <tr id="field_isshippingbyweightbracketed">
+                <td class="rt_fname">isshippingbyweightbracketed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">In Whole Increments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">To not allow partial increments, check the In Whole Increments box.</td>
+            </tr>
+                <tr id="field_istaxable">
+                <td class="rt_fname">istaxable</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Tax on this shipping portion of item</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to charge tax on this shipping item.
+
+You may wish to check with your local tax authorities to see if you must charge tax on shipping.</td>
+            </tr>
+                <tr id="field_itemid">
+                <td class="rt_fname">itemid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Ship Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter a name for this shipping item.
+
+This name appears on transaction pages, lists and all other internal facing documents.</td>
+            </tr>
+                <tr id="field_itemtype">
+                <td class="rt_fname">itemtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">stype</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_labelplugin">
+                <td class="rt_fname">labelplugin</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_labelpluginselect">
+                <td class="rt_fname">labelpluginselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Shipping Partner</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select Australia Post to be assigned as the shipping partner that will generate the labels for this shipping item.</td>
+            </tr>
+                <tr id="field_labelreg">
+                <td class="rt_fname">labelreg</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_labelregselect">
+                <td class="rt_fname">labelregselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Registration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Australia Post registration to be used for the labels of this shipping item.</td>
+            </tr>
+                <tr id="field_labelservice">
+                <td class="rt_fname">labelservice</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_labelservicegroup">
+                <td class="rt_fname">labelservicegroup</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_labelservicegroupselect">
+                <td class="rt_fname">labelservicegroupselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Service Group</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the service group to be used for the labels of this shipping item.</td>
+            </tr>
+                <tr id="field_labelserviceselect">
+                <td class="rt_fname">labelserviceselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Service</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the specific service to be used for the labels of this shipping item.</td>
+            </tr>
+                <tr id="field_labeltype">
+                <td class="rt_fname">labeltype</td>
+                <td class="rt_ftype">radio</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Integrated Shipping Label</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Click these radio buttons to select integrated labels or shipping partner labels.</td>
+            </tr>
+                <tr id="field_maximumshippingcost">
+                <td class="rt_fname">maximumshippingcost</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_minimumshippingcost">
+                <td class="rt_fname">minimumshippingcost</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_needsallfreeshippingitems">
+                <td class="rt_fname">needsallfreeshippingitems</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">All items must be purchased</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to require that every item you select be on an order before free shipping is offered. Otherwise, any item on an order qualifies the order for free shipping.</td>
+            </tr>
+                <tr id="field_omitpackaging">
+                <td class="rt_fname">omitpackaging</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Omit packaging</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to disable the automatic packaging logic that occurs during item fulfillment and create only one package for the order.</td>
+            </tr>
+                <tr id="field_pluginlabelsarrangement">
+                <td class="rt_fname">pluginlabelsarrangement</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Shipping Partner Labels</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_pluginratearrangement">
+                <td class="rt_fname">pluginratearrangement</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Shipping Partner Rate</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ratingplugin">
+                <td class="rt_fname">ratingplugin</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ratingpluginselect">
+                <td class="rt_fname">ratingpluginselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Shipping Partner</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select Australia Post to be assigned as the shipping partner for the item.</td>
+            </tr>
+                <tr id="field_ratingreg">
+                <td class="rt_fname">ratingreg</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ratingregselect">
+                <td class="rt_fname">ratingregselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Registration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the name of the registration record to be associated with the service name.</td>
+            </tr>
+                <tr id="field_ratingservice">
+                <td class="rt_fname">ratingservice</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ratingservicegroup">
+                <td class="rt_fname">ratingservicegroup</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_ratingservicegroupselect">
+                <td class="rt_fname">ratingservicegroupselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Service Group</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the service group for your Australia Post account.</td>
+            </tr>
+                <tr id="field_ratingserviceselect">
+                <td class="rt_fname">ratingserviceselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Service</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Australia Post service to be associated with this shipping item.</td>
+            </tr>
+                <tr id="field_restrictionarrangement">
+                <td class="rt_fname">restrictionarrangement</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Web Store Shipping Restrictions</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnlabelreg">
+                <td class="rt_fname">returnlabelreg</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnlabelregselect">
+                <td class="rt_fname">returnlabelregselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Registration</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnlabelservice">
+                <td class="rt_fname">returnlabelservice</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnlabelserviceselect">
+                <td class="rt_fname">returnlabelserviceselect</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Return Service</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the specific return service to be used for the labels of this shipping item.</td>
+            </tr>
+                <tr id="field_returnservicecode">
+                <td class="rt_fname">returnservicecode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnsintegrated">
+                <td class="rt_fname">returnsintegrated</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Return Label Integration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to be able to print customer return labels with each order fulfillment that uses the shipping item.</td>
+            </tr>
+                <tr id="field_shipitemcurrency">
+                <td class="rt_fname">shipitemcurrency</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Identifies the currency for the subsidiary.</td>
+            </tr>
+                <tr id="field_shipperintegrated">
+                <td class="rt_fname">shipperintegrated</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Shipping Label Integration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to have this shipping item integrated with your default shipping carrier selected at Setup &gt; Accounting Shipping.
+
+The method you select here is the method used to ship an order and the method charged to your integrated account. You can choose to charge customers based on either the same method or a different method on the Shipping Rate subtab.</td>
+            </tr>
+                <tr id="field_shippingaspercentageoftotal">
+                <td class="rt_fname">shippingaspercentageoftotal</td>
+                <td class="rt_ftype">percent</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingbyweightamount">
+                <td class="rt_fname">shippingbyweightamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingbyweightperquantity">
+                <td class="rt_fname">shippingbyweightperquantity</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">per</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingbyweightperunit">
+                <td class="rt_fname">shippingbyweightperunit</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Weight Unit</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingcarrier">
+                <td class="rt_fname">shippingcarrier</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingflatrateamount">
+                <td class="rt_fname">shippingflatrateamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingperitemamount">
+                <td class="rt_fname">shippingperitemamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Charge</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the default amount to charge for shipping on a per-item basis.</td>
+            </tr>
+                <tr id="field_shippingtablechargeby">
+                <td class="rt_fname">shippingtablechargeby</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingtableuom">
+                <td class="rt_fname">shippingtableuom</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingtaxcode">
+                <td class="rt_fname">shippingtaxcode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Charge Tax on this shipping portion of item</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_site">
+                <td class="rt_fname">site</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Limit To Sites</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Web sites where shoppers can select this shipping item. If you leave this field blank, then the shipping item is available on all Web sites.</td>
+            </tr>
+                <tr id="field_states">
+                <td class="rt_fname">states</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">States</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select one or more states to ship to using this shipping item. Otherwise this shipping item is available for all states.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiaries</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Shipping items are restricted to a single subsidiary. Therefore, you must define a similar shipping item for each subsidiary.</td>
+            </tr>
+                <tr id="field_tabtext">
+                <td class="rt_fname">tabtext</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_taxschedule">
+                <td class="rt_fname">taxschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Tax on this shipping portion of item</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a tax schedule to calculate the tax amount for the shipping charge.</td>
+            </tr>
+                <tr id="field_taxschedulehandling">
+                <td class="rt_fname">taxschedulehandling</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Tax on this handling portion of item</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a tax schedule to calculate the tax amount for the handling charge.</td>
+            </tr>
+                <tr id="field_upsdiscountrate">
+                <td class="rt_fname">upsdiscountrate</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Discount Rate</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a number to multiply the rate by to receive the correct discount.
+
+For example, if you want to offer a 25% discount off the real-time rate USPS returns, enter 0.75.</td>
+            </tr>
+                <tr id="field_upssavername">
+                <td class="rt_fname">upssavername</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_upsservicecode">
+                <td class="rt_fname">upsservicecode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_uspsdiscountrate">
+                <td class="rt_fname">uspsdiscountrate</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Discount Rate</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_uspsservicecode">
+                <td class="rt_fname">uspsservicecode</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_handlingtable_">handlingtable</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_handlingtable_handlingtablecharge">
+                        <td class="rt_sname">handlingtablecharge</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Charge</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_handlingtable_handlingtablerangevalue">
+                        <td class="rt_sname">handlingtablerangevalue</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Range Value</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_handlingtable_shipitem">
+                        <td class="rt_sname">shipitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_items_">items - Items</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_items_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Item</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_nqty">
+                        <td class="rt_sname">nqty</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_shipitem">
+                        <td class="rt_sname">shipitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_shipmethodrulerelations_">shipmethodrulerelations - Shipping Items</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_shipmethodrulerelations_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Shipping Item</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_shipmethodrulerelations_subsidiary">
+                        <td class="rt_sname">subsidiary</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Subsidiary</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_shippingtable_">shippingtable</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_shippingtable_shipitem">
+                        <td class="rt_sname">shipitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_shippingtable_shippingtablecharge">
+                        <td class="rt_sname">shippingtablecharge</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Charge</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_shippingtable_shippingtablerangevalue">
+                        <td class="rt_sname">shippingtablerangevalue</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Range Value</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_translations_">translations - Translation</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_translations_displayname">
+                        <td class="rt_sname">displayname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Display Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_language">
+                        <td class="rt_sname">language</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Language</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_locale">
+                        <td class="rt_sname">locale</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_shipitem">
+                        <td class="rt_sname">shipitem</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_freeshipping">
+                <td class="rt_tname">freeshipping</td>
+                <td class="rt_tlabel">Free Shipping Items</td>
+            </tr>
+                <tr id="tab_handling">
+                <td class="rt_tname">handling</td>
+                <td class="rt_tlabel">Handling Rate</td>
+            </tr>
+                <tr id="tab_rules">
+                <td class="rt_tname">rules</td>
+                <td class="rt_tlabel">Shipping and Handling Rules</td>
+            </tr>
+                <tr id="tab_shipping">
+                <td class="rt_tname">shipping</td>
+                <td class="rt_tlabel">Shipping Rate</td>
+            </tr>
+                <tr id="tab_shippinglabels">
+                <td class="rt_tname">shippinglabels</td>
+                <td class="rt_tlabel">Shipping Labels</td>
+            </tr>
+                <tr id="tab_translation">
+                <td class="rt_tname">translation</td>
+                <td class="rt_tlabel">Translation</td>
+            </tr>
+        </table>
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_account">
+                    <td class="rt_iname">account</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Account</td>
+                </tr>
+                    <tr id="filter_accounthandling">
+                    <td class="rt_iname">accounthandling</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Account (Handling)</td>
+                </tr>
+                    <tr id="filter_carrier">
+                    <td class="rt_iname">carrier</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Carrier</td>
+                </tr>
+                    <tr id="filter_description">
+                    <td class="rt_iname">description</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Description</td>
+                </tr>
+                    <tr id="filter_displayname">
+                    <td class="rt_iname">displayname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Dipslay Name</td>
+                </tr>
+                    <tr id="filter_excludedforcountries">
+                    <td class="rt_iname">excludedforcountries</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Excluded For Countries</td>
+                </tr>
+                    <tr id="filter_excludedforsites">
+                    <td class="rt_iname">excludedforsites</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Excluded For Sites</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_freeiftotaloveramount">
+                    <td class="rt_iname">freeiftotaloveramount</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Free If Total Over Amount</td>
+                </tr>
+                    <tr id="filter_handlingflatrate">
+                    <td class="rt_iname">handlingflatrate</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Handling Flat Rate</td>
+                </tr>
+                    <tr id="filter_handlingfunctiontype">
+                    <td class="rt_iname">handlingfunctiontype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Handling Rate Type</td>
+                </tr>
+                    <tr id="filter_handlingrateaspercentoftotal">
+                    <td class="rt_iname">handlingrateaspercentoftotal</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Handling Rate As Percent of Total</td>
+                </tr>
+                    <tr id="filter_handlingratebyitem">
+                    <td class="rt_iname">handlingratebyitem</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Handling Rate By Item</td>
+                </tr>
+                    <tr id="filter_handlingratebyweight">
+                    <td class="rt_iname">handlingratebyweight</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Handling Rate By Weight</td>
+                </tr>
+                    <tr id="filter_handlingratebyweightbracketed">
+                    <td class="rt_iname">handlingratebyweightbracketed</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Handling Rate By Weight Bracketed</td>
+                </tr>
+                    <tr id="filter_handlingratebyweightper">
+                    <td class="rt_iname">handlingratebyweightper</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Handling Rate By Weight Per</td>
+                </tr>
+                    <tr id="filter_handlingratebyweightunit">
+                    <td class="rt_iname">handlingratebyweightunit</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Handling Rate By Weight Unit</td>
+                </tr>
+                    <tr id="filter_handlingratetabletype">
+                    <td class="rt_iname">handlingratetabletype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Handling Rate Table Type</td>
+                </tr>
+                    <tr id="filter_hasmaxshippingcost">
+                    <td class="rt_iname">hasmaxshippingcost</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Has Maximum Shipping Cost</td>
+                </tr>
+                    <tr id="filter_hasminshippingcost">
+                    <td class="rt_iname">hasminshippingcost</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Has Minimum Shipping Cost</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isfreeiftotalover">
+                    <td class="rt_iname">isfreeiftotalover</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Free If Total Over</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_isonline">
+                    <td class="rt_iname">isonline</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Display in Web Site</td>
+                </tr>
+                    <tr id="filter_isreturnsintegrated">
+                    <td class="rt_iname">isreturnsintegrated</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Return Service Integrated</td>
+                </tr>
+                    <tr id="filter_isshipperintegrated">
+                    <td class="rt_iname">isshipperintegrated</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Integrated Shipping Item</td>
+                </tr>
+                    <tr id="filter_itemid">
+                    <td class="rt_iname">itemid</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_labelpluginid">
+                    <td class="rt_iname">labelpluginid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Label Plugin Id</td>
+                </tr>
+                    <tr id="filter_labelregistration">
+                    <td class="rt_iname">labelregistration</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Label Registration</td>
+                </tr>
+                    <tr id="filter_labelservicegroupid">
+                    <td class="rt_iname">labelservicegroupid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Label Service Group Id</td>
+                </tr>
+                    <tr id="filter_labelserviceid">
+                    <td class="rt_iname">labelserviceid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Label Service Id</td>
+                </tr>
+                    <tr id="filter_limitedtocountries">
+                    <td class="rt_iname">limitedtocountries</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Limited To Countries</td>
+                </tr>
+                    <tr id="filter_limitedtosites">
+                    <td class="rt_iname">limitedtosites</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Limited To Sites</td>
+                </tr>
+                    <tr id="filter_limitedtostates">
+                    <td class="rt_iname">limitedtostates</td>
+                    <td class="rt_itype">multiselect</td>
+                    <td class="rt_ilabel">Limited To States</td>
+                </tr>
+                    <tr id="filter_limitwebsitevisibilitybytotal">
+                    <td class="rt_iname">limitwebsitevisibilitybytotal</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Web Site Visibility Limited by Total</td>
+                </tr>
+                    <tr id="filter_limitwebsitevisibilitybyweight">
+                    <td class="rt_iname">limitwebsitevisibilitybyweight</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Web Site Visibility Limited by Weight</td>
+                </tr>
+                    <tr id="filter_maxshippingcost">
+                    <td class="rt_iname">maxshippingcost</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Maximum Shipping Cost</td>
+                </tr>
+                    <tr id="filter_minshippingcost">
+                    <td class="rt_iname">minshippingcost</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Minimum Shipping Cost</td>
+                </tr>
+                    <tr id="filter_ratingpluginid">
+                    <td class="rt_iname">ratingpluginid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Rating Plugin Id</td>
+                </tr>
+                    <tr id="filter_ratingregistration">
+                    <td class="rt_iname">ratingregistration</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Rating Registration</td>
+                </tr>
+                    <tr id="filter_ratingservicegroupid">
+                    <td class="rt_iname">ratingservicegroupid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Rating Service Group Id</td>
+                </tr>
+                    <tr id="filter_ratingserviceid">
+                    <td class="rt_iname">ratingserviceid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Rating Service Id</td>
+                </tr>
+                    <tr id="filter_realtimerateservice">
+                    <td class="rt_iname">realtimerateservice</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Real-Time Rate Service</td>
+                </tr>
+                    <tr id="filter_returnlabelregistration">
+                    <td class="rt_iname">returnlabelregistration</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Return Label Registration</td>
+                </tr>
+                    <tr id="filter_returnlabelserviceid">
+                    <td class="rt_iname">returnlabelserviceid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Return Label Service Id</td>
+                </tr>
+                    <tr id="filter_returnshippingservice">
+                    <td class="rt_iname">returnshippingservice</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Return Shipping Service</td>
+                </tr>
+                    <tr id="filter_shippingdiscountrate">
+                    <td class="rt_iname">shippingdiscountrate</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Rate Discount</td>
+                </tr>
+                    <tr id="filter_shippingflatrate">
+                    <td class="rt_iname">shippingflatrate</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Flat Rate</td>
+                </tr>
+                    <tr id="filter_shippingfunctiontype">
+                    <td class="rt_iname">shippingfunctiontype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Rate Type</td>
+                </tr>
+                    <tr id="filter_shippingrateaspercentoftotal">
+                    <td class="rt_iname">shippingrateaspercentoftotal</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Rate As Percent of Total</td>
+                </tr>
+                    <tr id="filter_shippingratebyitem">
+                    <td class="rt_iname">shippingratebyitem</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Rate By Item</td>
+                </tr>
+                    <tr id="filter_shippingratebyweight">
+                    <td class="rt_iname">shippingratebyweight</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Rate By Weight</td>
+                </tr>
+                    <tr id="filter_shippingratebyweightbracketed">
+                    <td class="rt_iname">shippingratebyweightbracketed</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Shipping Rate By Weight Bracketed</td>
+                </tr>
+                    <tr id="filter_shippingratebyweightper">
+                    <td class="rt_iname">shippingratebyweightper</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Shipping Rate By Weight Per</td>
+                </tr>
+                    <tr id="filter_shippingratebyweightunit">
+                    <td class="rt_iname">shippingratebyweightunit</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Rate By Weight Unit</td>
+                </tr>
+                    <tr id="filter_shippingratetabletype">
+                    <td class="rt_iname">shippingratetabletype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Rate Table Type</td>
+                </tr>
+                    <tr id="filter_shippingservice">
+                    <td class="rt_iname">shippingservice</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Shipping Service</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+                    <tr id="filter_websitevisibilitybytotaltype">
+                    <td class="rt_iname">websitevisibilitybytotaltype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Web Site Visibility By Total Type</td>
+                </tr>
+                    <tr id="filter_websitevisibilitybyweighttype">
+                    <td class="rt_iname">websitevisibilitybyweighttype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Web Site Visibility By Weight Type</td>
+                </tr>
+                    <tr id="filter_websitevisibilitytotallimit">
+                    <td class="rt_iname">websitevisibilitytotallimit</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Web Site Visibility By Total Limit</td>
+                </tr>
+                    <tr id="filter_websitevisibilityweightlimit">
+                    <td class="rt_iname">websitevisibilityweightlimit</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Web Site Visibility By Weight Limit</td>
+                </tr>
+                    <tr id="filter_websitevisibilityweightunit">
+                    <td class="rt_iname">websitevisibilityweightunit</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Web Site Visibility By Weight Unit</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_account">
+                    <td class="rt_cname">account</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account</td>
+                </tr>
+                    <tr id="column_accounthandling">
+                    <td class="rt_cname">accounthandling</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Account (Handling)</td>
+                </tr>
+                    <tr id="column_carrier">
+                    <td class="rt_cname">carrier</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Carrier</td>
+                </tr>
+                    <tr id="column_description">
+                    <td class="rt_cname">description</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Description</td>
+                </tr>
+                    <tr id="column_displayname">
+                    <td class="rt_cname">displayname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Display Name</td>
+                </tr>
+                    <tr id="column_excludedforcountries">
+                    <td class="rt_cname">excludedforcountries</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Excluded For Countries</td>
+                </tr>
+                    <tr id="column_excludedforsites">
+                    <td class="rt_cname">excludedforsites</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Excluded For Sites</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_freeiftotaloveramount">
+                    <td class="rt_cname">freeiftotaloveramount</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Free Shipping Total Treshold</td>
+                </tr>
+                    <tr id="column_handlingflatrate">
+                    <td class="rt_cname">handlingflatrate</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Flat Rate</td>
+                </tr>
+                    <tr id="column_handlingfunctiontype">
+                    <td class="rt_cname">handlingfunctiontype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Handling Rate Type</td>
+                </tr>
+                    <tr id="column_handlingrateaspercentoftotal">
+                    <td class="rt_cname">handlingrateaspercentoftotal</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Rate As Percent of Total</td>
+                </tr>
+                    <tr id="column_handlingratebyitem">
+                    <td class="rt_cname">handlingratebyitem</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Rate By Item</td>
+                </tr>
+                    <tr id="column_handlingratebyweight">
+                    <td class="rt_cname">handlingratebyweight</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Rate By Weight</td>
+                </tr>
+                    <tr id="column_handlingratebyweightbracketed">
+                    <td class="rt_cname">handlingratebyweightbracketed</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Handling Rate By Weight Whole Increments</td>
+                </tr>
+                    <tr id="column_handlingratebyweightper">
+                    <td class="rt_cname">handlingratebyweightper</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Rate By Weight Per</td>
+                </tr>
+                    <tr id="column_handlingratebyweightunit">
+                    <td class="rt_cname">handlingratebyweightunit</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Handling Rate By Weight Unit</td>
+                </tr>
+                    <tr id="column_handlingratetabletype">
+                    <td class="rt_cname">handlingratetabletype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Handling Rate Table Type</td>
+                </tr>
+                    <tr id="column_hasmaxshippingcost">
+                    <td class="rt_cname">hasmaxshippingcost</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Has Maximum Shipping Cost</td>
+                </tr>
+                    <tr id="column_hasminshippingcost">
+                    <td class="rt_cname">hasminshippingcost</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Has Minimum Shipping Cost</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isfreeiftotalover">
+                    <td class="rt_cname">isfreeiftotalover</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Free Shipping total</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_isonline">
+                    <td class="rt_cname">isonline</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Display in Web Site</td>
+                </tr>
+                    <tr id="column_isreturnserviceintegrated">
+                    <td class="rt_cname">isreturnserviceintegrated</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Return Service Integrated</td>
+                </tr>
+                    <tr id="column_isshipperintegrated">
+                    <td class="rt_cname">isshipperintegrated</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Integrated Shipping Item</td>
+                </tr>
+                    <tr id="column_itemid">
+                    <td class="rt_cname">itemid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_labelpluginid">
+                    <td class="rt_cname">labelpluginid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Label Plugin Id</td>
+                </tr>
+                    <tr id="column_labelregistration">
+                    <td class="rt_cname">labelregistration</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Label Registration</td>
+                </tr>
+                    <tr id="column_labelservicegroupid">
+                    <td class="rt_cname">labelservicegroupid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Label Service Group Id</td>
+                </tr>
+                    <tr id="column_labelserviceid">
+                    <td class="rt_cname">labelserviceid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Label Service Id</td>
+                </tr>
+                    <tr id="column_limitedtocountries">
+                    <td class="rt_cname">limitedtocountries</td>
+                    <td class="rt_ctype">multiselect</td>
+                    <td class="rt_clabel">Limited To Countries</td>
+                </tr>
+                    <tr id="column_limitedtosites">
+                    <td class="rt_cname">limitedtosites</td>
+                    <td class="rt_ctype">multiselect</td>
+                    <td class="rt_clabel">Limited To Sites</td>
+                </tr>
+                    <tr id="column_limitedtostates">
+                    <td class="rt_cname">limitedtostates</td>
+                    <td class="rt_ctype">multiselect</td>
+                    <td class="rt_clabel">Limited To States</td>
+                </tr>
+                    <tr id="column_limitwebsitevisibilitybytotal">
+                    <td class="rt_cname">limitwebsitevisibilitybytotal</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Web Site Visibility Limited by Total</td>
+                </tr>
+                    <tr id="column_limitwebsitevisibilitybyweight">
+                    <td class="rt_cname">limitwebsitevisibilitybyweight</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Web Site Visibility Limited by Weight</td>
+                </tr>
+                    <tr id="column_maxshippingcost">
+                    <td class="rt_cname">maxshippingcost</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Maximum Shipping Cost</td>
+                </tr>
+                    <tr id="column_minshippingcost">
+                    <td class="rt_cname">minshippingcost</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Minimum Shipping Cost</td>
+                </tr>
+                    <tr id="column_ratingpluginid">
+                    <td class="rt_cname">ratingpluginid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Rating Plugin Id</td>
+                </tr>
+                    <tr id="column_ratingregistration">
+                    <td class="rt_cname">ratingregistration</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Rating Registration</td>
+                </tr>
+                    <tr id="column_ratingservicegroupid">
+                    <td class="rt_cname">ratingservicegroupid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Rating Service Group Id</td>
+                </tr>
+                    <tr id="column_ratingserviceid">
+                    <td class="rt_cname">ratingserviceid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Rating Service Id</td>
+                </tr>
+                    <tr id="column_realtimerateservice">
+                    <td class="rt_cname">realtimerateservice</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Real-Time Rate Service</td>
+                </tr>
+                    <tr id="column_returnlabelregistration">
+                    <td class="rt_cname">returnlabelregistration</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Return Label Registration</td>
+                </tr>
+                    <tr id="column_returnlabelserviceid">
+                    <td class="rt_cname">returnlabelserviceid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Return Label Service Id</td>
+                </tr>
+                    <tr id="column_returnshippingservice">
+                    <td class="rt_cname">returnshippingservice</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Return Shipping Service</td>
+                </tr>
+                    <tr id="column_shippingdiscountrate">
+                    <td class="rt_cname">shippingdiscountrate</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate Discount</td>
+                </tr>
+                    <tr id="column_shippingflatrate">
+                    <td class="rt_cname">shippingflatrate</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Flat Rate</td>
+                </tr>
+                    <tr id="column_shippingfunctiontype">
+                    <td class="rt_cname">shippingfunctiontype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Rate Type</td>
+                </tr>
+                    <tr id="column_shippingrateaspercentoftotal">
+                    <td class="rt_cname">shippingrateaspercentoftotal</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate As Percent of Total</td>
+                </tr>
+                    <tr id="column_shippingratebyitem">
+                    <td class="rt_cname">shippingratebyitem</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate By Item</td>
+                </tr>
+                    <tr id="column_shippingratebyweight">
+                    <td class="rt_cname">shippingratebyweight</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate By Weight</td>
+                </tr>
+                    <tr id="column_shippingratebyweightbracketed">
+                    <td class="rt_cname">shippingratebyweightbracketed</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Shipping Rate By Weight Whole Increments</td>
+                </tr>
+                    <tr id="column_shippingratebyweightper">
+                    <td class="rt_cname">shippingratebyweightper</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate By Weight Per</td>
+                </tr>
+                    <tr id="column_shippingratebyweightunit">
+                    <td class="rt_cname">shippingratebyweightunit</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Shipping Rate By Weight Unit</td>
+                </tr>
+                    <tr id="column_shippingratetabletype">
+                    <td class="rt_cname">shippingratetabletype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Rate Table Type</td>
+                </tr>
+                    <tr id="column_shippingservice">
+                    <td class="rt_cname">shippingservice</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Shipping Service</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+                    <tr id="column_websitevisibilitybytotaltype">
+                    <td class="rt_cname">websitevisibilitybytotaltype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Web Site Visibility By Total Type</td>
+                </tr>
+                    <tr id="column_websitevisibilitybyweighttype">
+                    <td class="rt_cname">websitevisibilitybyweighttype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Web Site Visibility By Weight Type</td>
+                </tr>
+                    <tr id="column_websitevisibilitytotallimit">
+                    <td class="rt_cname">websitevisibilitytotallimit</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Web Site Visibility By Total Limit</td>
+                </tr>
+                    <tr id="column_websitevisibilityweightlimit">
+                    <td class="rt_cname">websitevisibilityweightlimit</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Web Site Visibility By Weight Limit</td>
+                </tr>
+                    <tr id="column_websitevisibilityweightunit">
+                    <td class="rt_cname">websitevisibilityweightunit</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Web Site Visibility By Weight Unit</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

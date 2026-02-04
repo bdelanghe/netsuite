@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__vendorbill','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__vendorbill','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>VendorBill</H1>
+
+
+    Namespace: <a href="../../schema/record/vendorbill.html?mode=package">urn:purchases.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">account</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the Accounts Payable account that will be affected by this transaction.
+
+Click New to set up a new account.
+
+For details on accounts, go to Setup &gt; Accounting &gt; Manage G/L &gt; Chart of Accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">approvalStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Approval Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The approval status of this bill shows in this field.
+
+Accept the default status or choose one of the following:
+    * Approved – No further review or processing is required before a payment is processed.
+    * Pending Approval – Someone with permission must approve the bill before a payment can be processed for it.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">availableVendorCredit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Available Vendor Credit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">From the web services perspective, this field is available only with the get, getList, and asyncGetList operations. This field is not available through search.
+
+For more information about this field, refer to the field help in the UI. That is, navigate to the record and click the Available Vendor Credit label. In response, the system displays a popup window that contains more information about the field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Vendor Select field, choose a vendor.
+Verify the billing address displayed in the Vendor field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you wish, select the class that applies to this item. Click —New— to set up a new class.
+
+Go to Lists &gt; Classes for details about existing classes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Credit Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field that returns the credit limit set for the vendor.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The transaction currency for this bill is shown here.
+
+If this bill was created from a purchase order, the currency on the originating purchase order is shown, and you cannot change the currency on the bill.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read only field that defaults to the currency associated with the customer referenced by the entity field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the appropriate standard or custom form to use.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Company &gt; Classifications &gt; Departments. This field is required when Departments is enabled at Setup &gt; Accounting &gt; Accounting Preferences. Depending on account configuration, this field may need to be set at the item line level.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read-only field that returns the amount discounted on this bill.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read-only field that returns the last day you can pay this bill in order to receive a discount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dueDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Due Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the due date for the bill. Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The tax registration number for this entity displays here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the rate associated with the Vendor set in the entity field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expenseList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/vendorbillexpenselist.html?mode=package">VendorBillExpenseList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">installmentList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/installmentlist.html?mode=package">InstallmentList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/vendorbillitemlist.html?mode=package">VendorBillItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">landedCostMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/landedcostmethod.html?mode=package">LandedCostMethod</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost Allocation Method</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Available values are: _quantity _value _weight</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">landedCostPerLine</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Landed Cost per Line</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to enter a landed cost per line item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">landedCostsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/purchlandedcostlist.html?mode=package">PurchLandedCostList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a location to associate with this line item. Select New to create a new location record.
+
+Go to Lists &gt; Locations for details about existing locations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a memo that will appear on such reports as the 2-line Accounts Payable Register.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nextApprover</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Next Approver</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the next person set to approve this bill via approval routing.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Nexus</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the nexus of the transaction. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different nexus in the dropdown list, the corresponding tax registration number is automatically selected in the Subsidiary Tax Reg. Number field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overrideInstallments</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the default calculated installment amounts and enter custom ones.
+Note that you must ensure that custom installment amounts must add up to the total amount due.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">paymentHold</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Payment Hold</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Payment Hold box to apply a payment hold on a disputed bill:
+
+    * The Make Payment button does not appear on the vendor bill and a vendor payment for that bill cannot be processed.
+    * Vendor bills subject to a payment hold do not appear on the bill payments page.
+    * The Electronic Payment SuiteApp does not process payments that are subject to a payment hold.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">postingPeriod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Posting Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Required on Add when the Accounting Periods feature is enabled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the subsidiary you want to associate with this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the tax registration number of the transaction nexus. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different tax registration number in the dropdown list, the corresponding nexus is automatically selected in the Nexus field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tax2Total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/taxdetailslist.html?mode=package">TaxDetailsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Details Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the tax information on the Tax Details subtab of the transaction. Only roles with at least the Edit level of the Tax Details Tab permission can override the tax details.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxPointDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Point Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Tax point date is a legal requirement in many countries. It is the date of the transaction that determines the taxability. It may be different from the transaction date that determines the GL impact. Specific rules consider the reporting of transactions based on tax point date and other factors.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Registration Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the values in the Nexus and Subsidiary Tax Reg. Number fields. Only roles with at least the Edit level of the Tax Details Tab permission can override the values that NetSuite automatically selects in these fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; New &gt; Terms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reference No.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the number to identify this transaction, such as the vendor's invoice number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">transactionNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transaction Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">By default, transaction lists display only the Number field in searches and reporting.
+
+For the transaction types available through previous releases, these two values will be the same.
+
+Note: The Transaction Number field is visible by default on standard NetSuite forms and invisible by default on customized forms. You can customize a form to display this field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">userTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read-only field that returns the total amount of the transaction. check this -- in the UI, this can be entered but then is overwritten on submit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vatRegNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">VAT Registration</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

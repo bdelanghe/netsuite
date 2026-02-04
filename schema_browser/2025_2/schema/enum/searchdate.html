@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.core.platform.webservices.netsuite.com__searchdate','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.core.platform.webservices.netsuite.com__searchdate','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>SearchDate</H1>
+    Namespace: urn:types.core.platform.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">fiscalHalfBeforeLast</td></tr>
+        <tr><td class="est_vvalue">fiscalHalfBeforeLastToDate</td></tr>
+        <tr><td class="est_vvalue">fiscalQuarterBeforeLast</td></tr>
+        <tr><td class="est_vvalue">fiscalQuarterBeforeLastToDate</td></tr>
+        <tr><td class="est_vvalue">fiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">fiscalYearBeforeLastToDate</td></tr>
+        <tr><td class="est_vvalue">fiveDaysAgo</td></tr>
+        <tr><td class="est_vvalue">fiveDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">fourDaysAgo</td></tr>
+        <tr><td class="est_vvalue">fourDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">fourWeeksStartingThisWeek</td></tr>
+        <tr><td class="est_vvalue">lastBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">lastFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">lastFiscalHalfOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">lastFiscalHalfToDate</td></tr>
+        <tr><td class="est_vvalue">lastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">lastFiscalQuarterOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">lastFiscalQuarterToDate</td></tr>
+        <tr><td class="est_vvalue">lastFiscalQuarterTwoFiscalYearsAgo</td></tr>
+        <tr><td class="est_vvalue">lastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">lastFiscalYearToDate</td></tr>
+        <tr><td class="est_vvalue">lastMonth</td></tr>
+        <tr><td class="est_vvalue">lastMonthOneFiscalQuarterAgo</td></tr>
+        <tr><td class="est_vvalue">lastMonthOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">lastMonthToDate</td></tr>
+        <tr><td class="est_vvalue">lastMonthTwoFiscalQuartersAgo</td></tr>
+        <tr><td class="est_vvalue">lastMonthTwoFiscalYearsAgo</td></tr>
+        <tr><td class="est_vvalue">lastRollingHalf</td></tr>
+        <tr><td class="est_vvalue">lastRollingQuarter</td></tr>
+        <tr><td class="est_vvalue">lastRollingYear</td></tr>
+        <tr><td class="est_vvalue">lastWeek</td></tr>
+        <tr><td class="est_vvalue">lastWeekToDate</td></tr>
+        <tr><td class="est_vvalue">monthAfterNext</td></tr>
+        <tr><td class="est_vvalue">monthAfterNextToDate</td></tr>
+        <tr><td class="est_vvalue">monthBeforeLast</td></tr>
+        <tr><td class="est_vvalue">monthBeforeLastToDate</td></tr>
+        <tr><td class="est_vvalue">nextBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">nextFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">nextFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">nextFiscalYear</td></tr>
+        <tr><td class="est_vvalue">nextFourWeeks</td></tr>
+        <tr><td class="est_vvalue">nextMonth</td></tr>
+        <tr><td class="est_vvalue">nextOneHalf</td></tr>
+        <tr><td class="est_vvalue">nextOneMonth</td></tr>
+        <tr><td class="est_vvalue">nextOneQuarter</td></tr>
+        <tr><td class="est_vvalue">nextOneWeek</td></tr>
+        <tr><td class="est_vvalue">nextOneYear</td></tr>
+        <tr><td class="est_vvalue">nextWeek</td></tr>
+        <tr><td class="est_vvalue">ninetyDaysAgo</td></tr>
+        <tr><td class="est_vvalue">ninetyDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">oneYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">previousFiscalQuartersLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousFiscalQuartersThisFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousMonthsLastFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">previousMonthsLastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">previousMonthsLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousMonthsSameFiscalHalfLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousMonthsSameFiscalQuarterLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousMonthsThisFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">previousMonthsThisFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">previousMonthsThisFiscalYear</td></tr>
+        <tr><td class="est_vvalue">previousOneDay</td></tr>
+        <tr><td class="est_vvalue">previousOneHalf</td></tr>
+        <tr><td class="est_vvalue">previousOneMonth</td></tr>
+        <tr><td class="est_vvalue">previousOneQuarter</td></tr>
+        <tr><td class="est_vvalue">previousOneWeek</td></tr>
+        <tr><td class="est_vvalue">previousOneYear</td></tr>
+        <tr><td class="est_vvalue">previousRollingHalf</td></tr>
+        <tr><td class="est_vvalue">previousRollingQuarter</td></tr>
+        <tr><td class="est_vvalue">previousRollingYear</td></tr>
+        <tr><td class="est_vvalue">sameDayFiscalQuarterBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameDayFiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameDayLastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">sameDayLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">sameDayLastMonth</td></tr>
+        <tr><td class="est_vvalue">sameDayLastWeek</td></tr>
+        <tr><td class="est_vvalue">sameDayMonthBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameDayWeekBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameFiscalHalfLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">sameFiscalHalfLastFiscalYearToDate</td></tr>
+        <tr><td class="est_vvalue">sameFiscalQuarterFiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameFiscalQuarterLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">sameFiscalQuarterLastFiscalYearToDate</td></tr>
+        <tr><td class="est_vvalue">sameMonthFiscalQuarterBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameMonthFiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameMonthLastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">sameMonthLastFiscalQuarterToDate</td></tr>
+        <tr><td class="est_vvalue">sameMonthLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">sameMonthLastFiscalYearToDate</td></tr>
+        <tr><td class="est_vvalue">sameWeekFiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">sameWeekLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">sixtyDaysAgo</td></tr>
+        <tr><td class="est_vvalue">sixtyDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">startOfFiscalHalfBeforeLast</td></tr>
+        <tr><td class="est_vvalue">startOfFiscalQuarterBeforeLast</td></tr>
+        <tr><td class="est_vvalue">startOfFiscalYearBeforeLast</td></tr>
+        <tr><td class="est_vvalue">startOfLastBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">startOfLastFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">startOfLastFiscalHalfOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">startOfLastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfLastFiscalQuarterOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">startOfLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfLastMonth</td></tr>
+        <tr><td class="est_vvalue">startOfLastMonthOneFiscalQuarterAgo</td></tr>
+        <tr><td class="est_vvalue">startOfLastMonthOneFiscalYearAgo</td></tr>
+        <tr><td class="est_vvalue">startOfLastRollingHalf</td></tr>
+        <tr><td class="est_vvalue">startOfLastRollingQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfLastRollingYear</td></tr>
+        <tr><td class="est_vvalue">startOfLastWeek</td></tr>
+        <tr><td class="est_vvalue">startOfMonthBeforeLast</td></tr>
+        <tr><td class="est_vvalue">startOfNextBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">startOfNextFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">startOfNextFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfNextFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfNextMonth</td></tr>
+        <tr><td class="est_vvalue">startOfNextWeek</td></tr>
+        <tr><td class="est_vvalue">startOfPreviousRollingHalf</td></tr>
+        <tr><td class="est_vvalue">startOfPreviousRollingQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfPreviousRollingYear</td></tr>
+        <tr><td class="est_vvalue">startOfSameFiscalHalfLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfSameFiscalQuarterLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfSameMonthLastFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfSameMonthLastFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfThisBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">startOfThisFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">startOfThisFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">startOfThisFiscalYear</td></tr>
+        <tr><td class="est_vvalue">startOfThisMonth</td></tr>
+        <tr><td class="est_vvalue">startOfThisWeek</td></tr>
+        <tr><td class="est_vvalue">startOfThisYear</td></tr>
+        <tr><td class="est_vvalue">startOfWeekBeforeLast</td></tr>
+        <tr><td class="est_vvalue">tenDaysAgo</td></tr>
+        <tr><td class="est_vvalue">tenDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">thirtyDaysAgo</td></tr>
+        <tr><td class="est_vvalue">thirtyDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">thisBusinessWeek</td></tr>
+        <tr><td class="est_vvalue">thisFiscalHalf</td></tr>
+        <tr><td class="est_vvalue">thisFiscalHalfToDate</td></tr>
+        <tr><td class="est_vvalue">thisFiscalQuarter</td></tr>
+        <tr><td class="est_vvalue">thisFiscalQuarterToDate</td></tr>
+        <tr><td class="est_vvalue">thisFiscalYear</td></tr>
+        <tr><td class="est_vvalue">thisFiscalYearToDate</td></tr>
+        <tr><td class="est_vvalue">thisMonth</td></tr>
+        <tr><td class="est_vvalue">thisMonthToDate</td></tr>
+        <tr><td class="est_vvalue">thisRollingHalf</td></tr>
+        <tr><td class="est_vvalue">thisRollingQuarter</td></tr>
+        <tr><td class="est_vvalue">thisRollingYear</td></tr>
+        <tr><td class="est_vvalue">thisWeek</td></tr>
+        <tr><td class="est_vvalue">thisWeekToDate</td></tr>
+        <tr><td class="est_vvalue">thisYear</td></tr>
+        <tr><td class="est_vvalue">threeDaysAgo</td></tr>
+        <tr><td class="est_vvalue">threeDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">threeFiscalQuartersAgo</td></tr>
+        <tr><td class="est_vvalue">threeFiscalQuartersAgoToDate</td></tr>
+        <tr><td class="est_vvalue">threeFiscalYearsAgo</td></tr>
+        <tr><td class="est_vvalue">threeFiscalYearsAgoToDate</td></tr>
+        <tr><td class="est_vvalue">threeMonthsAgo</td></tr>
+        <tr><td class="est_vvalue">threeMonthsAgoToDate</td></tr>
+        <tr><td class="est_vvalue">today</td></tr>
+        <tr><td class="est_vvalue">tomorrow</td></tr>
+        <tr><td class="est_vvalue">twoDaysAgo</td></tr>
+        <tr><td class="est_vvalue">twoDaysFromNow</td></tr>
+        <tr><td class="est_vvalue">weekAfterNext</td></tr>
+        <tr><td class="est_vvalue">weekAfterNextToDate</td></tr>
+        <tr><td class="est_vvalue">weekBeforeLast</td></tr>
+        <tr><td class="est_vvalue">weekBeforeLastToDate</td></tr>
+        <tr><td class="est_vvalue">yesterday</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

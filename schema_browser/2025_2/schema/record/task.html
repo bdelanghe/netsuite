@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__task','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__task','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Task</H1>
+
+
+    Namespace: <a href="../../schema/record/task.html?mode=package">urn:scheduling.activities.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessLevel</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Private</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The default value is false. True indicates that the task is private.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">actualTime</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Time</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Actual Time field shows the total amount of time entered against this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assigned</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assigned To</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References an entity record that already exists in your account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">company</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Company</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">completedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Completed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date this task was actually completed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contact</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contact</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the contact for this task.
+
+The contacts in this field are the contacts attached to the company selected above. Click Open next to the Company field to add contacts to a company's record.
+
+You can select additional companies and contacts on the Contacts subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contactList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/taskcontactlist.html?mode=package">TaskContactList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dueDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Due Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the projected date when this task needs to be complete.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is required in the UI but not when submitting requests via Web services.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedTime</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initial Time Budget</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Initial Time Budget field, enter your first approximation of the amount of time this task will take. Later, you can increase or decrease your time estimate in the Current Time Budget field.
+ 
+By maintaining an initial time estimate in this field, you can compare your initial estimate to your altered estimate.
+ 
+If you entered a time estimate on a job task template, that amount shows here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedTimeOverride</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Current Time Budget</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If your estimate of the time this task will take increases or decreases from your original estimate, enter the altered estimate in the Current Time Budget field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter any comments about this task.
+
+These comments appear in the e-mail sent to the person this task is assigned to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">milestone</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Milestone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">owner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Created By</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an entity record that already exists in your account. The field defaults to the current user. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Child Of</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the parent task if this task is the subordinate of another.
+Note: By identifying this task as a subordinate, the parent task becomes a summary task. A summary task cannot have resources assigned to it because it does not track work, it only tracks information about subordinate tasks.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentComplete</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Percent Complete</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Percent Complete field, enter an estimate of how much of the total amount of work for this task is already completed.
+ 
+For example, if half the work toward completion is done, enter 50%.
+ 
+Note: The percentage you enter in this field overrides the auto-calculated figure in the Percent Time Complete field and is used for task calculations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">percentTimeComplete</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Percent Complete (Time)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The system auto-calculates a value for the Percent Time Complete field, by dividing Actual Time by Current Time Budget (or by Initial Time Budget, if no Current Time Budget has been entered). This value indicates how much of the budgeted time for the task has been completed.
+
+You can override this value by entering a percentage value in the Percent Complete field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">priority</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/taskpriority.html?mode=package">TaskPriority</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Priority</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The values used to populate this field are _low, _medium or _high.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">reminderMinutes</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/taskreminderminutes.html?mode=package">TaskReminderMinutes</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reminder Minutes</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is settable only if timedEvent is set to TRUE.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">reminderType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/taskremindertype.html?mode=package">TaskReminderType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reminder type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is settable only if timedEvent is set to TRUE.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendEmail</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Send email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The default value is false.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field has a default value of the current date and time. It is required in the UI but not when submitting requests via Web services.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/taskstatus.html?mode=package">TaskStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The values used to populate this field are _notStarted, _inProgress or _completed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supportCase</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Support Case</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timedEvent</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Timed Event</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In Web services the startTime and endTime field are not exposed. Therefore, to set start and end times for a timed task, users must first set the timedEvent field to TRUE. Then the time component of the DateTime value that is specified in startDate will be set for startTime, and the time component of the DateTime value that is specified in endDate will be set for endTime. Note that the fields reminderMinutes and reminderType are also only settable if timedEvent is set to TRUE.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeItemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/tasktimeitemlist.html?mode=package">TaskTimeItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeRemaining</td>
+                        <td class="rst_ftype"><a href="../../schema/other/duration.html?mode=package">Duration</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Time Remaining</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Time Remaining field shows the estimated remaining amount of time for this task.
+ 
+Time remaining is calculated as follows:
+
+(Initial Time Budget - Actual Time)
+
+If you have entered a Current Time Budget to update your Initial Time Budget, then the time remaining for the task is calculated as:
+
+(Current Time Budget - Actual Time)</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Title</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter a name for this task.
+
+This name is the subject line of the e-mail sent to the assignee if you check the Send e-mail box.
+
+This title also appears to others if the Private Task box is not checked. The title shows on the Tasks list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">transaction</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transaction</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an opportunity record that already exists in your account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/tasksearch.html?mode=package">TaskSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/tasksearchadvanced.html?mode=package">TaskSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/tasksearchbasic.html?mode=package">TaskSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/tasksearchrow.html?mode=package">TaskSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/tasksearchrowbasic.html?mode=package">TaskSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

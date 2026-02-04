@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__locationsearchrowbasic','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__locationsearchrowbasic','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>LocationSearchRowBasic</H1>
+    Namespace: urn:common.platform.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">address1</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 1</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address2</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 2</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address3</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 3</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">allowStorePickup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Allow Store Pickup</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">autoAssignmentRegionSetting</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Automatic Location Assignment</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bufferStock</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Buffer Stock</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">city</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">country</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customFieldList</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumncustomfieldlist.html?mode=package">SearchColumnCustomFieldList</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dailyShippingCapacity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Daily Shipping Capacity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">endTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">End Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">External ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">geolocationMethod</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Geolocation Method</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isFriday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Friday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInactive</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Inactive</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isIncludeInCt</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Include In Control Tower</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isMonday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Monday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isOffice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Staffed Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isSaturday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Saturday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isSunday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sunday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isThursday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Thursday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isTuesday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Tuesday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isWednesday</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Wednesday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">latitude</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Latitude</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">locationType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Location Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">longitude</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Longitude</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">makeInventoryAvailable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Make Inventory Available</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">makeInventoryAvailableStore</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Make Inventory Available in Web Store</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">name</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nameNoHierarchy</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Name (no hierarchy)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextPickupCutOffTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Next Pickup Cut-Off Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">phone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sameDayPickupCutOffTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Same Day Pickup Cut-Off Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">soPredConfidence</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Order Predicted Risk Confidence</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">soPredictedDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Order Predicted Days Late/Early</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">startTime</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Start Time</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">state</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">storePickupBufferStock</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Store Pickup Buffer Stock</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">timeZone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Time Zone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">totalShippingCapacity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Total Shipping Capacity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">tranPrefix</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Transaction Prefix</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">usesBins</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Use Bins</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">zip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Zip</td>
+            </tr>
+    </table>
+
+
+    <H2>Related Record(s)</H2>
+    <table class="jtable">
+        <tr><th class="sst_slabel">Name</th></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/location.html?mode=package">Location</a></td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

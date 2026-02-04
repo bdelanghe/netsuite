@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__subsidiary','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__subsidiary','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Subsidiary</H1>
+    <H3>Internal ID: subsidiary</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_addrphone">
+                <td class="rt_fname">addrphone</td>
+                <td class="rt_ftype">phone</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Phone</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_addrtext">
+                <td class="rt_fname">addrtext</td>
+                <td class="rt_ftype">address</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_attention">
+                <td class="rt_fname">attention</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Attention</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_caseupdatetemplate">
+                <td class="rt_fname">caseupdatetemplate</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Case Update</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_checklayout">
+                <td class="rt_fname">checklayout</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Check Default Chart Type</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the check layout you want to use when printing checks from this subsidiary.</td>
+            </tr>
+                <tr id="field_city">
+                <td class="rt_fname">city</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">City</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_country">
+                <td class="rt_fname">country</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Country</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the country in which this subsidiary is located.</td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the base currency used by this subsidiary. If you do not select a currency, the system uses the currency of the parent subsidiary.
+
+If you have not entered transactions for a subsidiary, you can change the base currency. See the Editing Subsidiary Records for details.</td>
+            </tr>
+                <tr id="field_edition">
+                <td class="rt_fname">edition</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Edition</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field displays the edition of NetSuite used by this subsidiary.</td>
+            </tr>
+                <tr id="field_email">
+                <td class="rt_fname">email</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Return Email Address</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the return email address for this subsidiary.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_fax">
+                <td class="rt_fname">fax</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Fax</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the fax number for this subsidiary.</td>
+            </tr>
+                <tr id="field_federalidnumber">
+                <td class="rt_fname">federalidnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Employer Identification Number (EIN)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the appropriate tax identification number for this subsidiary:
+
+    * United States – Employer Identification Number (EIN) or Federal Identification Number (FIN)
+    * Australia – Australian Business Number
+    * United Kingdom – VAT Registration Number
+    * All other locations – VAT Registration Number
+
+This number is required for all businesses with employees or acting as corporations or partnerships for tax purposes. If you think you need a tax identification number or do not know what your number is, contact the tax agency with jurisdiction over this subsidiary.</td>
+            </tr>
+                <tr id="field_fiscalcalendar">
+                <td class="rt_fname">fiscalcalendar</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Fiscal Calendar</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the calendar to roll up accounting periods. The fiscal calendar determines the start date for the accounting year.</td>
+            </tr>
+                <tr id="field_heading0">
+                <td class="rt_fname">heading0</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Case Email Setup</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_heading1">
+                <td class="rt_fname">heading1</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer Notification Templates</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_heading2">
+                <td class="rt_fname">heading2</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Employee Notification Templates</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_intercoaccount">
+                <td class="rt_fname">intercoaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Intercompany Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If the Intercompany Time and Expense feature is enabled in your account, an Intercompany Account is automatically associated with a subsidiary after qualifying transactions are created in the system, such as a journal to eliminate Time and Expense.
+
+This account is determined by the subsidiary’s base currency. It is used to offset the transfer of charges from intercompany time and expenses from this subsidiary to others.</td>
+            </tr>
+                <tr id="field_iselimination">
+                <td class="rt_fname">iselimination</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Elimination</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if this subsidiary record is to be used for only journal entries and transactions between subsidiaries.
+
+When a loan, sale, or inventory transfer is made between subsidiaries, you use an elimination subsidiary to balance your consolidated books. By entering a journal entry against the elimination subsidiary in the same amount as the inter-company transaction, you have both a record of the transactions and a correct balance.</td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary is Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if this subsidiary is no longer active or used in your account.
+
+Inactivated subsidiaries no longer show in the Subsidiary field on records and transactions unless they are currently attached to a record. Web sites of inactive subsidiaries are no longer available online.</td>
+            </tr>
+                <tr id="field_languagelocale">
+                <td class="rt_fname">languagelocale</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Language</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the default language for NetSuite users in this subsidiary. Individual users can choose their language at Home &gt; Set Preferences.</td>
+            </tr>
+                <tr id="field_legalname">
+                <td class="rt_fname">legalname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Legal Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the legal name of this subsidiary as it should appear on tax forms.</td>
+            </tr>
+                <tr id="field_logo">
+                <td class="rt_fname">logo</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary Logo (Forms)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Subsidiary Logo (Forms) field, select the logo image to be used on all forms by this subsidiary.
+
+Click New to upload a logo. Logos must be in JPG or GIF format.
+
+Note: The logo selected in this field does not affect pages in your account. The logo displayed on pages is determined by the selection in the Subsidiary Logo (Pages) field.
+
+To upload a logo, click Add New. Check the Available Without Login box.</td>
+            </tr>
+                <tr id="field_mainaddress">
+                <td class="rt_fname">mainaddress</td>
+                <td class="rt_ftype">                        <a href="address.html">summary</a>
+</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_mossapplies">
+                <td class="rt_fname">mossapplies</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">MOSS applies</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if the One Stop Shop (OSS) VAT scheme applies to this subsidiary.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter the name of this subsidiary the way it should appear on all forms except checks.
+
+On checks, your company name is pre-printed with address and MICR information.
+
+The name can be alphanumeric. The maximum number of characters is 83.</td>
+            </tr>
+                <tr id="field_override">
+                <td class="rt_fname">override</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_pagelogo">
+                <td class="rt_fname">pagelogo</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary Logo (Pages)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the logo image to be displayed on all pages for this subsidiary.
+
+Click New to upload a logo. Logos must be in JPG or GIF format.
+
+Note: The logo selected in this field does not affect printed forms. The logo on printed forms is determined by the selection in the Subsidiary Logo (Forms) field.
+
+To upload a logo, click Add New. Check the Available Without Login box.</td>
+            </tr>
+                <tr id="field_parent">
+                <td class="rt_fname">parent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsubsidiary of</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select this direct parent of this subsidiary.
+
+Selecting a parent subsidiary sets your company hierarchy, which is shown in the subsidiaries list.</td>
+            </tr>
+                <tr id="field_purchaseorderamount">
+                <td class="rt_fname">purchaseorderamount</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and purchase order.</td>
+            </tr>
+                <tr id="field_purchaseorderquantity">
+                <td class="rt_fname">purchaseorderquantity</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+            </tr>
+                <tr id="field_purchaseorderquantitydiff">
+                <td class="rt_fname">purchaseorderquantitydiff</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+            </tr>
+                <tr id="field_receiptamount">
+                <td class="rt_fname">receiptamount</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and item receipt.</td>
+            </tr>
+                <tr id="field_receiptquantity">
+                <td class="rt_fname">receiptquantity</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+            </tr>
+                <tr id="field_receiptquantitydiff">
+                <td class="rt_fname">receiptquantitydiff</td>
+                <td class="rt_ftype">posfloat</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+            </tr>
+                <tr id="field_returnaddr">
+                <td class="rt_fname">returnaddr</td>
+                <td class="rt_ftype">address</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnaddress">
+                <td class="rt_fname">returnaddress</td>
+                <td class="rt_ftype">                        <a href="address.html">summary</a>
+</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnaddress1">
+                <td class="rt_fname">returnaddress1</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address1</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnaddress2">
+                <td class="rt_fname">returnaddress2</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address2</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returncity">
+                <td class="rt_fname">returncity</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">City</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returncountry">
+                <td class="rt_fname">returncountry</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Country</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnstate">
+                <td class="rt_fname">returnstate</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">County/State/Province</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_returnzip">
+                <td class="rt_fname">returnzip</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Postal Code</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_roundtime">
+                <td class="rt_fname">roundtime</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Round Time Entry Duration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If the Time Tracking preference Round Time Entry Duration is enabled, this read-only field indicates that time entries are rounded when employees track time.</td>
+            </tr>
+                <tr id="field_shipaddr">
+                <td class="rt_fname">shipaddr</td>
+                <td class="rt_ftype">address</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Address</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shipcountry">
+                <td class="rt_fname">shipcountry</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Country</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_shippingaddress">
+                <td class="rt_fname">shippingaddress</td>
+                <td class="rt_ftype">                        <a href="address.html">summary</a>
+</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_showsubsidiaryname">
+                <td class="rt_fname">showsubsidiaryname</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Always Display Subsidiary Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to display only the subsidiary name with your role in the upper right  corner of a page.  In addition, when logging in to an employee center, vendor center, or customer center, the dashboard displays only the logo of the subsidiary, not the company logo.
+
+Clear this box to display the parent and the subsidiary name in your account.</td>
+            </tr>
+                <tr id="field_ssnortin">
+                <td class="rt_fname">ssnortin</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">SSN or TIN (Social Security Number, Tax ID Number)</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you are a United States citizen and are self-emloyed with no employees, enter your Social Security Number (SSN). If you are not a US citizen but have a Taxpayer Identification Number (TIN) issued by the IRS for the purposes of operating a business with no employees, enter your TIN.
+
+These numbers are used for tax purposes. If you think you need a SSN or TIN or do not know what your number is, contact the United States Internal Revenue Service (IRS), or go to www.irs.gov/businesses for more information.</td>
+            </tr>
+                <tr id="field_state">
+                <td class="rt_fname">state</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">State/Province</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the state or province in which this subsidiary is located.</td>
+            </tr>
+                <tr id="field_taxfiscalcalendar">
+                <td class="rt_fname">taxfiscalcalendar</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Fiscal Calendar</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the calendar to roll up the tax periods. The tax fiscal calendar determines the start date for the tax year.</td>
+            </tr>
+                <tr id="field_tranprefix">
+                <td class="rt_fname">tranprefix</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Transaction Prefix</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you use auto-generated numbering with NetSuite OneWorld, you can make your document number sequences independent per subsidiary.
+
+Enter up to 8 alphanumeric characters in this field to number transactions with a prefix to signify this subsidiary.
+
+To set up auto-generated numbering, go to Setup &gt; Company &gt; Setup Tasks &gt; Auto-Generated Numbers. On the Document Numbers subtab, check the Use Subsidiary box next to each transaction to which this prefix should be applied.</td>
+            </tr>
+                <tr id="field_url">
+                <td class="rt_fname">url</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Web Site</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter this subsidiary's Web Site address, or URL.</td>
+            </tr>
+                <tr id="field_zip">
+                <td class="rt_fname">zip</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Zip</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_accountingbookdetail_">accountingbookdetail - Currencies</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_accountingbookdetail_accountingbook">
+                        <td class="rt_sname">accountingbook</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Secondary Book</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Base Currency</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_taxregistration_">taxregistration - Tax Registrations</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_taxregistration_effectivefrom">
+                        <td class="rt_sname">effectivefrom</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Effective From</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_nexus">
+                        <td class="rt_sname">nexus</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Nexus</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_nexuscountry">
+                        <td class="rt_sname">nexuscountry</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Country</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_taxagency">
+                        <td class="rt_sname">taxagency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Tax Agency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_taxengine">
+                        <td class="rt_sname">taxengine</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Tax Engine</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_taxregistrationnumber">
+                        <td class="rt_sname">taxregistrationnumber</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Tax Reg. Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxregistration_validuntil">
+                        <td class="rt_sname">validuntil</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Valid Until</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_addressbook">
+                <td class="rt_tname">addressbook</td>
+                <td class="rt_tlabel">Address</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">System Notes</td>
+            </tr>
+                <tr id="tab_nexustab">
+                <td class="rt_tname">nexustab</td>
+                <td class="rt_tlabel">Nexuses</td>
+            </tr>
+                <tr id="tab_preferencestab">
+                <td class="rt_tname">preferencestab</td>
+                <td class="rt_tlabel">Preferences</td>
+            </tr>
+                <tr id="tab_returnsaddrtab">
+                <td class="rt_tname">returnsaddrtab</td>
+                <td class="rt_tlabel">Return Address</td>
+            </tr>
+                <tr id="tab_shippingaddrtab">
+                <td class="rt_tname">shippingaddrtab</td>
+                <td class="rt_tlabel">Shipping Address</td>
+            </tr>
+                <tr id="tab_translation">
+                <td class="rt_tname">translation</td>
+                <td class="rt_tlabel">Translation</td>
+            </tr>
+        </table>
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_address">
+                    <td class="rt_jid">address</td>
+                    <td class="rt_jlabel">Address</td>
+                    <td class="rt_jname">Address</td>
+                </tr>
+                    <tr id="join_defaultadvancetoapplyaccount">
+                    <td class="rt_jid">defaultadvancetoapplyaccount</td>
+                    <td class="rt_jlabel">Default Advance to Apply Account</td>
+                    <td class="rt_jname">Account</td>
+                </tr>
+                    <tr id="join_returnaddress">
+                    <td class="rt_jid">returnaddress</td>
+                    <td class="rt_jlabel">Return Address</td>
+                    <td class="rt_jname">Address</td>
+                </tr>
+                    <tr id="join_shippingaddress">
+                    <td class="rt_jid">shippingaddress</td>
+                    <td class="rt_jlabel">Shipping Address</td>
+                    <td class="rt_jname">Address</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_accountingbook">
+                    <td class="rt_iname">accountingbook</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Accounting Book</td>
+                </tr>
+                    <tr id="filter_accountingbookcurrency">
+                    <td class="rt_iname">accountingbookcurrency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Accounting Book Currency</td>
+                </tr>
+                    <tr id="filter_address">
+                    <td class="rt_iname">address</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Address</td>
+                </tr>
+                    <tr id="filter_city">
+                    <td class="rt_iname">city</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">City</td>
+                </tr>
+                    <tr id="filter_country">
+                    <td class="rt_iname">country</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Country</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_effectivefrom">
+                    <td class="rt_iname">effectivefrom</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Effective From</td>
+                </tr>
+                    <tr id="filter_email">
+                    <td class="rt_iname">email</td>
+                    <td class="rt_itype">email</td>
+                    <td class="rt_ilabel">Email</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fax">
+                    <td class="rt_iname">fax</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Fax</td>
+                </tr>
+                    <tr id="filter_formuladate">
+                    <td class="rt_iname">formuladate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Formula (Date)</td>
+                </tr>
+                    <tr id="filter_formulanumeric">
+                    <td class="rt_iname">formulanumeric</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="filter_formulatext">
+                    <td class="rt_iname">formulatext</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Formula (Text)</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_iselimination">
+                    <td class="rt_iname">iselimination</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Elimination</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_legalname">
+                    <td class="rt_iname">legalname</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Legal Name</td>
+                </tr>
+                    <tr id="filter_mossapplies">
+                    <td class="rt_iname">mossapplies</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">MOSS Applies</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nexus">
+                    <td class="rt_iname">nexus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Nexus</td>
+                </tr>
+                    <tr id="filter_phone">
+                    <td class="rt_iname">phone</td>
+                    <td class="rt_itype">phone</td>
+                    <td class="rt_ilabel">Phone</td>
+                </tr>
+                    <tr id="filter_purchaseorderamount">
+                    <td class="rt_iname">purchaseorderamount</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                </tr>
+                    <tr id="filter_purchaseorderquantity">
+                    <td class="rt_iname">purchaseorderquantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                </tr>
+                    <tr id="filter_purchaseorderquantitydiff">
+                    <td class="rt_iname">purchaseorderquantitydiff</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                </tr>
+                    <tr id="filter_receiptamount">
+                    <td class="rt_iname">receiptamount</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                </tr>
+                    <tr id="filter_receiptquantity">
+                    <td class="rt_iname">receiptquantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                </tr>
+                    <tr id="filter_receiptquantitydiff">
+                    <td class="rt_iname">receiptquantitydiff</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                </tr>
+                    <tr id="filter_state">
+                    <td class="rt_iname">state</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">State/Province</td>
+                </tr>
+                    <tr id="filter_taxengine">
+                    <td class="rt_iname">taxengine</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Tax Engine</td>
+                </tr>
+                    <tr id="filter_taxidnum">
+                    <td class="rt_iname">taxidnum</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Tax ID</td>
+                </tr>
+                    <tr id="filter_taxregistrationnumber">
+                    <td class="rt_iname">taxregistrationnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Tax Reg. Number</td>
+                </tr>
+                    <tr id="filter_tranprefix">
+                    <td class="rt_iname">tranprefix</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Transaction Prefix</td>
+                </tr>
+                    <tr id="filter_url">
+                    <td class="rt_iname">url</td>
+                    <td class="rt_itype">url</td>
+                    <td class="rt_ilabel">Web Site</td>
+                </tr>
+                    <tr id="filter_validuntil">
+                    <td class="rt_iname">validuntil</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Valid Until</td>
+                </tr>
+                    <tr id="filter_zip">
+                    <td class="rt_iname">zip</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Zip</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_accountingbook">
+                    <td class="rt_cname">accountingbook</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Accounting Book</td>
+                </tr>
+                    <tr id="column_accountingbookcurrency">
+                    <td class="rt_cname">accountingbookcurrency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Accounting Book Currency</td>
+                </tr>
+                    <tr id="column_anonymouscustomerinboundemail">
+                    <td class="rt_cname">anonymouscustomerinboundemail</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Anonymous Customer - Inbound Email</td>
+                </tr>
+                    <tr id="column_anonymouscustomeronlineforms">
+                    <td class="rt_cname">anonymouscustomeronlineforms</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Anonymous Customer - Online Forms</td>
+                </tr>
+                    <tr id="column_caseassignmenttemplate">
+                    <td class="rt_cname">caseassignmenttemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Case Assignment</td>
+                </tr>
+                    <tr id="column_caseautomaticclosuretemplate">
+                    <td class="rt_cname">caseautomaticclosuretemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Automatic Case Closure</td>
+                </tr>
+                    <tr id="column_casecopyemployeetemplate">
+                    <td class="rt_cname">casecopyemployeetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Copy Employee</td>
+                </tr>
+                    <tr id="column_casecreationtemplate">
+                    <td class="rt_cname">casecreationtemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Case Creation</td>
+                </tr>
+                    <tr id="column_caseescalationtemplate">
+                    <td class="rt_cname">caseescalationtemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Escalation</td>
+                </tr>
+                    <tr id="column_caseupdatetemplate">
+                    <td class="rt_cname">caseupdatetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Customer Notification Template - Case Update</td>
+                </tr>
+                    <tr id="column_city">
+                    <td class="rt_cname">city</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">City</td>
+                </tr>
+                    <tr id="column_companynameforsupportmessages">
+                    <td class="rt_cname">companynameforsupportmessages</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Company Name for Support Messages</td>
+                </tr>
+                    <tr id="column_country">
+                    <td class="rt_cname">country</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Country</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_effectivefrom">
+                    <td class="rt_cname">effectivefrom</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Effective From</td>
+                </tr>
+                    <tr id="column_email">
+                    <td class="rt_cname">email</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Email</td>
+                </tr>
+                    <tr id="column_employeecaseupdatetemplate">
+                    <td class="rt_cname">employeecaseupdatetemplate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Employee Notification Template - Case Update</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fax">
+                    <td class="rt_cname">fax</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Fax</td>
+                </tr>
+                    <tr id="column_formulacurrency">
+                    <td class="rt_cname">formulacurrency</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Formula (Currency)</td>
+                </tr>
+                    <tr id="column_formuladate">
+                    <td class="rt_cname">formuladate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Formula (Date)</td>
+                </tr>
+                    <tr id="column_formuladatetime">
+                    <td class="rt_cname">formuladatetime</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Formula (Date/Time)</td>
+                </tr>
+                    <tr id="column_formulanumeric">
+                    <td class="rt_cname">formulanumeric</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="column_formulapercent">
+                    <td class="rt_cname">formulapercent</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Formula (Percent)</td>
+                </tr>
+                    <tr id="column_formulatext">
+                    <td class="rt_cname">formulatext</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Formula (Text)</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_iselimination">
+                    <td class="rt_cname">iselimination</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Elimination</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_legalname">
+                    <td class="rt_cname">legalname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Legal Name</td>
+                </tr>
+                    <tr id="column_mainsupportemailaddress">
+                    <td class="rt_cname">mainsupportemailaddress</td>
+                    <td class="rt_ctype">email</td>
+                    <td class="rt_clabel">Main Support Email Address</td>
+                </tr>
+                    <tr id="column_mossapplies">
+                    <td class="rt_cname">mossapplies</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">MOSS Applies</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_namenohierarchy">
+                    <td class="rt_cname">namenohierarchy</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name (no hierarchy)</td>
+                </tr>
+                    <tr id="column_nexus">
+                    <td class="rt_cname">nexus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Nexus</td>
+                </tr>
+                    <tr id="column_phone">
+                    <td class="rt_cname">phone</td>
+                    <td class="rt_ctype">phone</td>
+                    <td class="rt_clabel">Phone</td>
+                </tr>
+                    <tr id="column_purchaseorderamount">
+                    <td class="rt_cname">purchaseorderamount</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                </tr>
+                    <tr id="column_purchaseorderquantity">
+                    <td class="rt_cname">purchaseorderquantity</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                </tr>
+                    <tr id="column_purchaseorderquantitydiff">
+                    <td class="rt_cname">purchaseorderquantitydiff</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                </tr>
+                    <tr id="column_receiptamount">
+                    <td class="rt_cname">receiptamount</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                </tr>
+                    <tr id="column_receiptquantity">
+                    <td class="rt_cname">receiptquantity</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                </tr>
+                    <tr id="column_receiptquantitydiff">
+                    <td class="rt_cname">receiptquantitydiff</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                </tr>
+                    <tr id="column_state">
+                    <td class="rt_cname">state</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">State/Province</td>
+                </tr>
+                    <tr id="column_taxengine">
+                    <td class="rt_cname">taxengine</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Tax Engine</td>
+                </tr>
+                    <tr id="column_taxidnum">
+                    <td class="rt_cname">taxidnum</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Tax ID</td>
+                </tr>
+                    <tr id="column_taxregistrationnumber">
+                    <td class="rt_cname">taxregistrationnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Tax Reg. Number</td>
+                </tr>
+                    <tr id="column_tranprefix">
+                    <td class="rt_cname">tranprefix</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Transaction Prefix</td>
+                </tr>
+                    <tr id="column_url">
+                    <td class="rt_cname">url</td>
+                    <td class="rt_ctype">url</td>
+                    <td class="rt_clabel">Web Site</td>
+                </tr>
+                    <tr id="column_validuntil">
+                    <td class="rt_cname">validuntil</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Valid Until</td>
+                </tr>
+                    <tr id="column_zip">
+                    <td class="rt_cname">zip</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Zip</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

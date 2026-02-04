@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__projecttaskassignment','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__projecttaskassignment','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Project Task Assignment</H1>
+    <H3>Internal ID: projecttaskassignment</H3>
+        <H3>Search Join only</H3>
+        <H3>Supports Deleted Record Search</H3>
+
+
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_actualwork">
+                    <td class="rt_iname">actualwork</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Actual Work</td>
+                </tr>
+                    <tr id="filter_billingclass">
+                    <td class="rt_iname">billingclass</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Class</td>
+                </tr>
+                    <tr id="filter_cost">
+                    <td class="rt_iname">cost</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Cost</td>
+                </tr>
+                    <tr id="filter_costbase">
+                    <td class="rt_iname">costbase</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Cost (Base Currency)</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">End Date</td>
+                </tr>
+                    <tr id="filter_estimatedwork">
+                    <td class="rt_iname">estimatedwork</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Estimated Work</td>
+                </tr>
+                    <tr id="filter_estimatedworkbaseline">
+                    <td class="rt_iname">estimatedworkbaseline</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Estimated Work Baseline</td>
+                </tr>
+                    <tr id="filter_grossprofit">
+                    <td class="rt_iname">grossprofit</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Gross Profit</td>
+                </tr>
+                    <tr id="filter_grossprofitbase">
+                    <td class="rt_iname">grossprofitbase</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Gross Profit (Base Currency)</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_plannedwork">
+                    <td class="rt_iname">plannedwork</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Planned Work</td>
+                </tr>
+                    <tr id="filter_plannedworkbaseline">
+                    <td class="rt_iname">plannedworkbaseline</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Planned Work Baseline</td>
+                </tr>
+                    <tr id="filter_price">
+                    <td class="rt_iname">price</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Revenue</td>
+                </tr>
+                    <tr id="filter_pricebase">
+                    <td class="rt_iname">pricebase</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Estimated Revenue (Base Currency)</td>
+                </tr>
+                    <tr id="filter_resource">
+                    <td class="rt_iname">resource</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Resource</td>
+                </tr>
+                    <tr id="filter_resourcename">
+                    <td class="rt_iname">resourcename</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Resource Name</td>
+                </tr>
+                    <tr id="filter_serviceitem">
+                    <td class="rt_iname">serviceitem</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Service Item</td>
+                </tr>
+                    <tr id="filter_serviceitemdesc">
+                    <td class="rt_iname">serviceitemdesc</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Description</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_unitcost">
+                    <td class="rt_iname">unitcost</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unit Cost</td>
+                </tr>
+                    <tr id="filter_unitcostbase">
+                    <td class="rt_iname">unitcostbase</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unit Cost (Base Currency)</td>
+                </tr>
+                    <tr id="filter_unitprice">
+                    <td class="rt_iname">unitprice</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unit Price</td>
+                </tr>
+                    <tr id="filter_unitpricebase">
+                    <td class="rt_iname">unitpricebase</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Unit Price (Base Currency)</td>
+                </tr>
+                    <tr id="filter_units">
+                    <td class="rt_iname">units</td>
+                    <td class="rt_itype">percent</td>
+                    <td class="rt_ilabel">Units (%)</td>
+                </tr>
+                    <tr id="filter_workcalendar">
+                    <td class="rt_iname">workcalendar</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Work Calendar</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_actualwork">
+                    <td class="rt_cname">actualwork</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Actual Work</td>
+                </tr>
+                    <tr id="column_billingclass">
+                    <td class="rt_cname">billingclass</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Class</td>
+                </tr>
+                    <tr id="column_cost">
+                    <td class="rt_cname">cost</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Cost</td>
+                </tr>
+                    <tr id="column_costbase">
+                    <td class="rt_cname">costbase</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Cost (Base Currency)</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">End Date</td>
+                </tr>
+                    <tr id="column_estimatedwork">
+                    <td class="rt_cname">estimatedwork</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Estimated Work</td>
+                </tr>
+                    <tr id="column_estimatedworkbaseline">
+                    <td class="rt_cname">estimatedworkbaseline</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Estimated Work Baseline</td>
+                </tr>
+                    <tr id="column_grossprofit">
+                    <td class="rt_cname">grossprofit</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Gross Profit</td>
+                </tr>
+                    <tr id="column_grossprofitbase">
+                    <td class="rt_cname">grossprofitbase</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Gross Profit (Base Currency)</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_plannedwork">
+                    <td class="rt_cname">plannedwork</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Planned Work</td>
+                </tr>
+                    <tr id="column_plannedworkbaseline">
+                    <td class="rt_cname">plannedworkbaseline</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Planned Work Baseline</td>
+                </tr>
+                    <tr id="column_price">
+                    <td class="rt_cname">price</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Revenue</td>
+                </tr>
+                    <tr id="column_pricebase">
+                    <td class="rt_cname">pricebase</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Estimated Revenue (Base Currency)</td>
+                </tr>
+                    <tr id="column_resource">
+                    <td class="rt_cname">resource</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Resource</td>
+                </tr>
+                    <tr id="column_resourcename">
+                    <td class="rt_cname">resourcename</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Resource Name</td>
+                </tr>
+                    <tr id="column_serviceitem">
+                    <td class="rt_cname">serviceitem</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Service Item</td>
+                </tr>
+                    <tr id="column_serviceitemdesc">
+                    <td class="rt_cname">serviceitemdesc</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Description</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_unitcost">
+                    <td class="rt_cname">unitcost</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unit Cost</td>
+                </tr>
+                    <tr id="column_unitcostbase">
+                    <td class="rt_cname">unitcostbase</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unit Cost (Base Currency)</td>
+                </tr>
+                    <tr id="column_unitprice">
+                    <td class="rt_cname">unitprice</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unit Price</td>
+                </tr>
+                    <tr id="column_unitpricebase">
+                    <td class="rt_cname">unitpricebase</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Unit Price (Base Currency)</td>
+                </tr>
+                    <tr id="column_units">
+                    <td class="rt_cname">units</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Units (%)</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

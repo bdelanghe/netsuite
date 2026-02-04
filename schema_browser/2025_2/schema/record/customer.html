@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__customer','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__customer','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Customer</H1>
+
+
+    Namespace: <a href="../../schema/record/customer.html?mode=package">urn:relationships.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessRole</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Role</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Users/Roles &gt; Manage Roles. This value sets the role assigned to this customer. To retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accountNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you assign accounts to your customers, enter an account number for this customer here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">addressbookList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customeraddressbooklist.html?mode=package">CustomerAddressbookList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">aging</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Current</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue A/R balance is shown here with the balance totals for each aging period.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">aging1</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">1-30 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue A/R balance is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">aging2</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">31-60 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue A/R balance is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">aging3</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">61-90 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue A/R balance is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">aging4</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Over 90 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue A/R balance is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">alcoholRecipientType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/alcoholrecipienttype.html?mode=package">AlcoholRecipientType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alcohol Recipient Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">FedEx requires that all packages containing alcohol are declared with the intended recipient type on the shipping note. This preference sets the default type for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altEmail</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an alternative email address for this person.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the name of this person or company.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altPhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If applicable, enter an alternate phone number for this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assignedWebSite</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assigned Web Site</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use this list to select the web site where you want to assign access to a customer account. The customer will be restricted to using the customer account associated with the web site you select here. 
+If you leave this field blank, then the customer has access to all your web sites. If you use OneWorld, customers have access to all web sites under the same subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">balance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Balance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Customer's current accounts receivable balance. This field is returned in an advanced search only. It is not returned when using the CustomerSearchBasic search object. Note that in your advanced search you must set the BodyFieldsOnly flag to false. This field is a read-only field.
+NetSuite converts the balance of all transactions in foreign currencies to your preferred currency using the exchange rate for the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPay</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">In order to send this customer payments online, check this box.
+
+You must follow the setup procedure in the help topic &quot;Setting Up Payees&quot; before you can use this feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">buyingReason</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Buying Reason</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the prospect or customer's reason for buying from your company. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">buyingTimeFrame</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Buying Time Frame</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the time frame for the prospect or customer to purchase. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">campaignCategory</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Campaign Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Marketing &gt; Campaign Categories. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">category</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Customer category defines a list of values that are used by the customer record to set the type of customer.
+
+To add options to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New and click Customer Category.
+
+For example, you might create categories of wholesale and retail.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">clickStream</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Click-Stream (1st Visit)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Read-only field that returns the click stream for this customer on first visit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">comments</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter any other information you wish to track for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">companyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Company Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the legal name of the customer.
+
+If you use Auto-Generated Numbering, it is important that you enter the customer's name here, as the Customer Name field fills with the number or code for this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolAging</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated Current</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue consolidated A/R balance is shown here with the balance totals for each aging period. These totals include the balance from all the customers and subcustomers in this hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolAging1</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">1-30 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue consolidated A/R balance is shown here with the balance totals for each aging period. These totals include the balance from all the customers and subcustomers in this hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolAging2</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">31-60 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue consolidated A/R balance is shown here with the balance totals for each aging period. These totals include the balance from all the customers and subcustomers in this hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolAging3</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">61-90 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue consolidated A/R balance is shown here with the balance totals for each aging period. These totals include the balance from all the customers and subcustomers in this hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolAging4</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Over 90 Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The overdue consolidated A/R balance is shown here with the balance totals for each aging period. These totals include the balance from all the customers and subcustomers in this hierarchy.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The current accounts receivable balance due for the customer-subcustomer hierarchy this customer is a part of is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolDaysOverdue</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the number of days overdue the consolidated overdue balance is.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolDepositBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the total amount of unapplied deposits for the customer-subcustomer hierarchy this customer is a member of.
+
+Deposits are recorded in the general ledger, as a liability, when the customer makes an advance payment before delivery of goods or services. A deposit balance exists until the goods or services are delivered. Deposits do not affect the customer's accounts receivable balance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolOverdueBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the consolidated total owed for open transactions for this customer-subcustomer hierarchy that are past their due date based on the invoice terms.
+
+Note: For open transactions that do not have a due date, the transaction date is used as the due date to calculate this total.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consolUnbilledOrders</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Consolidated</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the total amount of orders that have been entered but not yet billed for the customer-subcustomer hierarchy this customer is a part of.
+ 
+If you have enabled the preference Customer Credit Limit Includes Orders, then this total is included in credit limit calculations.
+ 
+Set this preference at Setup &gt; Accounting &gt; Preferences &gt; Accounting Preferences &gt; General.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contactRolesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/contactaccessroleslist.html?mode=package">ContactAccessRolesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contribPct</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contribution Percentage</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditCardsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customercreditcardslist.html?mode=package">CustomerCreditCardsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditHoldOverride</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customercreditholdoverride.html?mode=package">CustomerCreditHoldOverride</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Credit Hold</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field. Possible values include _auto, _on, and _off.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">creditLimit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Credit Limit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A credit limit for this customer. If set, and depending on preferences, a warning is generated when this customer's limit is exceeded during a transaction addition.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the currency this customer conducts business in. This customer's currency cannot be changed after transactions for this customer have been saved. All transactions involving this customer are conducted in this currency. Transaction figures are converted to your base currency in registers and on reports.
+
+If you use the Multi-Currency Customers feature, select the customer's primary currency in this field. The primary currency is the default currency on transactions and is used to display balance information for this customer. You can enter other transaction currencies on the Currencies subtab under the Financial subtab.
+
+Subcustomers are assigned the same currency as the parent customer.
+
+You can change the currency (or primary) currency at any time as long as the customer is not also have a vendor, partner, or other name record. Also, if you change the currency, you must re-enter the customer credit limit in the new currency.
+
+An administrator can create new currency records at Lists &gt; Accounting &gt; Currencies.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customercurrencylist.html?mode=package">CustomerCurrencyList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currencies</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dateCreated</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When adding a record, this field defaults to the current system date and time. This field cannot be overwritten. Note: In search, this field respects search criteria down to the second.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">daysOverdue</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The number of days overdue this balance is overdue is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAddress</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field automatically shows the default billing address that you enter and add using the Address subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAllocationStrategy</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Allocation Strategy</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field indicates the default allocation strategy that this entity uses.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultOrderPriority</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Order Priority</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a number to designate the priority for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultTaxReg</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the default tax registration number for this entity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">depositBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deposit Balance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is returned in an advanced search only. It is not returned when using the CustomerSearchBasic search object. Note that in your advanced search you must set the BodyFieldsOnly flag to false. This field is a read-only field</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displaySymbol</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency Symbol</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a currency symbol and text to use for this currency.  Include spaces if you want to separate the symbol from the currency value.
+
+For example, $ USD or $CAD.
+
+Use the Symbol Placement field to select where the symbol appears.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">downloadList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customerdownloadlist.html?mode=package">CustomerDownloadList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">drAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferred Revenue Reclassification Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the deferred revenue account to use by default to post revenue reclassification amounts generated by revenue reclassification journal entries for this customer. 
+
+You can override this account on a sales order for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"> Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter your customer's email address.
+
+If you allow your customers to access their accounts online, this becomes part of their access codes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emailPreference</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/emailpreference.html?mode=package">EmailPreference</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email Preference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can see your default email setting at Home &gt; Set Preferences.
+
+You can choose a different method to send forms here.
+
+If you select HTML, be sure this customer has an email program that allows HTML viewing.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emailTransactions</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email Transactions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set a preferred transaction delivery method for this customer.
+ 
+Choose to send transactions by regular mail, by email, by fax, or by a combination of the three. Then, when you select the customer on a transaction, their preferred delivery method is marked by default.
+
+    * Email – Check this box to check the To Be Emailed box by default on transactions when this customer is selected.
+    * Print – Check this box to check the To Be Printed box by default on transactions when this customer is selected.
+    * Fax – Check this box to check the To Be Faxed box by default on transactions when this customer is selected.
+
+Once you enter these settings on the customer record, these boxes are checked by default for transactions created from the customer record or for transactions that are copied or converted.
+
+Note: These settings override any customized settings on transaction forms you use.
+
+There are also preferences to set default values for new customer records at Setup &gt; Company &gt; Preferences &gt; Printing, Fax,&amp; Email Preferences. On the Print subtab, Fax subtab, or Email subtab, check Customers Default to [Print/Fax/Email] Transactions.
+
+You can also set these fields using the Mass Update function. Go to Lists &gt; Mass Updates &gt; Mass Updates &gt; General and click Customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you have a contract with this customer, enter the end date here.
+
+If you are entering a job record, enter the projected end date of the job here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Entity ID</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the name of this customer, prospect or lead the way it should appear in all lists and on the Pay to the Order of line of checks.
+
+If you use Auto-Generated Numbering, the customer number or code fills here. Enter the customer name in the Company Name field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the status of this customer or potential customer.
+A lead status creates a lead record. A prospect status creates a prospect record. A customer status creates a customer record.
+If this is a job record, select the status of this job's progress: Awarded, Not Awarded, Closed, In Progress or Pending.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedBudget</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Budget</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the estimated budget the prospect or customer has for this opportunity.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the fax number for the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">faxTransactions</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax Transactions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set a preferred transaction delivery method for this customer.
+ 
+Choose to send transactions by regular mail, by email, by fax, or by a combination of the three. Then, when you select the customer on a transaction, their preferred delivery method is marked by default.
+
+    * Email – Check this box to check the To Be Emailed box by default on transactions when this customer is selected.
+    * Print – Check this box to check the To Be Printed box by default on transactions when this customer is selected.
+    * Fax – Check this box to check the To Be Faxed box by default on transactions when this customer is selected.
+
+Once you enter these settings on the customer record, these boxes are checked by default for transactions created from the customer record or for transactions that are copied or converted.
+
+Note: These settings override any customized settings on transaction forms you use.
+
+There are also preferences to set default values for new customer records at Setup &gt; Company &gt; Preferences &gt; Printing, Fax,&amp; Email Preferences. On the Print subtab, Fax subtab, or Email subtab, check Customers Default to [Print/Fax/Email] Transactions.
+
+You can also set these fields using the Mass Update function. Go to Lists &gt; Mass Updates &gt; Mass Updates &gt; General and click Customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">firstName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">First Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter this customer's name.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">firstVisit</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">First Visit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is the date this customer first viewed your Web site.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fxAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Foreign Currency Adjustment Revenue Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the revenue account to use by default to post foreign currency adjustments that result when exchange rates are different for billing and revenue postings for this customer. You must select an income account.
+
+You can override this account on a sales order for this customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">giveAccess</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Login Access</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enables access to your NetSuite account for the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">globalSubscriptionStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/globalsubscriptionstatus.html?mode=package">GlobalSubscriptionStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Global Subscription Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Email recipients can have one of four subscription statuses:
+
+    * Confirmed Opt-In - When an email recipient has indicated that they want to receive your campaign and bulk merge email, they are assigned this subscription status. Only a recipient can set his or her subscription status to Confirmed Opt-In.
+    * Soft Opt-In - Recipients with this status can receive opt-in messages that enable them to confirm whether or not they want to receive your email campaigns as well as bulk email.
+      You can set a recipient’s status to Soft Opt-In manually or through a mass update.
+    * Soft Opt-Out - Recipients with this status cannot receive campaign or bulk email messages but can receive opt-in messages.
+      You can change this subscription status to Soft Opt-In manually or through a mass update.
+    * Confirmed Opt-Out - Only the recipient can set their subscription status to Confirmed Opt-Out.
+      Recipients with this status cannot receive email campaigns, bulk email, or opt-in messages. Recipients with this status can only opt in again through the Customer Center or by clicking the link in an email message they have received prior to opting out.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">groupPricingList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customergrouppricinglist.html?mode=package">CustomerGroupPricingList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">homePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Home Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a home phone number for this person.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">image</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Image</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an image from your file cabinet to attach to this record.
+
+Select -New- to upload a new image from your hard drive to your file cabinet in a new window.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isBudgetApproved</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Budget Approved</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the customer's budget has been approved.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is false by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isPerson</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Is Individual</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the type of customer record you are creating by selecting Company or Individual in the Type field.
+
+This selection determines which fields and subtabs are used on this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemPricingList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customeritempricinglist.html?mode=package">CustomerItemPricingList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">keywords</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Search Engine Keywords (1st Visit)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this customer was referred to your Web site by a search engine on the first visit, this field lists the keywords the customer used with the search engine.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">language</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/language.html?mode=package">Language</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Language</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in the Language system list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Returns the date on which the customer record was last modified.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Required when the isPerson field is set as TRUE designating this customer as an Individual.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastPageVisited</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Page Visited</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the last page this customer viewed on his or her most recent visit to your Web site.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastVisit</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Visit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Read-only field that returns the date the customer first visited the account website.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">leadSource</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lead Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If the Marketing Automation feature is not enabled, references a value in a user-defined list created by going to Setup &gt; Sales &gt; CRM Lists. Sets how this customer was referred to the organization. For details on how to modify this list via Web services, see LeadSource in the Records Guide. (Note: If the Marketing Automation feature is enabled, the lead source list originates from your list of campaigns.) In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">middleName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Middle Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Returns the customer's middle name or initial, if one is entered on the customer record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mobilePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mobile Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Only settable when isPerson is set to TRUE defining this customer as an individual.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">monthlyClosing</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customermonthlyclosing.html?mode=package">CustomerMonthlyClosing</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Closing Date</td>
+                    <td class="rst_freq">T</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">negativeNumberFormat</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customernegativenumberformat.html?mode=package">CustomerNegativeNumberFormat</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Negative Number Format</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the customer’s negative number format preference, if any. The format controls whether the negative number is preceded by the minus sign (-) or is enclosed in parentheses ( ).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberFormat</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customernumberformat.html?mode=package">CustomerNumberFormat</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Number Format</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the customer’s positive number format preference, if any. The format controls the thousands separator and decimals display.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the opening balance of this customer's account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalanceAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the account this opening balance is applied to.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalanceDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date of the balance entered in the Opening Balance field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overdueBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Overdue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is returned in an advanced search only. It is not returned when using the CustomerSearchBasic search object. Note that in your advanced search you must set the BodyFieldsOnly flag to false. This field is a read-only field.
+NetSuite converts the overdue balance of all transactions in foreign currencies to your preferred currency using the exchange rate for the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overrideCurrencyFormat</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Override Currency Format</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to customize the currency format.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parent</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this customer is subcustomer of another customer or a smaller entity of another customer, select the larger parent customer.
+
+If you select a parent customer in this field, this record shows indented under the parent customer in the Customers list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Partner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a partner record. This value sets the partner responsible for referring this customer. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customerpartnerslist.html?mode=package">CustomerPartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">password</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Password</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the password assigned to allow this customer access to NetSuite.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">password2</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Confirm Password</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the password confirmation field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a phone number for your customer. It will appear on the Customer List report.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phoneticName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Furigana</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the furigana character you want to use to sort this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">prefCCProcessor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Preferred Payment Processing Profile</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a record at Setup &gt; Company &gt; Credit Card Processors. Sets the credit card processor used to process orders. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">priceLevel</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Price Level</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; Price Level. This value sets the price level for selling to this customer. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">printOnCheckAs</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Print on Check As</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">What you enter here prints on the Pay to the Order of line of a check instead of what you entered in the Customer field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">printTransactions</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Print Transactions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set a preferred transaction delivery method for this customer.
+ 
+Choose to send transactions by regular mail, by email, by fax, or by a combination of the three. Then, when you select the customer on a transaction, their preferred delivery method is marked by default.
+
+    * Email – Check this box to check the To Be Emailed box by default on transactions when this customer is selected.
+    * Print – Check this box to check the To Be Printed box by default on transactions when this customer is selected.
+    * Fax – Check this box to check the To Be Faxed box by default on transactions when this customer is selected.
+
+Once you enter these settings on the customer record, these boxes are checked by default for transactions created from the customer record or for transactions that are copied or converted.
+
+Note: These settings override any customized settings on transaction forms you use.
+
+There are also preferences to set default values for new customer records at Setup &gt; Company &gt; Preferences &gt; Printing, Fax,&amp; Email Preferences. On the Print subtab, Fax subtab, or Email subtab, check Customers Default to [Print/Fax/Email] Transactions.
+
+You can also set these fields using the Mass Update function. Go to Lists &gt; Mass Updates &gt; Mass Updates &gt; General and click Customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receivablesAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Receivables Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the A/R account to use by default on receivable transactions for this customer.
+
+If you select Use System Preference, the account selected at Setup &gt; Accounting &gt; Preferences &gt; Accounting Preferences &gt; Items/Transactions in the Default Receivables Account field is used as this customer's default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">referrer</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Referrer (1st Visit)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Read-only field that returns the site that referred the customer to the NetSuite account website.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">reminderDays</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reminder Days</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the number of days before the end date that a reminder should be sent for renewing a customer's contract or project.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">representingSubsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Represents Subsidiary</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Indicates that this entity is an intercompany customer. Select the subsidiary this customer represents as a buyer in intercompany transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">requirePwdChange</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Require Password Change On Next Login</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">resaleNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Resale Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Customer's tax license number for cases where you do not collect sales tax from this customer because the merchandise will be resold.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Choose Team</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When team selling is enabled, this references a user defined sales team group at Lists &gt; Relationships &gt; Groups. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesReadiness</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Readiness</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose how close the prospect or customer is to purchasing. You can create additional options for this field at Setup &gt; Sales &gt; CRM Lists.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesRep</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an employee record. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTeamList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customersalesteamlist.html?mode=package">CustomerSalesTeamList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salutation</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mr./Ms...</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the title of this person, such as Mr., Mrs., Ms., Dr., Rev., etc.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendEmail</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Send New Access Notification Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If true, the customer is automatically sent an email notification when access to NetSuite is provided.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipComplete</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Complete</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you only want to ship orders to this customer when they are completely fulfilled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Lists &gt; Accounting &gt; Shipping Items. This value sets the default shipping method for this customer. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceWebSite</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Source Web Site</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is read-only. It shows the web site where the customer registered for a customer account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">stage</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customerstage.html?mode=package">CustomerStage</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date this person or company became a customer, lead or prospect.
+
+If this person or company has a contract with you, enter the start date of the contract.
+
+If you enter an estimate or an opportunity for this customer, this field will be updated with the date of that transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subscriptionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/subscriptionslist.html?mode=package">SubscriptionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the subsidiary to associate with this entity or job. You cannot enter transactions for this entity or job unless a subsidiary is assigned.
+ 
+If you select this entity on a transaction, the transaction is associated with this subsidiary. The entity is able to access only information associated with this subsidiary.
+ 
+Note: Once a transaction has posted for the entity or job, you are not able to change the subsidiary selected on the entity or job record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">symbolPlacement</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/currencysymbolplacement.html?mode=package">CurrencySymbolPlacement</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Symbol Placement</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether the symbol appears before or after the number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncPartnerTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update this customer's transactions to reflect the changes you make to the partner team.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">True indicates that this customer pays sales tax according to the rate defined in the tax Item field. False indicates that this customer does not pay sales tax, but only if Tax Item field is empty.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxExempt</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST Exempt</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Taxes &gt; Tax Codes. This value provides the standard tax rate associated with this customer. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegistrationList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customertaxregistrationlist.html?mode=package">CustomerTaxRegistrationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; Term. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">territory</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Territory</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Sales &gt; Sales Management &gt; Sales Territories. This value sets the sales territory this customer belongs in. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyAcct</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Account Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter this customer’s FedEx® or UPS® account number in the 3rd Party Billing Account Number field.
+
+This account number is used if you select Consignee Billing on item fulfillments using UPS or select Bill Recipient on item fulfillments using FedEx.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyCarrier</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/customerthirdpartycarrier.html?mode=package">CustomerThirdPartyCarrier</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Carrier</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the shipping carrier associated with the 3rd party billing account number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyCountry</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the country associated with the customer’s UPS or FedEx account number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyZipcode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Zip</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the zip code associated with the customer’s UPS or FedEx account number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the job title for this person's position at his or her company.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">unbilledOrders</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Unbilled Orders</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the total amount of orders that have been entered but not yet billed.
+
+If you have enabled the preference Customer Credit Limit Includes Orders, then this total is included in credit limit calculations.
+
+Set this preference at  Setup &gt; Accounting &gt; Preferences &gt; Accounting Preferences &gt; General.
+
+If you use the Multiple Currencies feature, the amount in this field is shown in the customer's currency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">url</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">URL</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the URL associated with the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vatRegNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">VAT Registration No.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For the UK edition only. Note that this field is not validated when submitted via Web services.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">visits</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Number of Visits</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the total number of visits this customer has made to your Web site.
+
+A new visit is counted after the customer leaves your site and returns.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">webLead</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Web Lead</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only hidden field that defines whether a customer registered via a NetSuite website. It returns a string of either Yes or No.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customersearch.html?mode=package">CustomerSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customersearchadvanced.html?mode=package">CustomerSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customersearchbasic.html?mode=package">CustomerSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customersearchrow.html?mode=package">CustomerSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/customersearchrowbasic.html?mode=package">CustomerSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

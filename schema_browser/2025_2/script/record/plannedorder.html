@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__plannedorder','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__plannedorder','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Planned Order</H1>
+    <H3>Internal ID: plannedorder</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">End Date</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">External ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_firmed">
+                <td class="rt_fname">firmed</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Firmed</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_item">
+                <td class="rt_fname">item</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Item</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_itemlocation">
+                <td class="rt_fname">itemlocation</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Item Location</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_itemtype">
+                <td class="rt_fname">itemtype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Item Type</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_plannedorderstatus">
+                <td class="rt_fname">plannedorderstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_quantity">
+                <td class="rt_fname">quantity</td>
+                <td class="rt_ftype">bigdecimal</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Quantity</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_released">
+                <td class="rt_fname">released</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Released</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_sourceitemlocation">
+                <td class="rt_fname">sourceitemlocation</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Source Location Item</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_sourcelocation">
+                <td class="rt_fname">sourcelocation</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Source Location</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_supplyplandefinition">
+                <td class="rt_fname">supplyplandefinition</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Supply Plan Definition</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_supplyplanningrunid">
+                <td class="rt_fname">supplyplanningrunid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_templatestored">
+                <td class="rt_fname">templatestored</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_transactioncreated">
+                <td class="rt_fname">transactioncreated</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Transaction Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_transactionlinecreated">
+                <td class="rt_fname">transactionlinecreated</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Transaction Line Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_transactiontype">
+                <td class="rt_fname">transactiontype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Transaction Type</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_datemodified">
+                    <td class="rt_iname">datemodified</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Modified</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">End Date</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isfirmed">
+                    <td class="rt_iname">isfirmed</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Firmed</td>
+                </tr>
+                    <tr id="filter_isreleased">
+                    <td class="rt_iname">isreleased</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Released</td>
+                </tr>
+                    <tr id="filter_item">
+                    <td class="rt_iname">item</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item</td>
+                </tr>
+                    <tr id="filter_location">
+                    <td class="rt_iname">location</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Location</td>
+                </tr>
+                    <tr id="filter_memo">
+                    <td class="rt_iname">memo</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Memo</td>
+                </tr>
+                    <tr id="filter_plannedorderstatus">
+                    <td class="rt_iname">plannedorderstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_quantity">
+                    <td class="rt_iname">quantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Quantity</td>
+                </tr>
+                    <tr id="filter_sourcelocation">
+                    <td class="rt_iname">sourcelocation</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Source Location</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_supplyplandefinition">
+                    <td class="rt_iname">supplyplandefinition</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Supply Plan Definition</td>
+                </tr>
+                    <tr id="filter_supplyplanningrun">
+                    <td class="rt_iname">supplyplanningrun</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Supply Planning Run</td>
+                </tr>
+                    <tr id="filter_transactioncreated">
+                    <td class="rt_iname">transactioncreated</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Transaction Created</td>
+                </tr>
+                    <tr id="filter_trantype">
+                    <td class="rt_iname">trantype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Transaction Type</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_datemodified">
+                    <td class="rt_cname">datemodified</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Modified</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">End Date</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isfirmed">
+                    <td class="rt_cname">isfirmed</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Firmed</td>
+                </tr>
+                    <tr id="column_isreleased">
+                    <td class="rt_cname">isreleased</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Released</td>
+                </tr>
+                    <tr id="column_item">
+                    <td class="rt_cname">item</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Item</td>
+                </tr>
+                    <tr id="column_location">
+                    <td class="rt_cname">location</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Location</td>
+                </tr>
+                    <tr id="column_memo">
+                    <td class="rt_cname">memo</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Memo</td>
+                </tr>
+                    <tr id="column_plannedorderstatus">
+                    <td class="rt_cname">plannedorderstatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_quantity">
+                    <td class="rt_cname">quantity</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Quantity</td>
+                </tr>
+                    <tr id="column_sourcelocation">
+                    <td class="rt_cname">sourcelocation</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Source Location</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_supplyplandefinition">
+                    <td class="rt_cname">supplyplandefinition</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Supply Plan Definition</td>
+                </tr>
+                    <tr id="column_supplyplanningrun">
+                    <td class="rt_cname">supplyplanningrun</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Supply Planning Run</td>
+                </tr>
+                    <tr id="column_transactioncreated">
+                    <td class="rt_cname">transactioncreated</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Transaction Created</td>
+                </tr>
+                    <tr id="column_trantype">
+                    <td class="rt_cname">trantype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Transaction Type</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

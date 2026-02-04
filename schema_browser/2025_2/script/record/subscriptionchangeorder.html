@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__subscriptionchangeorder','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__subscriptionchangeorder','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Subscription Change Order</H1>
+    <H3>Internal ID: subscriptionchangeorder</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_approvaldate">
+                <td class="rt_fname">approvaldate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Approved</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_approvalstatus">
+                <td class="rt_fname">approvalstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Approval Status</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_billingaccount">
+                <td class="rt_fname">billingaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Account</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The billing account shows all billing information for a customer or subcustomer. A billing account contains billing-specific information, including billing schedule, default payment terms, bill-to address, and currency. A customer can have multiple billing accounts, including a default billing account.</td>
+            </tr>
+                <tr id="field_createdby">
+                <td class="rt_fname">createdby</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Created By</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customer">
+                <td class="rt_fname">customer</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the name of an existing customer, or select New to create a new customer.</td>
+            </tr>
+                <tr id="field_datecreated">
+                <td class="rt_fname">datecreated</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_effectivedate">
+                <td class="rt_fname">effectivedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Effective Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The date on which the change order takes effect.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_idnumber">
+                <td class="rt_fname">idnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The automatically generated number identifying this subscription.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use this fields to enter notes.</td>
+            </tr>
+                <tr id="field_reactivationoption">
+                <td class="rt_fname">reactivationoption</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reactivation Option</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalenddate">
+                <td class="rt_fname">renewalenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal End Date</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalmethod">
+                <td class="rt_fname">renewalmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Method</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalplan">
+                <td class="rt_fname">renewalplan</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Subscription Plan</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalpricebook">
+                <td class="rt_fname">renewalpricebook</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Price Book</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalstartdate">
+                <td class="rt_fname">renewalstartdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Start Date</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewalterm">
+                <td class="rt_fname">renewalterm</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Term</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_renewaltrantype">
+                <td class="rt_fname">renewaltrantype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Renewal Transaction Type</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_requestoffcycleinvoice">
+                <td class="rt_fname">requestoffcycleinvoice</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Request Off-Cycle Invoice For Advance Charges</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select to set the default for off-cycle invoices, which is inherited from other records. An off-cycle invoice bills for subscriptions with a partial period. For example, sending a bill before the recurring scheduled bills.</td>
+            </tr>
+                <tr id="field_requestor">
+                <td class="rt_fname">requestor</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Requester</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of the person entering the change order.</td>
+            </tr>
+                <tr id="field_subscription">
+                <td class="rt_fname">subscription</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The name of this subscription.</td>
+            </tr>
+                <tr id="field_subscriptionplan">
+                <td class="rt_fname">subscriptionplan</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription Plan</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the name of the subscription plan associated with this subscription. To create a new subscription plan, click the plus sign.</td>
+            </tr>
+                <tr id="field_subscriptiontermduration">
+                <td class="rt_fname">subscriptiontermduration</td>
+                <td class="rt_ftype">posinteger</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subscriptiontermtype">
+                <td class="rt_fname">subscriptiontermtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_newsubline_">newsubline - New Lines</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_newsubline_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_newsubline_subscriptionline">
+                        <td class="rt_sname">subscriptionline</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_renewalsteps_">renewalsteps - Renewal Steps</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_renewalsteps_subscription">
+                        <td class="rt_sname">subscription</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_renewalsteps_transaction">
+                        <td class="rt_sname">transaction</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_subline_">subline - Items</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_subline_apply">
+                        <td class="rt_sname">apply</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Include</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_billingmode">
+                        <td class="rt_sname">billingmode</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">ratehighprecision</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_discountnew">
+                        <td class="rt_sname">discountnew</td>
+                        <td class="rt_stype">ratehighprecision</td>
+                        <td class="rt_slabel">New Discount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_enddate">
+                        <td class="rt_sname">enddate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_includeinrenewal">
+                        <td class="rt_sname">includeinrenewal</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_priceplannew">
+                        <td class="rt_sname">priceplannew</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">New Price Plan</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_quantity">
+                        <td class="rt_sname">quantity</td>
+                        <td class="rt_stype">nonnegfloat</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_quantitynew">
+                        <td class="rt_sname">quantitynew</td>
+                        <td class="rt_stype">nonnegfloat</td>
+                        <td class="rt_slabel">New Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_recurringamount">
+                        <td class="rt_sname">recurringamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Recurring Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_recurringamountnew">
+                        <td class="rt_sname">recurringamountnew</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">New Recurring Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_sequence">
+                        <td class="rt_sname">sequence</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Line Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_status">
+                        <td class="rt_sname">status</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_statusnew">
+                        <td class="rt_sname">statusnew</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">New Status</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_subscriptionline">
+                        <td class="rt_sname">subscriptionline</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subline_terminationdate">
+                        <td class="rt_sname">terminationdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_action">
+                    <td class="rt_iname">action</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Action</td>
+                </tr>
+                    <tr id="filter_approvaldate">
+                    <td class="rt_iname">approvaldate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Approved</td>
+                </tr>
+                    <tr id="filter_approvalstatus">
+                    <td class="rt_iname">approvalstatus</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Approval Status</td>
+                </tr>
+                    <tr id="filter_billingaccount">
+                    <td class="rt_iname">billingaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Account</td>
+                </tr>
+                    <tr id="filter_customer">
+                    <td class="rt_iname">customer</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_effectivedate">
+                    <td class="rt_iname">effectivedate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Effective Date</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_idnumber">
+                    <td class="rt_iname">idnumber</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Number</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_memo">
+                    <td class="rt_iname">memo</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Memo</td>
+                </tr>
+                    <tr id="filter_newenddate">
+                    <td class="rt_iname">newenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">New End Date</td>
+                </tr>
+                    <tr id="filter_orderedeffectivedate">
+                    <td class="rt_iname">orderedeffectivedate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Ordered Effective Date</td>
+                </tr>
+                    <tr id="filter_renewalenddate">
+                    <td class="rt_iname">renewalenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Renewal End Date</td>
+                </tr>
+                    <tr id="filter_renewalmethod">
+                    <td class="rt_iname">renewalmethod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Renewal Method</td>
+                </tr>
+                    <tr id="filter_renewalstartdate">
+                    <td class="rt_iname">renewalstartdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Renewal Start Date</td>
+                </tr>
+                    <tr id="filter_renewalterm">
+                    <td class="rt_iname">renewalterm</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Renewal Term</td>
+                </tr>
+                    <tr id="filter_renewaltrantype">
+                    <td class="rt_iname">renewaltrantype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Renewal Transaction Type</td>
+                </tr>
+                    <tr id="filter_requestoffcycleinvoice">
+                    <td class="rt_iname">requestoffcycleinvoice</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Request Off-Cycle Invoice for Advance Charges</td>
+                </tr>
+                    <tr id="filter_requestor">
+                    <td class="rt_iname">requestor</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Requestor</td>
+                </tr>
+                    <tr id="filter_subscription">
+                    <td class="rt_iname">subscription</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subscription</td>
+                </tr>
+                    <tr id="filter_subscriptionplan">
+                    <td class="rt_iname">subscriptionplan</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subscription Plan</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_action">
+                    <td class="rt_cname">action</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Action</td>
+                </tr>
+                    <tr id="column_approvaldate">
+                    <td class="rt_cname">approvaldate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Approved</td>
+                </tr>
+                    <tr id="column_approvalstatus">
+                    <td class="rt_cname">approvalstatus</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Approval Status</td>
+                </tr>
+                    <tr id="column_billingaccount">
+                    <td class="rt_cname">billingaccount</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Account</td>
+                </tr>
+                    <tr id="column_customer">
+                    <td class="rt_cname">customer</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Customer</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_effectivedate">
+                    <td class="rt_cname">effectivedate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Effective Date</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_idnumber">
+                    <td class="rt_cname">idnumber</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Number</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_memo">
+                    <td class="rt_cname">memo</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Memo</td>
+                </tr>
+                    <tr id="column_newenddate">
+                    <td class="rt_cname">newenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">New End Date</td>
+                </tr>
+                    <tr id="column_renewalenddate">
+                    <td class="rt_cname">renewalenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Renewal End Date</td>
+                </tr>
+                    <tr id="column_renewalmethod">
+                    <td class="rt_cname">renewalmethod</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Renewal Method</td>
+                </tr>
+                    <tr id="column_renewalstartdate">
+                    <td class="rt_cname">renewalstartdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Renewal Start Date</td>
+                </tr>
+                    <tr id="column_renewalterm">
+                    <td class="rt_cname">renewalterm</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Renewal Term</td>
+                </tr>
+                    <tr id="column_renewaltrantype">
+                    <td class="rt_cname">renewaltrantype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Renewal Transaction Type</td>
+                </tr>
+                    <tr id="column_requestoffcycleinvoice">
+                    <td class="rt_cname">requestoffcycleinvoice</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Request Off-Cycle Invoice for Advance Charges</td>
+                </tr>
+                    <tr id="column_requestor">
+                    <td class="rt_cname">requestor</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Requestor</td>
+                </tr>
+                    <tr id="column_subscription">
+                    <td class="rt_cname">subscription</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription</td>
+                </tr>
+                    <tr id="column_subscriptionplan">
+                    <td class="rt_cname">subscriptionplan</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription Plan</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+                    <tr id="column_view">
+                    <td class="rt_cname">view</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">View</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

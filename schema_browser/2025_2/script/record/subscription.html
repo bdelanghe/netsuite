@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__subscription','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__subscription','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Subscription</H1>
+    <H3>Internal ID: subscription</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_advancerenewalperiodnumber">
+                <td class="rt_fname">advancerenewalperiodnumber</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_advancerenewalperiodunit">
+                <td class="rt_fname">advancerenewalperiodunit</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_autoname">
+                <td class="rt_fname">autoname</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Auto</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_autorenewal">
+                <td class="rt_fname">autorenewal</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Automatically Initiate Renewal Process</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to automatically renew the subscription. After checking this box, enter a date by which you want to renew the subscription before it expires. The renewal process can include negotiating pricing, subscription terms, and other subscription details.</td>
+            </tr>
+                <tr id="field_billingaccount">
+                <td class="rt_fname">billingaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Account</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The billing account shows all billing information for a customer or subcustomer. A billing account contains billing-specific information, including billing schedule, default payment terms, bill-to address, and currency. A customer can have multiple billing accounts, including a default billing account.</td>
+            </tr>
+                <tr id="field_billingaccountstartdate">
+                <td class="rt_fname">billingaccountstartdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Account Start Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The Billing Account start date.</td>
+            </tr>
+                <tr id="field_billingschedule">
+                <td class="rt_fname">billingschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Schedule</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The billing schedule associated with this billing account.</td>
+            </tr>
+                <tr id="field_billingsubscriptionstatus">
+                <td class="rt_fname">billingsubscriptionstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The status of the subscription.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is an optional field. Your organization may use this field for reporting if desired.</td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this subscription for is shown here.
+
+If you use the Multi-Currency Customers feature, select the transaction currency you want to use to create this subscription. This customer's primary currency is selected by default.</td>
+            </tr>
+                <tr id="field_customer">
+                <td class="rt_fname">customer</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the name of an existing customer, or select New to create a new customer.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_defaultrenewalmethod">
+                <td class="rt_fname">defaultrenewalmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Renewal Method</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the default renewal method. Options include:
+
+    * Extending Existing Subscription - This option keeps the original Subscription Plan, Price Book, and Transaction Type.
+    * Create New Subscription - This option lets you choose a different Default Renewal Subscription Plan, Default Renewal Price Book, and Default Renewal Transaction Type.</td>
+            </tr>
+                <tr id="field_defaultrenewalplan">
+                <td class="rt_fname">defaultrenewalplan</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Renewal Subscription Plan</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select which plan to renew. You can choose the current plan, a different plan, or create a new plan.</td>
+            </tr>
+                <tr id="field_defaultrenewalpricebook">
+                <td class="rt_fname">defaultrenewalpricebook</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Renewal Price Book</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the default price book used to create the renewal subscription.</td>
+            </tr>
+                <tr id="field_defaultrenewalterm">
+                <td class="rt_fname">defaultrenewalterm</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Renewal Term</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the default renewal term for this subscription. Select New to create a new default renewal term.</td>
+            </tr>
+                <tr id="field_defaultrenewaltrantype">
+                <td class="rt_fname">defaultrenewaltrantype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default Renewal Transaction Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the transaction type for the renewal. Options include estimate, opportunity, or sales order. You can also select an option that does not create a new transaction.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The contracted end of the subscription. For a standard-term subscription, equal to the subscription start date plus the indicated subscription term. For a custom-term subscription, the subscription-level end date also must be set at the subscription level.</td>
+            </tr>
+                <tr id="field_estimatedrevrecenddate">
+                <td class="rt_fname">estimatedrevrecenddate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Estimated Revenue Recognition End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">For recurring subscriptions with an evergreen term, chose a forecasted end date for revenue and billing. NetSuite generates revenue elements and charges until this date, and periodically updates this field based on your preferences. If this field is left blank on activation, NetSuite automatically sets it to 3 years from the activation date.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_frequency">
+                <td class="rt_fname">frequency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Frequency</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Indicates how often the customers is billed. The information for this field is sourced from the billing schedule.</td>
+            </tr>
+                <tr id="field_id">
+                <td class="rt_fname">id</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_idnumber">
+                <td class="rt_fname">idnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription ID</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The automatically generated number identifying this subscription.</td>
+            </tr>
+                <tr id="field_initialterm">
+                <td class="rt_fname">initialterm</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Initial Term</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the initial term for this subscription. Select New to create a new term.</td>
+            </tr>
+                <tr id="field_initialtermduration">
+                <td class="rt_fname">initialtermduration</td>
+                <td class="rt_ftype">posinteger</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_initialtermtype">
+                <td class="rt_fname">initialtermtype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_initialtermunits">
+                <td class="rt_fname">initialtermunits</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_internalid">
+                <td class="rt_fname">internalid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastbillcycledate">
+                <td class="rt_fname">lastbillcycledate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Bill Cycle Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The start date for the next billing cycle.</td>
+            </tr>
+                <tr id="field_lastbilldate">
+                <td class="rt_fname">lastbilldate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Bill Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The date of the last invoice.</td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter a name to identify the subscription. If you leave this field blank, NetSuite automatically generates a subscription name upon saving.</td>
+            </tr>
+                <tr id="field_nextbillcycledate">
+                <td class="rt_fname">nextbillcycledate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Next Bill Cycle Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The next bill date for this Billing Account.</td>
+            </tr>
+                <tr id="field_nextrenewalstartdate">
+                <td class="rt_fname">nextrenewalstartdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Next Renewal Start Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The start date for the next renewal of this subscription.</td>
+            </tr>
+                <tr id="field_otherrecordnumber">
+                <td class="rt_fname">otherrecordnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_pricebook">
+                <td class="rt_fname">pricebook</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Price Book</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the price book associated with this subscription plan.</td>
+            </tr>
+                <tr id="field_renewalnumber">
+                <td class="rt_fname">renewalnumber</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Number of Renewal</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_salesorder">
+                <td class="rt_fname">salesorder</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Originating Sales Order</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The ID of the sales order associated with this subscription.</td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The contracted start date for the subscription. You must specify the subscription-level start date, or it defaults to the current date. Defines the earliest possible activation date for the subscription line items. Remains editable until any subscription line item becomes active. </td>
+            </tr>
+                <tr id="field_subscriptionplan">
+                <td class="rt_fname">subscriptionplan</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription Plan</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the name of the subscription plan associated with this subscription. To create a new subscription plan, click the plus sign.</td>
+            </tr>
+                <tr id="field_subscriptionplanname">
+                <td class="rt_fname">subscriptionplanname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Subscription Plan</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subscriptionrevision">
+                <td class="rt_fname">subscriptionrevision</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription Revision</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The current revision number for the subscription. The revision number increases when you create a change order on the subscription. The first activation is revision 1. Another revision is created whenever a change order is saved. </td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Required field. Choose one of the following options:
+
+    * Required - item must be included in the subscription
+    * Optional - item is available to be included in the subscription but is not required
+    * Add-On - item is not defined in the subscription plan but can be added to the subscription at time of sale or during the term</td>
+            </tr>
+                <tr id="field_templatestored">
+                <td class="rt_fname">templatestored</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_priceinterval_">priceinterval - Price Book Lines</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_priceinterval_catalogtype">
+                        <td class="rt_sname">catalogtype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Catalog Type</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_chargetype">
+                        <td class="rt_sname">chargetype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Subscription Line Type</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">ratehighprecision</td>
+                        <td class="rt_slabel">Discount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_frequency">
+                        <td class="rt_sname">frequency</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Charge Frequency</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_id">
+                        <td class="rt_sname">id</td>
+                        <td class="rt_stype">identifier</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_includedquantity">
+                        <td class="rt_sname">includedquantity</td>
+                        <td class="rt_stype">posfloat</td>
+                        <td class="rt_slabel">Included Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Item</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_linenumber">
+                        <td class="rt_sname">linenumber</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Line Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_multiplierline">
+                        <td class="rt_sname">multiplierline</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Included Quantity Multiplier</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_priceplan">
+                        <td class="rt_sname">priceplan</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Price Plan</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_prorateby">
+                        <td class="rt_sname">prorateby</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Prorate By</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_quantity">
+                        <td class="rt_sname">quantity</td>
+                        <td class="rt_stype">posfloat</td>
+                        <td class="rt_slabel">Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_recurringamount">
+                        <td class="rt_sname">recurringamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Recurring Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_repeatevery">
+                        <td class="rt_sname">repeatevery</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Repeat Every</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_startdate">
+                        <td class="rt_sname">startdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Start Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_startoffsetunit">
+                        <td class="rt_sname">startoffsetunit</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Interval</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_startoffsetvalue">
+                        <td class="rt_sname">startoffsetvalue</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Start On</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_status">
+                        <td class="rt_sname">status</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_priceinterval_subscriptionplanline">
+                        <td class="rt_sname">subscriptionplanline</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Subscription Plan Line</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_sublinefromplan_">sublinefromplan - Lines</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_sublinefromplan_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_sublinefromplan_revrecoption">
+                        <td class="rt_sname">revrecoption</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_subscriptionline_">subscriptionline - Lines</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_subscriptionline_billingmode">
+                        <td class="rt_sname">billingmode</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Billing Mode</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_catalogtype">
+                        <td class="rt_sname">catalogtype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Catalog Type</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_class">
+                        <td class="rt_sname">class</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Class</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_department">
+                        <td class="rt_sname">department</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Department</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Discount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_enddate">
+                        <td class="rt_sname">enddate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">End Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_includeinrenewal">
+                        <td class="rt_sname">includeinrenewal</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Include In Renewal Subscription</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_isincluded">
+                        <td class="rt_sname">isincluded</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Include</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Item</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_linenumber">
+                        <td class="rt_sname">linenumber</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Line Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_location">
+                        <td class="rt_sname">location</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Location</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_prorateenddate">
+                        <td class="rt_sname">prorateenddate</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Prorate End Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_proratestartdate">
+                        <td class="rt_sname">proratestartdate</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Prorate Start Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_quantity">
+                        <td class="rt_sname">quantity</td>
+                        <td class="rt_stype">posfloat</td>
+                        <td class="rt_slabel">Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_recurrencestartdate">
+                        <td class="rt_sname">recurrencestartdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Recurrence Start Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_revrecoption">
+                        <td class="rt_sname">revrecoption</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Revenue Recognition Option</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_startdate">
+                        <td class="rt_sname">startdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Start Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_status">
+                        <td class="rt_sname">status</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Status</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_subscription">
+                        <td class="rt_sname">subscription</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Subscription</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_subscriptionline">
+                        <td class="rt_sname">subscriptionline</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_subscriptionlinetype">
+                        <td class="rt_sname">subscriptionlinetype</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Subscription Line Type</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subscriptionline_terminationdate">
+                        <td class="rt_sname">terminationdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Termination Date</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_billingaccount">
+                    <td class="rt_jid">billingaccount</td>
+                    <td class="rt_jlabel">Billing Account</td>
+                    <td class="rt_jname">Billing Account</td>
+                </tr>
+                    <tr id="join_currency">
+                    <td class="rt_jid">currency</td>
+                    <td class="rt_jlabel">Currency</td>
+                    <td class="rt_jname">Currency</td>
+                </tr>
+                    <tr id="join_customer">
+                    <td class="rt_jid">customer</td>
+                    <td class="rt_jlabel">Customer</td>
+                    <td class="rt_jname">Customer</td>
+                </tr>
+                    <tr id="join_item">
+                    <td class="rt_jid">item</td>
+                    <td class="rt_jlabel">Subscription Plan</td>
+                    <td class="rt_jname">Item</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_advancerenewalperiodnumber">
+                    <td class="rt_iname">advancerenewalperiodnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Advance Renewal Period</td>
+                </tr>
+                    <tr id="filter_advancerenewalperiodunit">
+                    <td class="rt_iname">advancerenewalperiodunit</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Advance Renewal Period Unit</td>
+                </tr>
+                    <tr id="filter_autorenewal">
+                    <td class="rt_iname">autorenewal</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Automatically Initiate Renewal Process</td>
+                </tr>
+                    <tr id="filter_billingaccount">
+                    <td class="rt_iname">billingaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Account</td>
+                </tr>
+                    <tr id="filter_class">
+                    <td class="rt_iname">class</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Class</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_customer">
+                    <td class="rt_iname">customer</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer</td>
+                </tr>
+                    <tr id="filter_datecreated">
+                    <td class="rt_iname">datecreated</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_defaultrenewalmethod">
+                    <td class="rt_iname">defaultrenewalmethod</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Default Renewal Method</td>
+                </tr>
+                    <tr id="filter_defaultrenewalterm">
+                    <td class="rt_iname">defaultrenewalterm</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Default Renewal Term</td>
+                </tr>
+                    <tr id="filter_defaultrenewaltrantype">
+                    <td class="rt_iname">defaultrenewaltrantype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Default Transaction Type</td>
+                </tr>
+                    <tr id="filter_department">
+                    <td class="rt_iname">department</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Department</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">End Date</td>
+                </tr>
+                    <tr id="filter_estimatedrevrecenddate">
+                    <td class="rt_iname">estimatedrevrecenddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Estimated Revenue Recognition End Date</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_initialterm">
+                    <td class="rt_iname">initialterm</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Initial Term</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_location">
+                    <td class="rt_iname">location</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Location</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nextrenewalstartdate">
+                    <td class="rt_iname">nextrenewalstartdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Next Renewal Start Date</td>
+                </tr>
+                    <tr id="filter_originalsalestransaction">
+                    <td class="rt_iname">originalsalestransaction</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Original Sales Transaction</td>
+                </tr>
+                    <tr id="filter_parentsubscriptionid">
+                    <td class="rt_iname">parentsubscriptionid</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Parent Subscription ID</td>
+                </tr>
+                    <tr id="filter_renewalsubscriptionname">
+                    <td class="rt_iname">renewalsubscriptionname</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Renewal Subscription Name</td>
+                </tr>
+                    <tr id="filter_renewaltransaction">
+                    <td class="rt_iname">renewaltransaction</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Renewal Transaction</td>
+                </tr>
+                    <tr id="filter_rootsubscriptionid">
+                    <td class="rt_iname">rootsubscriptionid</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Root Subscription ID</td>
+                </tr>
+                    <tr id="filter_salesorder">
+                    <td class="rt_iname">salesorder</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Sales Order</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_status">
+                    <td class="rt_iname">status</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Status</td>
+                </tr>
+                    <tr id="filter_subscriptionplan">
+                    <td class="rt_iname">subscriptionplan</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subscription Plan</td>
+                </tr>
+                    <tr id="filter_subsidiary">
+                    <td class="rt_iname">subsidiary</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subsidiary</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_advancerenewalperiodnumber">
+                    <td class="rt_cname">advancerenewalperiodnumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Advance Renewal Period</td>
+                </tr>
+                    <tr id="column_advancerenewalperiodunit">
+                    <td class="rt_cname">advancerenewalperiodunit</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Advance Renewal Period Unit</td>
+                </tr>
+                    <tr id="column_autorenewal">
+                    <td class="rt_cname">autorenewal</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Automatically Initiate Renewal Process</td>
+                </tr>
+                    <tr id="column_billingaccount">
+                    <td class="rt_cname">billingaccount</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Account</td>
+                </tr>
+                    <tr id="column_class">
+                    <td class="rt_cname">class</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Class</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_customer">
+                    <td class="rt_cname">customer</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Customer</td>
+                </tr>
+                    <tr id="column_datecreated">
+                    <td class="rt_cname">datecreated</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_defaultrenewalmethod">
+                    <td class="rt_cname">defaultrenewalmethod</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Default Renewal Method</td>
+                </tr>
+                    <tr id="column_defaultrenewalterm">
+                    <td class="rt_cname">defaultrenewalterm</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Default Renewal Term</td>
+                </tr>
+                    <tr id="column_defaultrenewaltrantype">
+                    <td class="rt_cname">defaultrenewaltrantype</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Default Transaction Type</td>
+                </tr>
+                    <tr id="column_department">
+                    <td class="rt_cname">department</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Department</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">End Date</td>
+                </tr>
+                    <tr id="column_estimatedrevrecenddate">
+                    <td class="rt_cname">estimatedrevrecenddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Estimated Revenue Recognition End Date</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_initialterm">
+                    <td class="rt_cname">initialterm</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Initial Term</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_location">
+                    <td class="rt_cname">location</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Location</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_nextrenewalstartdate">
+                    <td class="rt_cname">nextrenewalstartdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Next Renewal Start Date</td>
+                </tr>
+                    <tr id="column_originalsalestransaction">
+                    <td class="rt_cname">originalsalestransaction</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Original Sales Transaction</td>
+                </tr>
+                    <tr id="column_renewalnumber">
+                    <td class="rt_cname">renewalnumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Renewal Sequence</td>
+                </tr>
+                    <tr id="column_renewalsubscriptionname">
+                    <td class="rt_cname">renewalsubscriptionname</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Renewal Subscription Name</td>
+                </tr>
+                    <tr id="column_renewaltransaction">
+                    <td class="rt_cname">renewaltransaction</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Renewal Transaction</td>
+                </tr>
+                    <tr id="column_salesorder">
+                    <td class="rt_cname">salesorder</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Sales Order</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_status">
+                    <td class="rt_cname">status</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Status</td>
+                </tr>
+                    <tr id="column_subscriptionplan">
+                    <td class="rt_cname">subscriptionplan</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription Plan</td>
+                </tr>
+                    <tr id="column_subsidiary">
+                    <td class="rt_cname">subsidiary</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subsidiary</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

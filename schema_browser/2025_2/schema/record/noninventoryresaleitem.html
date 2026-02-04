@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__noninventoryresaleitem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__noninventoryresaleitem','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>NonInventoryResaleItem</H1>
+
+
+    Namespace: <a href="../../schema/record/noninventoryresaleitem.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemaccountingbookdetaillist.html?mode=package">ItemAccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amortizationPeriod</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amortization Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of periods over which the purchase amount should be amortized. For example, enter 60 to amortize the amount over 60 periods starting from the amortization start date.
+ 
+Note: The starting period is specified by the amortization start date on bills.  If no amortization start date is specified, the posting date of the bill is the amortization start date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">amortizationTemplate</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Amortization Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an amortization template to create the recognition schedule for the cost of this item.
+ 
+This template is used by default on purchase transactions. You can still select a different template on transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">availableToPartners</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Available to Adv. Partners</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If true, this item is available in the Advanced Partner Center.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billExchRateVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Schedule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Allows users to reference default Billing Schedules for items. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPriceVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Price Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billQtyVarianceAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quantity Variance Account</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">consumptionUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Consumption Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use the Multiple Units of Measure feature, select the default unit of measure for inventory.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">copyDescription</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Copy from Sales Order</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the description from a sales order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">cost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the price you pay for this item.
+
+If you do not enter a price, purchase orders for this item show the most recent purchase price by default.
+
+If you select a preferred vendor for this item, the price is shown in the currency selected on the vendor's record. If no preferred vendor is selected, the price is shown in your base currency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costCategory</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a cost category to associate with this item.
+
+View existing cost categories at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists.
+
+For more details, click Help and read Creating Cost Categories.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costEstimate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Defined Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an Item Defined Cost amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costEstimateType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemcostestimatetype.html?mode=package">ItemCostEstimateType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cost Estimate Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Cost Estimate Type determines what value NetSuite uses to calculate estimated Gross Profit.
+
+The estimated Gross Profit for Items on a transaction provides the data needed to calculate the total estimated Gross Profit on that transaction.
+
+The individual line items that you enter in a transaction determine the amounts that post when you process that transaction.
+
+The following Cost Estimate Types on Items are available:
+
+    * Item Defined Cost - a user-defined amount, entered into the Item Defined Cost field on the Item definition page.
+    * Average Cost - NetSuite calculates an average cost of the units purchased. 
+    * Last Purchase Price - This field displays the most recent purchase price of the item as determined by purchase order receipt transactions. 
+    * Purchase Price - Price entered that you pay for this item. If you do not enter a price, then the most recent purchase price from purchase orders provides the price for this item by default.
+    * Preferred Vendor Rate - This option is only used if the Multi-Vendor feature is enabled and multiple vendors supply the same item.
+          o First priority is to use the preferred vendor rate if defined on the Item record.
+          o Next priority would be to use the purchase price.
+          o Last priority would be the purchase order rate. (Initially this uses the preferred vendor rate cost, and then after a purchase order is entered, this type uses the most recent actual purchase order rate. Special orders and drop-shipped items use this cost information.)
+    * Derived from member items - Total costs of items currently included in a kit. This Cost Estimate Type only applies to kits and sums the estimated costs of each item in the kit, based on each of their individual Cost Estimate Types. Uses the latest definition of the kit, not its historical definition.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costEstimateUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Cost Unit</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">countryOfManufacture</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a system list. Values are listed at platformCommonTyp:Country.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createRevenuePlansOn</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Create Revenue Plans On</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the event that triggers creation of revenue recognition plans. Match the event with the amount source of the item's revenue recognition rule.
+
+    * Revenue Arrangement Creation - Revenue plans can be created when the revenue arrangement is created. Use this option with rules that have Event-Amount as the Amount Source.
+    * Billing - Revenue plans can be created when the sales order is billed and from stand-alone cash sales, invoices, credit memos, and cash refunds. Use this option with rules that have Event-Percent based on amount as the Amount Source.
+    * Fulfillment - This option is available only when Advanced Shipping is enabled. Revenue plans can be created upon fulfillment. Use this option with rules that have Event-Percent based on quantity as the Amount Source.
+    * Project Progress - This option is available only when the Projects feature is enabled. Use this option with rules that have Event-Percent Complete as the Amount Source.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field. If a preferred vendor has been specified in vendorName, the field returns the currency set on that vendor record. Otherwise, the base currency for the company is returned.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultItemShipMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Shipping Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the shipping method to display by default when adding the item to a sales order.
+
+You can override the default shipping method and enter any shipping method when fulfilling an order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferralAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferred Expense</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a deferred expense account if you want to amortize expenses instead of posting to a standard expense account.
+ 
+Note: If you do not select a deferred expense account for an item, you can associate an amortization template with the item on transactions only if the template identifies a specific deferred expense account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferredRevenueAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferred Revenue Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the deferred revenue account to associate with this item. Then, when this item is sold and associated with a revenue recognition template, the revenue from the sale is deferred. The sale amount is posted to a deferred revenue account, as opposed to a standard income account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferRevRec</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold Revenue Recognition</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to delay recognizing revenue from the sale of this item. When this box is check, revenue recognition schedules or revenue plans are created with the status On Hold.
+
+For more information, see the help topic Delaying Revenue Recognition for an Item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set a department to associate with this item. For details on existing department records, in the UI go to Setup &gt; Company &gt; Departments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">directRevenuePosting</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Direct Revenue Posting</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to disable advanced revenue management for this item. When checked, posting transactions that include this item post directly to the item revenue account. No revenue element or revenue arrangement is created. When you check this box, the Deferred Revenue Account on the Accounting subtab is disabled.
+
+When you create sales transactions that include items that have this box checked, all the items in the transaction must have the box checked. You cannot mix items that post directly to revenue with items that post to deferred revenue in the same transaction. This restriction also applies to kit items. All items in a kit must post either to revenue or to deferred revenue.
+
+You cannot check or clear the box after the item has been used in a transaction with advanced revenue management.
+
+By default, this box is not checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">displayName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Display Name/Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an optional name of up to 250 characters for this item in addition to the item name. If you are integrating with a Yahoo! store, this field is imported from Yahoo!. The display name prints in the Item column of the sales form when Basic printing is used. If this item is a member of a kit, this name appears in the Item column when the Print Items box is checked. If you do not set a display name, then item name appears on printed forms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dontShowPrice</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Don't Show Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to hide the price of this item online.
+
+This is useful for items you want to advertise but don't want to sell or for items that you track inventory for and want to display but are offered in combination with other items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dropshipExpenseAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Dropship Expense Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When the Automated Intercompany Drop Ship feature is enabled, this field defaults to the account specified in the Default Expense Account on Accounting Preference page, but you can override this account. The account you select must have the Eliminate Intercompany Transactions box checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">enforceMinQtyInternally</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Enforce Minimum Internally</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to apply the minimum quantity restriction on sales orders generated from NetSuite. When you clear this box, but enter a number in the Minimum Quantity field, the minimum quantity is only applied to web store orders.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">excludeFromSitemap</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exclude from Sitemap</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to exclude a tab, category or item page from the site map.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expenseAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expense Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">featuredDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Featured Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Settable only if item is featured. You can provide letters, numbers and basic HTML code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">generateAccruals</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Generate Accruals</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to automatically generate and post an accrual to the General Ledger.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">As an option, you set a handling cost for this item in dollars. You must also create a shipping item for per-item shipping and handling costs at Lists &gt; Accounting &gt; Shipping Items &gt; New. When this item is set on sales orders, invoices or cash sales, the appropriate shipping and handling charges are automatically calculated.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingCostUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatHazardClass</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Hazard Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the DOT hazardous material class or division.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Id</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the regulatory identifier for the commodity from the Federal Express Ground Hazardous Materials Shipping Guide.
+
+The format is UNXXXX, where XXXX is a four digit number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatItemUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Item Units</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the unit of measure for this item, such as kg or ml.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatItemUnitsQty</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Item Units Quantity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the quantity for the item units.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatPackingGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/hazmatpackinggroup.html?mode=package">HazmatPackingGroup</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Packing Group</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the hazardous material packaging group for the item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatShippingName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat Shipping Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the shipping name for the ID as listed in the Federal Express Ground Hazardous Materials Shipping Guide.
+
+This item appears on the OP950 form.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hierarchyVersionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/noninventoryresaleitemhierarchyversionslist.html?mode=package">NonInventoryResaleItemHierarchyVersionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeChildren</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include Children</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Include Children box to share the item with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.
+
+Note: When sharing items across subsidiaries, all of the options selected on the item record must be compatible across subsidiaries.
+ 
+For example, when entering an inventory item to be shared across subsidiaries, you should select Income and Asset accounts on the item record that are also shared across the same subsidiaries.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">incomeAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Income Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing income account at Lists &gt; Accounting &gt; Accounts. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">intercoExpenseAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Intercompany Expense Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the account to use for intercompany expense for this item. This account is used to record transactions between subsidiaries in NetSuite OneWorld accounts.
+
+To be available for selection, an account must have the Eliminate Intercompany Transactions box checked. If the Eliminate Intercompany Transactions box is later cleared on the account, intercompany transactions cannot be eliminated.
+
+The field is included on inventory type items and the following resale item types:
+
+    * Non-Inventory
+    * Other Charge
+    * Service</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">intercoIncomeAccount</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Intercompany Income Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the account to use for intercompany income for this item. This account is used to record transactions between subsidiaries in NetSuite OneWorld accounts.
+
+To be available for selection, an account must have the Eliminate Intercompany Transactions box checked. If the Eliminate Intercompany Transactions box is later cleared on the account, intercompany transactions cannot be eliminated.
+
+The field is included on inventory type items and the following resale item types:
+
+    * Non-Inventory
+    * Other Charge
+    * Service</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isDonationItem</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Variable Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If true, the item is set as a variable-priced donation item. This enables customers to enter their own prices for this item, such as for donations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isDropShipItem</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Drop Ship Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If isDropShipItem is set to true, isSpecialOrderItem can NOT be true.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isFulfillable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Can be Fulfilled</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Can be Fulfilled/Received box to enable this item to be received and fulfilled during order processing.
+
+Clear this box if this item does not require being received and fulfilled.
+
+Note: Once this item has been added to transactions, this setting cannot be changed.
+
+This field is used when the Advanced Billing and Advanced Shipping features are both enabled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isGcoCompliant</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Google Checkout Compliant</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isHazmatItem</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hazmat/Dangerous Goods</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this item is categorized as either hazardous material or dangerous goods. These items can only be shipped using FedEx integration.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the item as inactive. By default, this field is set to false.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isOnline</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Display in Website</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true to make this item available online in your Web site. You cannot sell this item online unless this field is set to true.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isSpecialOrderItem</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Special Order Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If isSpecialOrderItem is set to true, isDropShipItem can NOT be true.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">issueProduct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Product</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the product this item is associated with.
+
+Product records are tracked with versions and builds for issue management.
+
+To create product records, go to Setup &gt; Issues &gt; Products &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the item is subject to sales tax.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemCarrier</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/shippingcarrier.html?mode=package">ShippingCarrier</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Carrier</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the default shipping carrier for the item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Name/Number</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter up to 250 characters for the name of this item. This name appears in lists on transactions. If you have the option of entering a display name and do not, the item name prints in the Item column of sales forms. If you have the option to enter a vendor name and do not, the item name prints in the Item column of purchase forms when Basic printing is used. If you have entered a display name, it will print on purchases instead of the item name when Basic printing is used.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemOptionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemoptionslist.html?mode=package">ItemOptionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemRevenueCategory</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Revenue Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The item revenue category is a classification for items that have similar characteristics and revenue allocation requirements. It is used in the fair value price list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemShipMethodList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemVendorList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemvendorlist.html?mode=package">ItemVendorList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a location to associate with this item.
+To use a location, the Multi-Location Inventory feature must be enabled.
+
+    * If the Multi-Location Inventory feature is not enabled:
+
+      Selecting an item record location limits the items that certain roles can access.
+      For example, Role A is set up to access only items associated with Location One. Therefore, employees who have Role A can access only items associated with Location One.
+
+      Note: If the Multi-Location Inventory feature is not enabled, you cannot use this field to track inventory by locations. For example, you cannot track how many widgets you have in stock in Location One.
+
+      For more information click here.
+
+    * If the Multi-Location Inventory feature is enabled:
+
+      Selecting an item record location classifies the item by that location to limit the items that certain roles can access. To track inventory per location, use the Locations subtab at the bottom of this form.
+
+      For more information click here.
+
+Select New to enter a new location record.
+
+Go to Setup &gt; Company &gt; Locations for details about existing location records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturer</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Type the name of the company that manufactures this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerAddr1</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the address of the manufacturer. This is necessary to fill out international shipping forms when you sell and ship this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerCity</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer City</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the city location of the manufacturer of this item. This is necessary to automatically fill out international forms when you ship this item across borders.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerState</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer State</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the state where this item's manufacturer is located.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerTariff</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">HS Tariff Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the Harmonized System (HS) tariff code number or the Harmonized Tariff Schedule (HTS) code number. This number should be six to ten characters.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerTaxId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer Tax Id</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the Tax ID Number (TIN) for the manufacturer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturerZip</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer Zip Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the postal code of the location of this manufacturer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixItemNameTemplate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Matrix Item Name Template</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is used to control how the matrix item will be displayed in the Matrix Item Name/Number field.
+
+Compose the order in which attributes and matrix options are displayed by selecting from the Insert Item Attribute and Insert Matrix Option dropdown lists.
+
+Add custom separator characters to easier distinguish the various options. 
+
+Example: Item Name: Fabric / Color / Waist / Length [Location]</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixOptionList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/matrixoptionlist.html?mode=package">MatrixOptionList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">matrixType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemmatrixtype.html?mode=package">ItemMatrixType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Matrix Type</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">maxDonationAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Maximum Variable Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If isDonationItem is set to true, set this field to the maximum amount that can be paid or donated for this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">maximumQuantity</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Maximum Order Qty</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the greatest quantity of this item that customers can purchase. If customers enter an item quantity above the maximum amount, a warning message is displayed. Web store customers are unable to complete checkout unless they enter a quantity equal to or below the maximum quantity.
+
+ Leave this field empty to allow customers to check out without maximum quantity restrictions.
+
+You can edit this warning at Setup &gt; Site Builder/SuiteCommerce Advanced &gt; Customize Text.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">metaTagHtml</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Meta Tag HTML</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the metatag information for the item page in web store.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">minimumQuantity</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Minimum Order Qty</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the smallest quantity you allow customers to purchase for this item. When customers add this item to their carts in the Web store, the quantity for this item is defaulted to the minimum number of items. Leave this field empty to allow customers to check out with no minimum quantity restrictions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">minimumQuantityUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mpn</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturer Part Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">MPN (Manufacturers Part Number) - Set the part number used by the manufacturer to identify this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">multManufactureAddr</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Multiple Manufacturer Addresses</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Multiple Manufacture Addresses box if this manufacturer uses more than one address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexTagCategory</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">NexTag Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the name of the NexTag category this item should be included in. This category is included in the product feeds you can export at Setup &gt; Web Site &gt; Product Feeds. Go to www.nextag.com for more information on the available categories. This is an optional field only displayed for the following item records: Kit/Package, Non-inventory Item for Sale, Non-inventory Item for Resale, Assembly (lot and serialized), and Inventory (lot and serialized).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">noPriceMessage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">No Price Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you opted to not show a price online, enter the message that should show instead of the price.
+
+For example, you might enter &quot;Call for Price.&quot;</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">offerSupport</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Offer Support</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When enabled, items can be referenced on case records either through the UI or via web services using the item field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">onSpecial</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">On Special</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true if you want to put this item on special. The item then appears in the Specials category in your store or site.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">outOfStockBehavior</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemoutofstockbehavior.html?mode=package">ItemOutOfStockBehavior</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Out Of Stock Behavior</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a custom out of stock behavior for this item. It overwrites the overall site’s out of stock behavior. Your choices are:
+
+    * Default - Uses the behavior selected in the Web Store Out of Stock Items field at Setup &gt; Web Site &gt; Setup Tasks &gt; Set Up Web Site &gt; Shopping.
+    * Disallow back orders but display out of stock messages
+    * Allow back orders but display out of stock messages
+    * Remove items when out of stock
+    * Allow back orders with no out of stock message</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">outOfStockMessage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Out Of Stock Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">You can enter a custom out of stock message for this item. The message here replaces the default out of stock message.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">overallQuantityPricingType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemoverallquantitypricingtype.html?mode=package">ItemOverallQuantityPricingType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Calculate Quantity Discounts</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Available values are: _byLineQuantity _byOverallItemQuantity _byOverallParentQuantity _byOverallScheduleQuantity</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pageTitle</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Page Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the display title in the upper-left corner of an Internet browser when customers view this item in your Web store.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subitem of</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing item record. Only required if the item is a child of another item. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">preferenceCriterion</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itempreferencecriterion.html?mode=package">ItemPreferenceCriterion</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Preference Criterion</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the NAFTA criterion for this item. Available values are: _A _B _C _D _E _F</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">presentationItemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/presentationitemlist.html?mode=package">PresentationItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pricesIncludeTax</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Prices Include Tax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to save the base price as the tax inclusive price. Clear this box to save the base price as the tax exclusive price.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pricingGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Pricing Group</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the pricing group this item is a member of.
+
+Using pricing groups enables you to assign customer-specific price levels for a group of items.
+
+You can create new pricing groups at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; New &gt; Pricing Group.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pricingMatrix</td>
+                        <td class="rst_ftype"><a href="../../schema/other/pricingmatrix.html?mode=package">PricingMatrix</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">producer</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Producer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true if you produce this item for the purposes of the NAFTA Certificate of Origin.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">productFeedList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/productfeedlist.html?mode=package">ProductFeedList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the description of this item that is displayed on vendor orders. You should include the unit of measure in this description.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseOrderQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Purchase Order Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and purchase order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Purchase Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">purchaseUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Purchase Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the unit you use to purchase this item from the vendor.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">quantityPricingSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quantity Pricing Schedule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the pricing schedule you want to use to set prices for this item. You can create new pricing schedules at Lists &gt; Accounting &gt; Quantity Pricing Schedules &gt; New. Selecting a pricing schedule sets the Use Marginal Rates and Calculate Quantity Discounts fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defines the rate for this item. If a value is entered followed by the percentage sign, the discount is interpreted as a percentage discount (i.e. -.10% sets a ten percent discount for the item). If a value without the percentage sign is entered, the rate is interpreted as a flat dollar value.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptAmount</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Amount Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the amount on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Tolerance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the tolerance limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">receiptQuantityDiff</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Bill - Item Receipt Quantity Difference</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the difference limit for the discrepancy between the quantity on the vendor bill and item receipt.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">relatedItemsDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Related Items Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the description displayed for a group of related items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">residual</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Residual</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an amount or percentage to remain in the deferral account and not be amortized. A residual amount generally represents the salvage value of a fixed asset.
+ 
+Note: A residual amount entered on a transaction overrides a residual amount entered on an item record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revenueAllocationGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revenue Allocation Group</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a revenue allocation group to use in GroupSum functions in fair value formulas. The value you select here is the default. You can change it on the revenue element.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revenueRecognitionRule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revenue Recognition Rule</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the revenue rule to use by default for this item in a revenue arrangement.
+
+Be sure the rule you select has an Amount Source that is appropriate for the value you select in the Create Revenue Plans On field. For more information, see the field level help for Create Revenue Plans On.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecForecastRule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rev Rec Forecast Rule</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select a revenue rule to use for forecast revenue recognition plans. The default is determined by the same accounting preference as the Revenue Recognition Rule.
+
+You may select the same rule or a different rule for actual and forecast rules. Percent complete rules are not available as forecast rules. For information about forecast revenue plans for project progress, see Working with Percent-Complete Revenue Recognition Plans.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revRecSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revenue Recognition Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the revenue recognition template that will be applied to this item. In order to set this field, the item record referenced in the item field must have a deferred revenue account associated with it. This field then defaults to the rev. rec. template associated to the item on the item record. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the description displayed when an item's store display name is clicked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Tax Code</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This field is required for customers subscribing to International versions on NetSuite. Sets the default tax code to be used on sales transactions. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">saleUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Sale Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the unit you use to sell this item to customers on sales transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scheduleBCode</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/schedulebcode.html?mode=package">ScheduleBCode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Schedule B Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the code for the Schedule B form for this item. Available values are: _1000, _1000cubicMeters, _barrels, _carat, _cleanYieldKilogram, _contentKilogram, _contentTon, _cubicMeters, _curie, _dozen, _dozenPairs, _dozenPieces, _fiberMeter, _gram, _gross, _grossContainers, _hundred, _kilogram, _kilogramTotalSugars, _liter, _meter, _millicurie, _noQuantityReq, _number, _pack, _pairs, _pieces, _proofLiter, _runningBales, _square, _squareCentimeters, _squareMeters, _ton</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scheduleBNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Schedule B Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number for the Schedule B form for this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scheduleBQuantity</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Schedule B Quantity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the quantity for the Schedule B form for this item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchKeywords</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Search Keywords</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter alternative search keywords that customers might use to find this item using your Web store's internal search. These can include synonyms, acronyms, alternate languages or misspellings. These keywords are seen as equally important as the item name when searches are conducted.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipIndividually</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ships Individually</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this item always ships alone and with no other items in the same package.
+
+This helps determine the number of packages needed and the shipping rate on order fulfillments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipPackage</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Package</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of package this item normally ships in. The information for this package type automatically fills in on order fulfillments for this item.
+
+Setting up and assigning package types helps determine the number of packages on an order and helps return accurate real-time shipping rates.
+
+Create package types at Setup &gt; Accounting &gt; Shipping &gt; Packages subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">As an option, you may set a shipping cost for this item in dollars. You must also create a shipping item for per-item shipping costs at Lists &gt; Accounting &gt; Shipping Items &gt; New. When this item is set on sales orders, invoices or cash sales, the appropriate shipping charges are automatically calculated.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingCostUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shoppingDotComCategory</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shopping.com Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the name of the Shopping.com category that this item should go under. This category is included in the product feeds that you can export from Setup &gt; Web Site &gt; Product Feeds. Go to www.shopping.com for more information on the categories available. This is an optional field only available for following item records: Kit/Package, Non-inventory Item for Sale, Non-inventory Item for Resale, Assembly (lot and serialized), and Inventory (lot and serialized).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shopzillaCategoryId</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shopzilla Category ID</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the name of the Shopzilla category this item should be included in. This category is included in the product feeds you export at Setup &gt; Web Site &gt; Product Feeds. Go to www.shopzilla.com for more information on the available categories. This is an optional field only displayed for the following item records: Kit/Package, Non-inventory Item for Sale, Non-inventory Item for Resale, Assembly (lot and serialized), and Inventory (lot and serialized).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">showDefaultDonationAmount</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Show Default Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Can only be set when isDonation is set to True. If true, the item's online price is displayed as a suggested price.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">siteCategoryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/sitecategorylist.html?mode=package">SiteCategoryList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sitemapPriority</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/sitemappriority.html?mode=package">SitemapPriority</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sitemap Priority</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use the Sitemap Priority list to indicate the relative importance of your Web site URLs.
+
+You can select a priority ranging from 0.0 to 1.0 on item, category, and tab records.
+
+NetSuite assigns the default priority “Auto” to all new and existing tab, category and item records in your account. The priority is calculated based on the position of the item or category in the hierarchy of your Web site.
+
+For example, your Web site tabs automatically generate a default priority value of 1.0 because they are top level pages. A category published to a tab gets a priority of 0.5. An item published to a category on a tab gets a priority of 0.3.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">softDescriptor</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Soft Descriptor</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Soft Descriptor list, select the name that will appear on the customer's credit card statement when this item is purchased.
+
+Enter soft descriptors to select in this field at Setup &gt; Accounting &gt; Payment Processing &gt; Credit Card Soft Descriptors.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">specialsDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Specials Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Settable only if onSpecial is set to True. You can provide letters, numbers and basic HTML code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">stockDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Stock Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter up to 21 characters to specify information about this item, such as New, Refurbished or Ships 2-3 days.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Store Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the item description. This field can contain plain text as well as basic html code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeDetailedDescription</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Detailed Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the detailed item description. This field can contain plain text as well as basic html code.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeDisplayImage</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Display Image</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing image file in the file cabinet. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeDisplayName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Store Display Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the item name for your Web site.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeDisplayThumbnail</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Display Thumbnail</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing image file in the file cabinet. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">storeItemTemplate</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Drilldown Template</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing item template at Setup &gt; Web Site &gt; Item/Category Templates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Schedule</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the tax schedule you want to apply to this item.
+
+You can create new tax schedules at Setup &gt; Accounting &gt; Taxes &gt; Tax Schedules &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">translationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/translationlist.html?mode=package">TranslationList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">unitsType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Primary Units Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">upcCode</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">UPC Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defines whether this is a unv part code. Bar codes for items are generated in Code 128 by default. If you prefer to use the UPC code format, set this field to True on each item record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">urlComponent</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">URL Component</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a short, descriptive name for this item to appear as part of its URL in the Web store.
+
+Setting a name to show in the URL can result in better ranking from search engines.
+
+If you leave this field blank, NetSuite terms and numbers are used as identifiers in the URL.
+
+Note: Descriptive URL components are case sensitive. Descriptive URLs must match the case used in the URL Component field of an item record to point to the correct page.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">useMarginalRates</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Use Marginal Rates</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set to true if you want the quantity discounts in the schedule to be applied to each pricing bracket separately. For example, a schedule offers no discount for the first 100 items sold and a 5% discount if more than 100 are sold. If 150 items are sold, the first 100 are at normal price, and the other fifty items are sold at 5% discount. The fault value is false, which applies the discount to all items sold.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vendor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Preferred Vendor</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vendorName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Vendor Name/Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the preferred vendor for this item. If the Multiple Vendors feature is enabled, this field is unavailable and you must set the preferred vendor in the itemVendorsList.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoeDeferral</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/vsoedeferral.html?mode=package">VsoeDeferral</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferral</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In this field set how to handle deferment when this item is sold as part of a bundle. The available options are: _deferBundleUntilDelivered - Until this item is marked delivered, the revenue recognition of all items in the bundle is deferred. A typical use for this option is to identify items whose revenue recognition depends on the delivery of the item itself, in addition to the delivery of a separate service. For example, a specified upgrade would typically be marked Defer Bundle Until Delivered. _deferUntilItemDelivered - Until this item is marked delivered, the revenue recognition of this item is deferred. This setting is the default for this field. Note: The deferral setting you set for each item in a bundle works together with the deferral settings for other items in the bundle.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoeDelivered</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default as Delivered</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to automatically set this item to a Delivered status when this item is added to a transaction. Clear this box to leave the delivery status clear by default.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoePermitDiscount</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/vsoepermitdiscount.html?mode=package">VsoePermitDiscount</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Permit Discount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set one of the following options to determine how discounts are handled for this item. _asAllowed - Allows a portion of an applicable discount to be applied against this item if its status is Delivered when the VSOE allocation is performed. _never - Does not allow a discount to be applied against this item when the VSOE allocation is performed. This selection would be common for a Specified Upgrade. Note: The default for this field is _asAllowed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoePrice</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allocation Price</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the VSOE price for this item, if the price is known. Note: If you need to use more than one VSOE price for an item, you can set the most common price here and then change the price on each order manually.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vsoeSopGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/vsoesopgroup.html?mode=package">VsoeSopGroup</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Allocation Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select an allocation type to associate with this item on sales transactions.
+
+    * Normal - Revenue allocation follows EITF 08-01 rules when you use VSOE and the fair value price list with advanced revenue management.
+    * Exclude - This item is excluded from revenue allocation. The item discounted sales amount is the revenue amount.
+    * Software - The item is software. When you use VSOE with the EITF SuiteApp, both EITF 08-01 and SOP 97-2 rules apply for revenue allocation. When you use advanced revenue management, revenue allocation follows the fair value price list. Then if the fair value prices for any of the items in the allocation are estimates rather than VSOE, the allocation is recalculated using the residual method.
+
+Note: Do not select the Software value unless you are using VSOE with the EITF SuiteApp or Advanced Revenue Management.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">weight</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item Weight </td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Set the weight of this item</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">weightUnit</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemweightunit.html?mode=package">ItemWeightUnit</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Weight Unit</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">weightUnits</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Weight Units</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

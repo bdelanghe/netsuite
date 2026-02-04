@@ -1,0 +1,1196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__itemfulfillment','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__itemfulfillment','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>ItemFulfillment</H1>
+
+
+    Namespace: <a href="../../schema/record/itemfulfillment.html?mode=package">urn:sales.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accessibilityTypeFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentaccessibilitytypefedex.html?mode=package">ItemFulfillmentAccessibilityTypeFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Accessibility</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">ancillaryEndorsementFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentancillaryendorsementfedex.html?mode=package">ItemFulfillmentAncillaryEndorsementFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ancillary Endorsement</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For SmartPost Returns, select Address Correction or Return Service for Presorted Standard SmartPost shipments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">b13aFilingOptionFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentb13afilingoptionfedex.html?mode=package">ItemFulfillmentB13AFilingOptionFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">B13A Filing Option</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">b13aStatementDataFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">B13A Statement Data</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">backupEmailAddressFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">backupEmailAddressUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Backup Email Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">blanketEndDateUps</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Blanket Period End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the expiration date for the NAFTA Certificate of Origin.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">blanketStartDateUps</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Blanket Period Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the start date for the blanket period of up to one year that the applicable North American Free Trade Agreement (NAFTA) Certificate of Origin is in effect.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">bookingConfirmationNumFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Booking Confirmation Number</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">carrierIdUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Carrier Identification Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the 4-digit Standard Carrier Alpha Code (SCAC) of the carrier for vessel, rail and truck shipments, or enter the 2-3 character International Air Transport Association (IATA) Code of the carrier for air shipments.
+
+See https://www.census.gov/foreign-trade/regulations/index.html for information on codes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdFrom</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fulfillment of</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the sales order this fulfillment is created from.
+
+Click the link to open the sales order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdFromShipGroup</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Group Reference Order Id</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">eccNumberUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ECCN</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the Export Control Classification Number for:
+
+    * exports authorized under a license or License Exception
+    * items being exported under the NLR provisions listed on the CCL with a reason for control other than anti-terrorism</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The customer or job associated with this transaction appears here.
+
+For details on existing customers and projects, go to Lists &gt; Relationships &gt; Customers.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entryNumberUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Entry Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the Import Entry Number when the export transaction is used as proof of export for import transactions, such as In-Bond, Temporary Import Bond or Drawback’s.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exportTypeUps</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentexporttypeups.html?mode=package">ItemFulfillmentExportTypeUps</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Export Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose one of the following:
+
+    * Domestic Exports – The merchandise being shipped is grown, produced or manufactured in the U.S., including imported merchandise that has been enhanced in value or changed in form.
+    * Foreign Exports – The merchandise being shipped has entered the U.S. and is being re-exported in the same condition.
+    * Foreign Military Sales – The merchandise being shipped is being sold under the Foreign Military Sales program.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">generateIntegratedShipperLabel</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Integrated Shipping Label</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you are using a UPS or FedEx-integrated shipping item to ship this order.
+
+Checking this box integrates the order with your FedEx or UPS account and generates a shipping label to be printed at Transactions &gt; Management &gt; Print Checks and Forms.
+
+If you use the Pick, Pack and Ship feature, this order must be in the integrate stage in order to check this box. To set which stage shipping is integrated, go to Setup &gt; Accounting &gt; Setup Tasks &gt; Shipping.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halAddr1FedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Address Line 1</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halAddr2FedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Address Line 2</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halAddr3FedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Address Line 3</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halCityFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location City</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halCountryFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Country</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halPhoneFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Contact Phone Number</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halStateFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location State</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">halZipFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location Zip Code</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The handling cost automatically calculates depending on the shipping method you select in the Ship Via field.
+
+To change the cost of handling, go to Lists &gt; Accounting &gt; Shipping Items and select the shipping method with the handling cost you want to change.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">hazmatTypeFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmenthazmattypefedex.html?mode=package">ItemFulfillmentHazmatTypeFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">holdAtLocationFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Hold at Location</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">homeDeliveryDateFedEx</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Home Delivery Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">homeDeliveryTypeFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmenthomedeliverytypefedex.html?mode=package">ItemFulfillmentHomeDeliveryTypeFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Home Delivery Type</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inbondCodeUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">In Bond Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter one of the 2-character codes listed in Part IV of Appendix C of the Foreign Trade Statistics Regulations (FTSR) (15 CFR Part 30) to indicate whether the shipment is being transported under bond.
+
+The FTSR is available at https://www.census.gov/foreign-trade/regulations/index.html.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">insideDeliveryFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inside Delivery</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to deliver to a location other than the loading area.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">insidePickupFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inside Pickup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to pick up the order from a location other than the loading area.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">intlExemptionNumFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">AES/FTSR Exemption Number</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inventoryLocation</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isCargoAircraftOnlyFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cargo Aircraft Only</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isRoutedExportTransactionUps</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Routed Export Transaction</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if the foreign principal party in interest authorizes a U.S. forwarding agent or other agent to export the merchandise out of the U.S.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemfulfillmentitemlist.html?mode=package">ItemFulfillmentItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">licenseDateUps</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">License Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the date of the license number you provided.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">licenseExceptionUps</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentlicenseexceptionups.html?mode=package">ItemFulfillmentLicenseExceptionUps</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">License Exception</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the license exception symbol for this type of shipment if you are operating under the authority of a License Exception.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">licenseNumberUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">License Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the license number if you are operating under the authority of one of following:
+
+    * Department of the Treasury
+    * Office of Foreign Assets Control license
+      Department of Justice DEA permit
+    * any other export license issued by a Federal government agency</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an optional memo with additional information about this fulfillment.
+ 
+What you enter here can be used in searches and shows on reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">methodOfTransportUps</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentmethodoftransportups.html?mode=package">ItemFulfillmentMethodOfTransportUps</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Method of Transport</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the method by which the merchandise is exported, such as vessel, air, rail, truck, etc.
+
+Specify “own power” if applicable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">packageFedExList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemfulfillmentpackagefedexlist.html?mode=package">ItemFulfillmentPackageFedExList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">packageList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemfulfillmentpackagelist.html?mode=package">ItemFulfillmentPackageList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">packageUpsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemfulfillmentpackageupslist.html?mode=package">ItemFulfillmentPackageUpsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">packageUspsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/itemfulfillmentpackageuspslist.html?mode=package">ItemFulfillmentPackageUspsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">packedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Packed Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Picked
+
+    * If the Pick Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Packed
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Shipped
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date.
+
+    * If the Ship Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+    * The Accounting Period field is required and it is populated based on the Ship Date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partiesToTransactionUps</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Parties to Transaction</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this is a related party transaction.
+
+A related party transaction is between a U.S Principal Party in Interest (USPPI) and a foreign consignee (a parent company or sister company) where there is at least 10% ownership of each by the same U.S. or foreign person or business.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Partner</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">pickedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Picked Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Picked
+
+    * If the Pick Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Packed
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Shipped
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date.
+
+    * If the Ship Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+    * The Accounting Period field is required and it is populated based on the Ship Date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">postingPeriod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Posting Period</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the period you want to post this transaction to.
+
+If a period is closed, you cannot post to that period.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recipientTaxIdUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recipient Tax Identification Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the Tax ID Number of the business receiving the shipment.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">requestedBy</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Requested By</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Shows the fulfillment request that the item fulfillment originated from.
+
+Click the fulfillment number to open the fulfillment request.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">saturdayDeliveryFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Saturday Service</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you need FedEx or deliver this shipment on a Saturday. Extra charges can occur with Saturday Service.
+
+Saturday delivery is available in the majority of U.S. cities with FedEx Priority Overnight® and FedEx 2Day® services. Call 1.800.GoFedEx (1.800.463.3339) to determine which service area your destination falls within. FedEx also offers Saturday delivery in most areas of the U.S. with FedEx SameDay® service, depending upon flight availability.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">saturdayDeliveryUps</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Saturday Delivery</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this order will be delivered on a Saturday.
+
+Saturday deliveries can result in extra charges from UPS. For more information, visit https://www.ups.com/us/en/global.page.
+
+This field is enabled only if you have UPS selected as your integration carrier and are using a UPS-integrated shipping item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">saturdayPickupFedex</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Saturday Pickup</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you need FedEx to pick-up this shipment on a Saturday. Extra charges can occur with Saturday pickup.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendBackupEmailFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendBackupEmailUps</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Send Backup Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box and enter an e-mail address to send shipment notification in case messages to the above addresses are undeliverable.
+
+This message can come back to you to notify you, or it can go to a 3rd address of the recipient.
+
+Back-up notification e-mail can result in extra charges from UPS. For more information, visit https://www.ups.com/us/en/global.page.
+
+This field is enabled only if you are using a UPS-integrated shipping method.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendShipNotifyEmailFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">FedEx ShipAlert®</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">To alert the recipient of this shipment of the expected delivery date, check this box, and enter the email address of the person who should be notified.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sendShipNotifyEmailUps</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Notification Email Addresses</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box and enter an e-mail address to notify the recipient that you are shipping the package.
+
+In the field below, you can enter a second e-mail address to be copied on this notification.
+
+Multiple e-mail addresses cannot be entered in these fields. You can enter a maximum of 2 addresses, one in each field.
+
+E-mail notification can result in extra charges from UPS. For more information, visit https://www.ups.com/us/en/global.page.
+
+This field is enabled only if you have UPS selected as your integration carrier and are using a UPS-integrated shipping item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Select Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the address to ship the order to. The full address displays in the Address field.
+ 
+    * Select New to enter a new shipping address to be used for this transaction and saved with the associated entity record.
+    * Select Custom to enter a new shipping address to be used for this transaction only (and not saved with the associated entity record).
+    * Click the Edit icon to edit an existing shipping address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipDateFedEx</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Future Ship Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipIsResidential</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Residential Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this address is not a business.
+
+This helps return accurate rates from UPS and FedEx.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipmentWeightFedEx</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total Package Weight</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field totals the weight for all packages on this order in pounds.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipmentWeightUps</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total Package Weight</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the total weight of all individual packages for this order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Via</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a shipping method for this order.
+
+If you automatically charge for shipping, the shipping amount is entered in the shipping costs field. To automatically charge for shipping, go to Setup &gt; Accounting &gt; Shipping. Check the Charge for Shipping box and click Save. You must also set up the charge details of your shipping items.
+
+To add or edit shipping items, go to Lists &gt; Accounting &gt; Shipping Items.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipNotifyEmailAddress2Ups</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Notification Email Address 2</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipNotifyEmailAddressFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Notification Email Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipNotifyEmailAddressUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Notification Email Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipNotifyEmailMessageUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Notification Email Message</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipped Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Picked
+
+    * If the Pick Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Packed
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+Shipped
+
+    * If the Pick Date field is empty, it populates with the current date.
+
+    * If the Pack Date field is empty, it populates with the current date.
+
+    * If the Ship Date field is empty, it populates with the current date and the Transaction Date field is populated with the current date.
+
+    * The Accounting Period field is required and it is populated based on the Ship Date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you charge for shipping, enter the amount of shipping costs for this order here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentshipstatus.html?mode=package">ItemFulfillmentShipStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select Picked if you want to pick, pack and ship your orders as separate transactions.
+
+Select Packed if you want to combine the steps to pick and pack orders. Orders will then need to be marked shipped.
+
+Select Shipped if you want to combine the steps to pick, pack and ship orders. Orders will then need to be billed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">signatureHomeDeliveryFedEx</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">FedEx Home Delivery®</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this order should be shipped using FedEx's Signature Home Delivery service for residential addresses.
+
+Signatures are required for packages delivered using this service.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">termsFreightChargeFedEx</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms Freight Charge</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a freight charge if you selected CF (Cost &amp; Freight) or CIF (Cost, Insurance, Freight) in the Terms of Sale field.
+
+This charge is added to the total customs value amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">termsInsuranceChargeFedEx</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Declared Value/Terms Insurance Charge</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter an insurance charge if you selected CIF (Cost, Insurance, Freight) in the Terms of Sale field.
+
+This charge is added to the total customs value amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">termsOfSaleFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmenttermsofsalefedex.html?mode=package">ItemFulfillmentTermsOfSaleFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms of Sale</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is required for dutiable International Express shipments.
+
+Note: This field is not applicable to International document Express shipments.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyAcctFedEx</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Account Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the FedEx account number that should be charged for shipping if you selected Bill Third Party in the 3rd Party Billing Type field. This can be your company’s master account number, a vendor's account number, or the customer's account number, for example.
+
+You can set a default 3rd party FedEx account number on the Company Information page.
+
+To set a default for customers when billing recipients, enter the customer’s UPS or FedEx account number on the customer record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyAcctUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Account Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the UPS account number that should be charged for shipping if you selected Bill Third Party in the 3rd Party Billing Type field. This can be your company’s master account number, a vendor's account number, or the customer's account number, for example.
+
+You can set a default 3rd party UPS account number on the Company Information page.
+
+To set a default for customers when billing recipients, enter the customer’s UPS or FedEx account number on the customer record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyCountryFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the country associated with the third party account number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyCountryUps</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/country.html?mode=package">Country</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Country</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the country associated with the 3rd party account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyTypeFedEx</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentthirdpartytypefedex.html?mode=package">ItemFulfillmentThirdPartyTypeFedEx</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of billing:
+
+    * None Selected – Bills the main account for this location as entered at Setup &gt; Company &gt; Set Up Shipping. No third party is charged.
+    * Bill Third Party – Bills the third party account entered on this page or the FedEx third party account entered at Setup &gt; Company &gt; Company Information.
+    * Bill Recipient – Bills customer’s FedEx account as entered on the customer record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyTypeUps</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/itemfulfillmentthirdpartytypeups.html?mode=package">ItemFulfillmentThirdPartyTypeUps</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of billing to use for this account:
+
+      None Selected – Bills the main account for this location as entered at Setup &gt; Company &gt; Set Up Shipping. No third party is charged.
+    * Third Party Billing – Bills the third party account specified on this page or bills the UPS third party account entered at Setup &gt; Company &gt; Company Information.
+    * Consignee Billing – Bills the customer’s UPS account as entered on the customer record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">thirdPartyZipcodeUps</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">3rd Party Billing Zip</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the zip code associated with the 3rd party account number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">This is the date you are fulfilling this order. By fulfilling this order, you may be shipping items or completing services.
+
+If you want to change the date, enter or click Pick to select a different date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ref No.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite increases the largest fulfillment number by one.
+
+If you wish, you can type another number. The next fulfillment number will revert to the standard pattern.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">transferLocation</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transfer Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the Destination Location selected on the inventory transfer or transfer order.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__contact','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__contact','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Contact</H1>
+
+
+    Namespace: <a href="../../schema/record/contact.html?mode=package">urn:relationships.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">addressbookList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/contactaddressbooklist.html?mode=package">ContactAddressbookList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altEmail</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">&lt;p&gt;Enter an alternate email address for this contact. If you use the Capture Email Replies, email sent with the alternate email address are automatically attached to the contact record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assistant</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assistant</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a reference to an existing contact. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assistantPhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assist. Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billPay</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">categoryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/categorylist.html?mode=package">CategoryList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">comments</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter any other information you want to note about this contact.
+
+These notes appears only on this record.
+
+You can enter up to 999 characters of text.
+
+If you see the Enhance text button next to this field, you can get writing help for this field from our generative AI service, NetSuite Text Enhance. Click the Enhance Text button to use the available options. Learn more about Text Enhance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">company</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Company</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the company this contact works for.
+ 
+This contact appears in contact lists for this company.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contactSource</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lead Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select how this customer was referred to you.
+
+If you do not use the Marketing Automation feature, you can create new lead sources at Setup &gt; Sales &gt; CRM Lists &gt; New.
+
+If you have enabled the Marketing Automation feature, this field fills with the names of your campaigns, and you can not create new lead sources at Setup &gt; Sales &gt; CRM Lists. Instead, create new campaigns at Lists &gt; Campaigns &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dateCreated</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When adding a record, this field defaults to the current system date and time. This field cannot be overwritten. The default value is set regardless of any use default settings.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">defaultAddress</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The default billing address automatically shows here when you enter and add it using the Address subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the email address for this contact. When this contact is invited to an event, a notification is sent to this address.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Entity ID</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Sets how the contact's name appears in all lists</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a fax number for this record. You should enter the fax number exactly as it must be dialed. If a '1' is required to fax to this number, be sure to include it at the beginning of the number.
+
+The number you enter automatically appears in the To Be Faxed field of transactions when you select this customer.
+
+To fax NetSuite forms, an administrator must first set up fax service at Setup &gt; Set Up Printing, Fax and E-mail &gt; Fax.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">firstName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">First Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is required for the Online Bill Pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">globalSubscriptionStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/globalsubscriptionstatus.html?mode=package">GlobalSubscriptionStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Global Subscription Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Email recipients can have one of four subscription statuses:
+
+    * Confirmed Opt-In - When an email recipient has indicated that they want to receive your campaign messages, they are assigned this subscription status. Only a recipient can set his or her subscription status to Confirmed Opt-In.
+    * Soft Opt-In - Recipients with this status can receive opt-in messages that enable them to confirm whether or not they want to receive your email campaigns as well as email marketing campaigns.
+      You can set a recipient’s status to Soft Opt-In manually or through a mass update.
+    * Soft Opt-Out - Recipients with this status cannot receive campaign email messages but can receive opt-in messages.
+      You can change this subscription status to Soft Opt-In manually or through a mass update.
+    * Confirmed Opt-Out - Only the recipient can set their subscription status to Confirmed Opt-Out.
+      Recipients with this status cannot receive email campaigns or opt-in messages. Recipients with this status can only opt in again through the Customer Center or by clicking the link in a campaign message they have received prior to opting out.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">homePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Home Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">image</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Image</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing file in the file cabinet for your account. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contact is Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This element has a default value of false. If set to true, this contact is not displayed on the Contacts list in the UI and cannot be associated with other records.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isPrivate</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Private</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field has a default value of false. If set to true the contact can only be viewed by the user that entered the contact record (as recorded with the login operation).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is required for the Online Bill Pay feature.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">middleName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Middle Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the contact's middle name or initial. This field is optional.
+
+What you enter here automatically appears second in the Contact field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">mobilePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mobile Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">officePhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Office Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Main Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field is required for the Online Bill Pay feature. Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phoneticName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Furigana</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the furigana character you want to use to sort this record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salutation</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mr./Ms...</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the contact's salutation.
+
+Examples are Mr., Mrs., Ms. and Miss.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subscriptionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/subscriptionslist.html?mode=package">SubscriptionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the subsidiary to associate with this contact. You cannot enter transactions for this contact unless a subsidiary is assigned.
+ 
+If you select this contact on a transaction, the transaction is associated with this subsidiary. The contact is able to access only information associated with this subsidiary.
+ 
+Note: Once a transaction has posted for the contact, you are not able to change the subsidiary selected on the contact record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supervisor</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Supervisor</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing contact. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">supervisorPhone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sup. Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Must be entered in the following formats:999-999-9999, 1-999-999-9999, (999) 999-9999, 1(999) 999-9999 or 999-999-9999 ext 9999.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Job Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter this contact's title at his or her company.
+
+On the record for this contact's company, in the Contacts section, this title appears next to the contacts name.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/contactsearch.html?mode=package">ContactSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/contactsearchadvanced.html?mode=package">ContactSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/contactsearchbasic.html?mode=package">ContactSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/contactsearchrow.html?mode=package">ContactSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/contactsearchrowbasic.html?mode=package">ContactSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

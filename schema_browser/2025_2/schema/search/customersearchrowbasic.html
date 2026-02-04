@@ -1,0 +1,1526 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__customersearchrowbasic','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__customersearchrowbasic','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CustomerSearchRowBasic</H1>
+    Namespace: urn:common.platform.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">accountNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address1</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 1</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address2</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 2</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">address3</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address 3</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressInternalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressLabel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address Label</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Address Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altContact</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Alt. Contact</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altEmail</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Alt. Email</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">altPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Office Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">assignedSite</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Assigned Web Site</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">assignedSiteId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Assigned Web Site ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">attention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Attention</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">availableOffline</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Always Available Offline</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">balance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Balance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress1</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Address 1</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress2</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Address 2</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress3</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Address 3</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAttention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Attention</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCountry</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billCountryCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Country Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billZipCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Billing Zip</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buyingReason</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Buying Reason</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">buyingTimeFrame</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Buying Time Frame</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">category</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccCustomerCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">CC Customer Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccDefault</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Credit Card</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccExpDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">CC Expire Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccHolderName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Cardholder Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccInternalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card State</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccStateFrom</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card State From</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ccType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">city</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">comments</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Comments</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">companyName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Company Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consolBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Balance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consolDaysOverdue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Days Overdue</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consolDepositBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Deposit Balance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consolOverdueBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Overdue Balance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">consolUnbilledOrders</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Unbilled Orders</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contact</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Contact</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contribution</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Contribution %</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">contributionPrimary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Sales Rep Contribution %</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">conversionDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Conversion Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">country</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">countryCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Country Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">creditHold</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Hold</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">creditHoldOverride</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Hold</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">creditLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">currency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Primary Currency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customFieldList</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumncustomfieldlist.html?mode=package">SearchColumnCustomFieldList</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dateClosed</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date Closed</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dateCreated</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date Created</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">daysOverdue</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Days Overdue</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultAllocationStrategy</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Allocation Strategy</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultOrderPriority</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Order Priority</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultTaxReg</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Tax Reg.</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">depositBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Deposit Balance </td>
+            </tr>
+            <tr>
+                <td class="sst_fname">drAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Deferred Revenue Reclassification Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">email</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Email</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">emailPreference</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Email Preference</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">emailTransactions</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Email Transactions</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">endDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">End Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entityId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entityNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entityStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">estimatedBudget</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Estimated Budget</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">explicitConversion</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Explicit Conversion</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">External ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fax</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Fax</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">faxTransactions</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Fax Transactions</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">firstName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">First Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">firstOrderDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date of First Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">firstSaleDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date of First Sale</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Foreign Currency Adjustment Revenue Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Balance (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxConsolBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Balance (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxConsolUnbilledOrders</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Consolidated Unbilled Orders (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fxUnbilledOrders</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Unbilled Orders (Foreign Currency)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giveAccess</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Login Access</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">globalSubscriptionStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Global Subscription Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">groupPricingLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Group Pricing Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">hasDuplicates</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Duplicate</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">homePhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Home Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">image</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Image</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isBudgetApproved</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Budget Approved</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isDefaultBilling</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isDefaultShipping</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Shipping Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInactive</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Inactive</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isPerson</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Is Individual</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isShipAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Residential Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemPricingLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Item Pricing Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">itemPricingUnitPrice</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Item Pricing Unit Price</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobEndDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Job Actual End</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobProjectedEnd</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Job Projected End</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobStartDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Job Start</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Job Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">language</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Language</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastModifiedDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Modified</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Last Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastOrderDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date of Last Order</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastSaleDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Date of Last Sale</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">leadDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Lead Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">leadSource</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Lead Source</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">level</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">manualCreditHold</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Override Credit Hold On</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">middleName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Middle Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">mobilePhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Mobile Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">monthlyClosing</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Monthly Closing Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">onCreditHold</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">On Credit Hold</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">overdueBalance</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Overdue Balance</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">parent</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Top Level Parent</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partner</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Partner</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerContribution</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Partner Contribution %</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerRole</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Partner Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">partnerTeamMember</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Partner Team Member</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pec</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">PEC</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">permission</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Permission</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">phone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">phoneticName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Phonetic Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">prefCCProcessor</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Credit Card Processor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">priceLevel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Price Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pricingGroup</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Pricing Group</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">pricingItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Pricing Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">printTransactions</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Print Transactions</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">prospectDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Prospect Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">receivablesAccount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Default Receivables Account</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">reminderDays</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Reminder Days</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">resaleNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Resale Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">role</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesReadiness</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Readiness</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesRep</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Rep</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesTeamMember</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Team Member</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesTeamRole</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Sales Team Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salutation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Mr./Mrs...</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddress1</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Address 1</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddress2</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Address 2</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddress3</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Address 3</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAddressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipAttention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Attention</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipComplete</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Ship Complete</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCountry</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipCountryCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Country Code</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shippingItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipState</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">shipZip</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Shipping Zip</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sourceSite</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Source Website</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">sourceSiteId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnlongfield.html?mode=package">SearchColumnLongField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Source Website ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">stage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnenumselectfield.html?mode=package">SearchColumnEnumSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Stage</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">startDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Start Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">state</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">State/Province</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subscription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subscription</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subscriptionDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndatefield.html?mode=package">SearchColumnDateField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subscription Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subscriptionStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subscription Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxable</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Taxable</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">taxItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Tax Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terms</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Terms</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">territory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnselectfield.html?mode=package">SearchColumnSelectField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Territory</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">title</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Job Title</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">unbilledOrders</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumndoublefield.html?mode=package">SearchColumnDoubleField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Unbilled Orders</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">url</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Web Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">vatRegNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Tax Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">webLead</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnbooleanfield.html?mode=package">SearchColumnBooleanField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Web Lead</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">zipCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcolumnstringfield.html?mode=package">SearchColumnStringField</a>
+</td>
+                <td class="sst_fcard">0..unbounded</td>
+                <td class="sst_flabel">Zip Code</td>
+            </tr>
+    </table>
+
+
+    <H2>Related Record(s)</H2>
+    <table class="jtable">
+        <tr><th class="sst_slabel">Name</th></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/customer.html?mode=package">Customer</a></td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

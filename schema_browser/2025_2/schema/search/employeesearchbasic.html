@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','search__employeesearchbasic','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','search__employeesearchbasic','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>EmployeeSearchBasic</H1>
+    Namespace: urn:common.platform.webservices.netsuite.com<br/>
+
+
+    <H2>Fields</H2>
+    <table class="jtable">
+        <tr><th class="sst_fname">Name</th><th class="sst_ftype">Type</th><th class="sst_fcard">Cardinality</th><th class="sst_flabel">Label</th></tr>
+            <tr>
+                <td class="sst_fname">address</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressee</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Addressee</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressLabel</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Address Label</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">addressPhone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Address Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">alienNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Alien Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">allocation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Allocation</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">anniversary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Anniversary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">approvalLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Approval Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">approver</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Approver</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">attention</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Attention</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">authWorkDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Authorized to work until date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">baseWage</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Base Wage</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">baseWageType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeebasewagetype.html?mode=package">EmployeeBaseWageType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Base Wage Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billAddress</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">billingClass</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Billing Class</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">birthDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Birth Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">birthDay</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Birthday</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bonusTarget</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Bonus Target</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bonusTargetComment</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Target Comments</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bonusTargetPayFrequency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeebonustargetpayfrequency.html?mode=package">EmployeeBonusTargetPayFrequency</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Target Frequency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">bonusTargetType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeebonustargettype.html?mode=package">EmployeeBonusTargetType</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Target Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">cContribution</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Company Contribution</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">city</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">City</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">class</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Class</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">comments</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Comments</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">commissionPlan</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Commission Plan</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">compensationCurrency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeecompensationcurrency.html?mode=package">EmployeeCompensationCurrency</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Compensation Currency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">concurrentWebServicesUser</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Concurrent Web Services User</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">corporateCardProfile</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Corporate Card Profile</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">country</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/country.html?mode=package">Country</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Country</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">county</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">County/State</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">customFieldList</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchcustomfieldlist.html?mode=package">SearchCustomFieldList</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel"></td>
+            </tr>
+            <tr>
+                <td class="sst_fname">dateCreated</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Date Created</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">deduction</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Deduction</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultAcctCorpCardExp</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Account for Corporate Card Expenses</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultExpenseReportCurrency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Currency for Expense Reports</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultTaxReg</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Tax Reg.</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">defaultTaxRegText</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Tax Reg. (Text)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">department</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Department</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">earning</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Earning</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">education</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Education</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">eligibleForCommission</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Eligible For Commission</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">email</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Email</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">embossedName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Name on Card</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">employeeStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Employee Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">employeeType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Employee Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">employeeTypeKpi</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Include in KPI</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">entityId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Name/ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">ethnicity</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Ethnicity</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expenseReportCurrency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expense Report Currency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">expiration</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Expiration Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">External ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">externalIdString</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">External ID (Text)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">fax</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Fax</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">firstName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">First Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">gender</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/gender.html?mode=package">Gender</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Gender</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">giveAccess</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Login Access</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">globalSubscriptionStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/globalsubscriptionstatus.html?mode=package">GlobalSubscriptionStatus</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Global Subscription Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">group</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Group</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">hireDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Hire Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">I9Verified</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">I9 Verified</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">image</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Image</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalId</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Internal ID</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">internalIdNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchlongfield.html?mode=package">SearchLongField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Internal ID (Number)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isDefaultBilling</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Billing Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isDefaultShipping</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Default Shipping Address</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isInactive</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Inactive</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isJobManager</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job Manager</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isJobResource</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Job Resource</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">isTemplate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Template</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">job</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">jobDescription</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job Description</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">laborCost</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Labor Cost</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">language</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/language.html?mode=package">Language</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Language</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastModifiedDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Last Modified</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Last Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastPaidDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Last Paid Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">lastReviewDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Last Review Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">level</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/permissionlevel.html?mode=package">PermissionLevel</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Level</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">location</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Location</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">maritalStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Marital Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">middleName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Middle Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">nextReviewDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Next Review Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">offlineAccess</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Offline Access</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">payFrequency</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeepayfrequency.html?mode=package">EmployeePayFrequency</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Pay Frequency</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">permChangeDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Permission Change Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">permission</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/permissioncode.html?mode=package">PermissionCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Permission</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">permissionChange</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/permissioncode.html?mode=package">PermissionCode</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Permission Change</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">phone</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Phone</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">phoneticName</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Phonetic Name</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">positionTitle</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Position Title</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">primaryEarningAmount</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Primary Earning Amount</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">primaryEarningItem</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Primary Earning Item</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">primaryEarningType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Primary Earning Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderApprovalLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Purchase Approval Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderApprover</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Purchase Approver</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">purchaseOrderLimit</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Purchase Limit</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">releaseDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Termination/Release Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">residentStatus</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Resident Status</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">role</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">roleChange</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Role Change</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">roleChangeDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Role Change Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesRep</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Sales Rep</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salesRole</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Sales Role</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">salutation</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Mr./Mrs...</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">socialSecurityNumber</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Social Security Number</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">startDateTimeOffCalc</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Start Date for Time-Off Calculations</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">state</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">State/Province (Deprecated)</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">subsidiary</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Subsidiary</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supervisor</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Supervisor</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">supportRep</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Is Support Rep</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">targetUtilization</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdoublefield.html?mode=package">SearchDoubleField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Target Utilization</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terminationCategory</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeeterminationcategory.html?mode=package">EmployeeTerminationCategory</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Termination Category</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terminationDetails</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Termination Details</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terminationReason</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Termination Reason</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">terminationRegretted</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchenummultiselectfield.html?mode=package">SearchEnumMultiSelectField</a>
+                        <br/>(use: <a href="../../schema/enum/employeeterminationregretted.html?mode=package">EmployeeTerminationRegretted</a>)
+                    </td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Termination Regretted</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">timeApprover</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Time Approver</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">timeOffPlan</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Time-Off Plan</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">title</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Job Title</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">usePerquest</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Include In US Payroll</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">useTimeData</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchbooleanfield.html?mode=package">SearchBooleanField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Use Time Data</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">visaExpDate</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchdatefield.html?mode=package">SearchDateField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Visa Expiration Date</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">visaType</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Visa Type</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">withholding</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Withholding</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">workCalendar</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Work Calendar</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">workplace</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchmultiselectfield.html?mode=package">SearchMultiSelectField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Workplace</td>
+            </tr>
+            <tr>
+                <td class="sst_fname">zipCode</td>
+                    <td class="sst_ftype"><a href="../../schema/other/searchstringfield.html?mode=package">SearchStringField</a>
+</td>
+                <td class="sst_fcard">0..1</td>
+                <td class="sst_flabel">Zip</td>
+            </tr>
+    </table>
+
+
+    <H2>Related Record(s)</H2>
+    <table class="jtable">
+        <tr><th class="sst_slabel">Name</th></tr>
+            <tr><td class="sst_slabel"><a href="../../schema/record/employee.html?mode=package">Employee</a></td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

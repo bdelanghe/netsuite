@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__billingschedule','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__billingschedule','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>BillingSchedule</H1>
+
+
+    Namespace: <a href="../../schema/record/billingschedule.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">applyToSubtotal</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Apply To Subtotal</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to create a billing schedule applied to the pre-tax, pre-discount subtotal of a transaction. To create a billing schedule applied to a transaction subtotal, Type must be set to Standard and Recurrence Frequency must be set to Custom.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billForActuals</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Invoice Actual Time Only</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the box to invoice only actual time worked and recorded in Time Tracking in each interval. If checked, you cannot enter an initial amount.
+ 
+Clear the box to invoice planned time and actual time worked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dayPeriod</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">frequency</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulefrequency.html?mode=package">BillingScheduleFrequency</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Frequency</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the frequency for bills to recur.
+
+Select Daily to create bills once per day.
+
+Select Weekly to create bills once per week.
+
+Select Monthly to create bills once per month.
+
+Select Quarterly to create bills once per quarter.
+Alternatively, select Monthly and then select 3 in the Repeat Every field.
+
+Select Twice a Year to create bills twice per year.
+Alternatively, select Monthly and then select 6 in the Repeat Every field.
+
+Select Annually to create bills once per year.
+
+Select One Time to create a one-time bill.
+
+Select End of Period to create a bill at the end of a calendar period.
+
+Select Start of Period to create a bill at the beginning of a calendar period.
+
+Select Custom to create a new frequency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inArrears</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">In Arrears</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to bill at the end of each period, instead of the beginning.
+
+For example, on a billing schedule with no initial amount, standard monthly frequency, in arrears, the first invoice is created one month from one day after the sales order date.
+
+Note: When this box is not checked, the first invoice bills for the initial amount plus the first recurring amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">initialAmount</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initial Amount</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the initial bill amount generated by this billing schedule.
+
+This can be entered as a percentage or a set currency amount if you use line-level billing schedules. You can only use percentage initial amounts if you apply billing schedules on the transaction level.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">initialTerms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Initial Payment Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the terms applied to the initial payment amount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to inactivate this billing schedule. You cannot apply inactive schedules to orders.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isPublic</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Public</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to make this billing schedule public. You can select a public schedule on any estimate, sales order or item record.
+
+If you do not check the Public box, this schedule is Private. A private billing schedule shows only in the transaction it is created from. If you create a private billing schedule from a transaction, that schedule is attached to items on the resulting sales order.
+
+Note: This check box is available only for schedules created on-the-fly. If you create a regular schedule, it defaults to Public and cannot be changed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">milestoneList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/billingschedulemilestonelist.html?mode=package">BillingScheduleMilestoneList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">monthDom</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day of Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">monthDow</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulemonthdow.html?mode=package">BillingScheduleMonthDow</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day of Week</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">monthDowim</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulemonthdowim.html?mode=package">BillingScheduleMonthDowim</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day Of Week in Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">monthMode</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulerecurrencemode.html?mode=package">BillingScheduleRecurrenceMode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mode</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">name</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the name of this billing schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">numberRemaining</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Count</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter the number of subsequent payments you want the order amount divided into.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">project</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceDowMaskList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recurrencedowmasklist.html?mode=package">RecurrenceDowMaskList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/billingschedulerecurrencelist.html?mode=package">BillingScheduleRecurrenceList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrencePattern</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulerecurrencepattern.html?mode=package">BillingScheduleRecurrencePattern</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Pattern</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select whether you want billing to occur on a specified date or on the anniversary date. For example, the billing schedule is created on the 3rd of the month, but you only bill customers on the 15th and 30th of the month. In this case, select fixed date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurrenceTerms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Payment Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the terms to be used on all invoices subsequent to the initial invoice.
+
+To add new payment terms, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New and click Terms.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">repeatEvery</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulerepeatevery.html?mode=package">BillingScheduleRepeatEvery</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Repeat Every</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose how often the recurring invoices are generated.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">scheduleType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingscheduletype.html?mode=package">BillingScheduleType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The kind of billing schedule. The types available depend on the features enabled in your account. For example, the Fixed Bid Interval billing schedule type is only available when the Project Management feature is enabled.
+
+    * Charge-Based – Lets you create charges, based on charge rules, which you can bill to customers.
+    * Fixed Bid, Interval – Lets you bill customers for work completed at set intervals.
+    * Standard – Lets you create a standard billing schedule based on an initial amount, recurrence frequency, and recurrence count.
+    * Time and Materials – Bill customers based on actual expenses incurred in a project, such as raw materials and work hours.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">seriesStartDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Recurrence Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">transaction</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Transaction</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the associated transaction for this schedule.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearDom</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day of Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearDow</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingscheduleyeardow.html?mode=package">BillingScheduleYearDow</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day of Week</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearDowim</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingscheduleyeardowim.html?mode=package">BillingScheduleYearDowim</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Day Of Week in Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearDowimMonth</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingscheduleyeardowimmonth.html?mode=package">BillingScheduleYearDowimMonth</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearMode</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingschedulerecurrencemode.html?mode=package">BillingScheduleRecurrenceMode</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mode</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">yearMonth</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/billingscheduleyearmonth.html?mode=package">BillingScheduleYearMonth</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Month</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/billingschedulesearch.html?mode=package">BillingScheduleSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/billingschedulesearchadvanced.html?mode=package">BillingScheduleSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/billingschedulesearchbasic.html?mode=package">BillingScheduleSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/billingschedulesearchrow.html?mode=package">BillingScheduleSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/billingschedulesearchrowbasic.html?mode=package">BillingScheduleSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

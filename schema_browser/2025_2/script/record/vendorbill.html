@@ -1,0 +1,1524 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__vendorbill','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__vendorbill','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Vendor Bill</H1>
+    <H3>Internal ID: vendorbill</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the Accounts Payable account that will be affected by this transaction.
+
+Click New to set up a new account.
+
+For details on accounts, go to Setup &gt; Accounting &gt; Manage G/L &gt; Chart of Accounts.</td>
+            </tr>
+                <tr id="field_approvalstatus">
+                <td class="rt_fname">approvalstatus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Approval Status</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The approval status of this bill shows in this field.
+
+Accept the default status or choose one of the following:
+    * Approved – No further review or processing is required before a payment is processed.
+    * Pending Approval – Someone with permission must approve the bill before a payment can be processed for it.</td>
+            </tr>
+                <tr id="field_availablevendorcredit">
+                <td class="rt_fname">availablevendorcredit</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Available Vendor Credit</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Available Vendor Credit field displays the remaining credit available to this vendor before a payment is received. It is converted from vendor’s primary currency into the transaction currency. The field value is available only in edit mode.
+
+This field is visible after you customize the vendor bill. To display this field, enable accounts payable preferences:
+
+   1. Go to Setup &gt;Accounting &gt; Preferences &gt; Accounting Preferences.
+   2. In the Accounts Payable section, check the Vendor Credit Limit Warnings and Vendor Credit Limit Includes Orders boxes.
+   3. Click Save.
+   4. In the vendor bill Customize menu, click Customize Form.
+   5. In the Screen Fields subtab, beside Available Vendor Credit, check the Show box.
+   6. Click Save.
+
+If the transaction exceeds the vendor’s credit limit, a warning message appears displaying the exceeded credit amount. The message does not prevent you from saving the transaction.</td>
+            </tr>
+                <tr id="field_balance">
+                <td class="rt_fname">balance</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_billaddresslist">
+                <td class="rt_fname">billaddresslist</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor Select</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Vendor Select field, choose a vendor.
+Verify the billing address displayed in the Vendor field.</td>
+            </tr>
+                <tr id="field_billingaddress">
+                <td class="rt_fname">billingaddress</td>
+                <td class="rt_ftype">                        <a href="address.html">summary</a>
+</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you wish, select the class that applies to this item. Click —New— to set up a new class.
+
+Go to Lists &gt; Classes for details about existing classes.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_creditlimit">
+                <td class="rt_fname">creditlimit</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Credit Limit</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The credit limit you entered for your purchases from this vendor will appear here.
+
+To enter or change a credit limit, go to Lists &gt; Relationships &gt; Vendors. On the vendor record's Financial tab, enter the credit limit.
+
+NetSuite will warn you when you meet or exceed this vendor's limit while you are entering orders if you go to Home &gt; Set Preferences and check the Credit Limit Warnings box.</td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The transaction currency for this bill is shown here.
+
+If this bill was created from a purchase order, the currency on the originating purchase order is shown, and you cannot change the currency on the bill.</td>
+            </tr>
+                <tr id="field_currencyname">
+                <td class="rt_fname">currencyname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This vendor's currency is shown in this field.
+
+All currency amounts on this transaction are shown in this currency.</td>
+            </tr>
+                <tr id="field_currencysymbol">
+                <td class="rt_fname">currencysymbol</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency Symbol</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the appropriate standard or custom form to use.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a department to associate with this transaction.
+
+To create a new department, select New.
+
+For details on existing departments, go to Setup &gt; Company &gt; Departments.</td>
+            </tr>
+                <tr id="field_discountamount">
+                <td class="rt_fname">discountamount</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Disc. Amt.</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite enters the amount discounted on this bill.
+
+This discount is based on the purchase order terms.  For example, if terms are set as 2%-10, Net 30 and the bill is paid within 10 days, a 2% discount is applied.
+
+If this discount item is taxable, the discount is applied before taxes. If it is not taxable, the discount is applied after taxes.</td>
+            </tr>
+                <tr id="field_discountdate">
+                <td class="rt_fname">discountdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Disc. Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If your vendor offers discounts for early payments on bills, a calculated date based on the terms of the bill automatically shows up in this field. This date is the last day you can pay this bill in order to receive a discount.</td>
+            </tr>
+                <tr id="field_documentstatus">
+                <td class="rt_fname">documentstatus</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_duedate">
+                <td class="rt_fname">duedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Due Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">NetSuite inserts today's date. You can type or pick another date. If you do not assign a due date, this bill will not appear on aging reports.</td>
+            </tr>
+                <tr id="field_entity">
+                <td class="rt_fname">entity</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Vendor</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the vendor for this purchase. Click New to set up a new vendor.
+
+Go to Lists &gt; Relationships &gt; Vendors for details about existing vendors.
+
+Note: If you use NetSuite OneWorld, the Subsidiary field defaults to the primary subsidiary assigned to the selected vendor. If the selected vendor has been shared with multiple secondary subsidiaries, you can select the secondary subsidiary to associate with this bill.</td>
+            </tr>
+                <tr id="field_entitynexus">
+                <td class="rt_fname">entitynexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_entitytaxregnum">
+                <td class="rt_fname">entitytaxregnum</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Tax Reg. Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The tax registration number for this entity displays here.</td>
+            </tr>
+                <tr id="field_exchangerate">
+                <td class="rt_fname">exchangerate</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exchange Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The currency's exchange rate is shown in this field.
+
+You can edit the exchange rate for this transaction only, or you can update the currency record with the exchange rate you enter here.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isbasecurrency">
+                <td class="rt_fname">isbasecurrency</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Base Currency</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_landedcostperline">
+                <td class="rt_fname">landedcostperline</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Landed Cost per Line</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to enter a landed cost per line item.</td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a location to associate with this line item. Select New to create a new location record.
+
+Go to Lists &gt; Locations for details about existing locations.</td>
+            </tr>
+                <tr id="field_memo">
+                <td class="rt_fname">memo</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Memo</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a memo that will appear on such reports as the 2-line Accounts Payable Register.</td>
+            </tr>
+                <tr id="field_nextapprover">
+                <td class="rt_fname">nextapprover</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Next Approver</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field displays the next person set to approve this bill via approval routing.</td>
+            </tr>
+                <tr id="field_nexus">
+                <td class="rt_fname">nexus</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Nexus</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the nexus of the transaction. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different nexus in the dropdown list, the corresponding tax registration number is automatically selected in the Subsidiary Tax Reg. Number field.</td>
+            </tr>
+                <tr id="field_overrideinstallments">
+                <td class="rt_fname">overrideinstallments</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override Installments</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to override the default calculated installment amounts and enter custom ones.
+Note that you must ensure that custom installment amounts must add up to the total amount due.</td>
+            </tr>
+                <tr id="field_paymenthold">
+                <td class="rt_fname">paymenthold</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payment Hold</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Payment Hold box to apply a payment hold on a disputed bill:
+
+    * The Make Payment button does not appear on the vendor bill and a vendor payment for that bill cannot be processed.
+    * Vendor bills subject to a payment hold do not appear on the bill payments page.
+    * The Electronic Payment SuiteApp does not process payments that are subject to a payment hold.</td>
+            </tr>
+                <tr id="field_postingperiod">
+                <td class="rt_fname">postingperiod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Posting Period</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the period to which you want to post this transaction.
+
+You cannot post to a closed period.
+
+If your transaction is subject to approval, the posting period is set when the transaction is approved. For details, see the help topic Approval Routing, subsection Posting Period for Transactions Subject to Approval.</td>
+            </tr>
+                <tr id="field_received">
+                <td class="rt_fname">received</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Received Bill</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Place a check mark in this box if you have received a bill for this order.
+
+If you have received all the items on your order but have not checked this box, this transaction will now appear in your open bills report with no due date.</td>
+            </tr>
+                <tr id="field_status">
+                <td class="rt_fname">status</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Status</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_statusref">
+                <td class="rt_fname">statusref</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the subsidiary you want to associate with this transaction.</td>
+            </tr>
+                <tr id="field_subsidiarytaxregnum">
+                <td class="rt_fname">subsidiarytaxregnum</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Tax Reg. Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the tax registration number of the transaction nexus. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different tax registration number in the dropdown list, the corresponding nexus is automatically selected in the Nexus field.</td>
+            </tr>
+                <tr id="field_taxdetailsoverride">
+                <td class="rt_fname">taxdetailsoverride</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Tax Details Override</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to override the tax information on the Tax Details subtab of the transaction. Only roles with at least the Edit level of the Tax Details Tab permission can override the tax details.</td>
+            </tr>
+                <tr id="field_taxpointdate">
+                <td class="rt_fname">taxpointdate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Point Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Tax point date is a legal requirement in many countries. It is the date of the transaction that determines the taxability. It may be different from the transaction date that determines the GL impact. Specific rules consider the reporting of transactions based on tax point date and other factors.</td>
+            </tr>
+                <tr id="field_taxpointdateoverride">
+                <td class="rt_fname">taxpointdateoverride</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Override</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to change the tax point date.</td>
+            </tr>
+                <tr id="field_taxregoverride">
+                <td class="rt_fname">taxregoverride</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Tax Registration Override</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to override the values in the Nexus and Subsidiary Tax Reg. Number fields. Only roles with at least the Edit level of the Tax Details Tab permission can override the values that NetSuite automatically selects in these fields.</td>
+            </tr>
+                <tr id="field_terms">
+                <td class="rt_fname">terms</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Terms</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select discount terms or payment terms that apply to this bill.
+
+To add additional choices to this list, go to &lt;_TABNAME=LIST_ACCOUNTINGOTHERLIST_&gt; &gt; &lt;_TASKCATEGORY=LIST_ACCOUNTINGOTHERLIST_&gt; &gt; Accounting Lists &gt; Terms.</td>
+            </tr>
+                <tr id="field_tobeprinted">
+                <td class="rt_fname">tobeprinted</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">To Be Printed</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to save this bill in a que of bills to be printed later. This enables you to print vendor bills in bulk on the Print Bills page.
+
+For more information, see the help topic Print Vendor Bills.</td>
+            </tr>
+                <tr id="field_total">
+                <td class="rt_fname">total</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_trandate">
+                <td class="rt_fname">trandate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">NetSuite inserts today's date for the posting date of this bill. You can type or pick another date.
+
+What you enter here determines the date range in which this transaction appears on the Accounts Payable Register.
+
+You can select or enter custom date ranges on registers.</td>
+            </tr>
+                <tr id="field_tranid">
+                <td class="rt_fname">tranid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Reference No.</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter additional information to identify this transaction, such as the vendor's invoice number. This reference appears on reports such as the Accounts Payable Register.
+
+Note: You can enter 45 Latin alphanumeric characters maximum in this field. Entries that use special characters, for example, characters from other languages, may support fewer than 45 characters.</td>
+            </tr>
+                <tr id="field_transactionnumber">
+                <td class="rt_fname">transactionnumber</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Transaction Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">By default, transaction lists display only the Number field in searches and reporting.
+
+For the transaction types available through previous releases, these two values will be the same.
+
+Note: The Transaction Number field is visible by default on standard NetSuite forms and invisible by default on customized forms. You can customize a form to display this field.</td>
+            </tr>
+                <tr id="field_unbilledorders">
+                <td class="rt_fname">unbilledorders</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_usertotal">
+                <td class="rt_fname">usertotal</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">You can enter the dollar amount of the bill, but NetSuite will update this amount as you add or edit line items.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_accountingbookdetail_">accountingbookdetail - Accounting Books</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_accountingbookdetail_accountingbook">
+                        <td class="rt_sname">accountingbook</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Secondary Book</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_exchangerate">
+                        <td class="rt_sname">exchangerate</td>
+                        <td class="rt_stype">currency2</td>
+                        <td class="rt_slabel">Exchange Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_expense_">expense - Expenses</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_expense_account">
+                        <td class="rt_sname">account</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Account</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+Select the Accounts Payable account that will be affected by this transaction.
+
+Click —New — to set up a new account.
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amortizationenddate">
+                        <td class="rt_sname">amortizationenddate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Amort. End</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amortizationresidual">
+                        <td class="rt_sname">amortizationresidual</td>
+                        <td class="rt_stype">rate</td>
+                        <td class="rt_slabel">Residual</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amortizationsched">
+                        <td class="rt_sname">amortizationsched</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Amort. Schedule</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amortizationtype">
+                        <td class="rt_sname">amortizationtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amortizstartdate">
+                        <td class="rt_sname">amortizstartdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Amort. Start</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_category">
+                        <td class="rt_sname">category</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Category</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_class">
+                        <td class="rt_sname">class</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Class</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+If you wish, select the class that applies to this item. Click —New— to set up a new class.
+
+Go to Lists &gt; Classes for details about existing classes.
+                        </td>
+                    </tr>
+                        <tr id="field_expense_customer">
+                        <td class="rt_sname">customer</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Customer</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_department">
+                        <td class="rt_sname">department</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Department</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+If you like, select a department.
+
+Click New to enter a new department.
+
+Go to Lists &gt; Departments for details about existing departments.
+                        </td>
+                    </tr>
+                        <tr id="field_expense_grossamt">
+                        <td class="rt_sname">grossamt</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Gross Amt</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_isbillable">
+                        <td class="rt_sname">isbillable</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Billable</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_line">
+                        <td class="rt_sname">line</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_location">
+                        <td class="rt_sname">location</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Location</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+Select a location to associate with this line item. Select New to create a new location record.
+
+Go to Lists &gt; Locations for details about existing locations.
+                        </td>
+                    </tr>
+                        <tr id="field_expense_memo">
+                        <td class="rt_sname">memo</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Memo</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+Enter a memo that will appear on such reports as the 2-line Accounts Payable Register.
+                        </td>
+                    </tr>
+                        <tr id="field_expense_orderdoc">
+                        <td class="rt_sname">orderdoc</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_orderline">
+                        <td class="rt_sname">orderline</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_projecttask">
+                        <td class="rt_sname">projecttask</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Project Task</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_expense_scheduletype">
+                        <td class="rt_sname">scheduletype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_installment_">installment - Installments</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_installment_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">poscurrency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_installment_amountdue">
+                        <td class="rt_sname">amountdue</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount Due</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_installment_duedate">
+                        <td class="rt_sname">duedate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Due Date</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_installment_seqnum">
+                        <td class="rt_sname">seqnum</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Installment Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_installment_status">
+                        <td class="rt_sname">status</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Status</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_item_">item - Items</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_item_amortizationenddate">
+                        <td class="rt_sname">amortizationenddate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Amort. End</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_amortizationresidual">
+                        <td class="rt_sname">amortizationresidual</td>
+                        <td class="rt_stype">rate</td>
+                        <td class="rt_slabel">Residual</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_amortizationsched">
+                        <td class="rt_sname">amortizationsched</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Amort. Schedule</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_amortizationtype">
+                        <td class="rt_sname">amortizationtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_amortizstartdate">
+                        <td class="rt_sname">amortizstartdate</td>
+                        <td class="rt_stype">date</td>
+                        <td class="rt_slabel">Amort. Start</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_amount">
+                        <td class="rt_sname">amount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_billreceipts">
+                        <td class="rt_sname">billreceipts</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Receipts</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_billvariancestatus">
+                        <td class="rt_sname">billvariancestatus</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_catchupperiod">
+                        <td class="rt_sname">catchupperiod</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_class">
+                        <td class="rt_sname">class</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Class</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+If you wish, select the class that applies to this item. Click —New— to set up a new class.
+
+Go to Lists &gt; Classes for details about existing classes.
+                        </td>
+                    </tr>
+                        <tr id="field_item_customer">
+                        <td class="rt_sname">customer</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Customer</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_deferrevrec">
+                        <td class="rt_sname">deferrevrec</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_department">
+                        <td class="rt_sname">department</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Department</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+If you like, select a department.
+
+Click New to enter a new department.
+
+Go to Lists &gt; Departments for details about existing departments.
+                        </td>
+                    </tr>
+                        <tr id="field_item_description">
+                        <td class="rt_sname">description</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_grossamt">
+                        <td class="rt_sname">grossamt</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Gross Amt</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_id">
+                        <td class="rt_sname">id</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_inventorydetail">
+                        <td class="rt_sname">inventorydetail</td>
+                        <td class="rt_stype"><a href="inventorydetail.html">summary</a></td>
+                        <td class="rt_slabel">Inventory Detail</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_isbillable">
+                        <td class="rt_sname">isbillable</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Billable</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_isvsoebundle">
+                        <td class="rt_sname">isvsoebundle</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Item</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_itemsubtype">
+                        <td class="rt_sname">itemsubtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_itemtype">
+                        <td class="rt_sname">itemtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_landedcostcategory">
+                        <td class="rt_sname">landedcostcategory</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Landed Cost Category</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_line">
+                        <td class="rt_sname">line</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_linenumber">
+                        <td class="rt_sname">linenumber</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_location">
+                        <td class="rt_sname">location</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Location</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+Select a location to associate with this line item. Select New to create a new location record.
+
+Go to Lists &gt; Locations for details about existing locations.
+                        </td>
+                    </tr>
+                        <tr id="field_item_matrixtype">
+                        <td class="rt_sname">matrixtype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_options">
+                        <td class="rt_sname">options</td>
+                        <td class="rt_stype">namevaluelist</td>
+                        <td class="rt_slabel">Options</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_orderdoc">
+                        <td class="rt_sname">orderdoc</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_orderline">
+                        <td class="rt_sname">orderline</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">{1}</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_quantity">
+                        <td class="rt_sname">quantity</td>
+                        <td class="rt_stype">float</td>
+                        <td class="rt_slabel">Quantity</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_rate">
+                        <td class="rt_sname">rate</td>
+                        <td class="rt_stype">rate</td>
+                        <td class="rt_slabel">Rate</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_rateschedule">
+                        <td class="rt_sname">rateschedule</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_scheduletype">
+                        <td class="rt_sname">scheduletype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_units">
+                        <td class="rt_sname">units</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Units</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_item_vendorname">
+                        <td class="rt_sname">vendorname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Vendor Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_taxdetails_">taxdetails - Tax Detail</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_taxdetails_calcdetail">
+                        <td class="rt_sname">calcdetail</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Details</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_linename">
+                        <td class="rt_sname">linename</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_linetype">
+                        <td class="rt_sname">linetype</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Line type</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_netamount">
+                        <td class="rt_sname">netamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Net Amount</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxamount">
+                        <td class="rt_sname">taxamount</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Tax Amount</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxbasis">
+                        <td class="rt_sname">taxbasis</td>
+                        <td class="rt_stype">currency</td>
+                        <td class="rt_slabel">Tax Basis</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxcode">
+                        <td class="rt_sname">taxcode</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Tax Code</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxdetailsreference">
+                        <td class="rt_sname">taxdetailsreference</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Tax Details Reference</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_taxrate">
+                        <td class="rt_sname">taxrate</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Tax Rate</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_taxdetails_transaction">
+                        <td class="rt_sname">transaction</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Transaction</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_items">
+                <td class="rt_tname">items</td>
+                <td class="rt_tlabel">Items</td>
+            </tr>
+                <tr id="tab_landedcost">
+                <td class="rt_tname">landedcost</td>
+                <td class="rt_tlabel">Landed Cost</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+        <H2>Search Data</H2>
+        <H3><a href="transaction.html">Transaction</a></H3>
+
+        <H2>Transform Types</H2>
+        <table class="jtable" id="transformtypes">
+            <tr>
+                <th class="rt_tname">Target Record Type</th>
+                <th class="rt_tdef">Field Defaults</th>
+            </tr>
+                <tr id="transform_customPurchase">
+                <td class="rt_tname">customPurchase</td>
+                <td class="rt_tdef"></td>
+            </tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

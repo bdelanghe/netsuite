@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.common.platform.webservices.netsuite.com__country','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.common.platform.webservices.netsuite.com__country','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Country</H1>
+    Namespace: urn:types.common.platform.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">_afghanistan</td></tr>
+        <tr><td class="est_vvalue">_alandIslands</td></tr>
+        <tr><td class="est_vvalue">_albania</td></tr>
+        <tr><td class="est_vvalue">_algeria</td></tr>
+        <tr><td class="est_vvalue">_americanSamoa</td></tr>
+        <tr><td class="est_vvalue">_andorra</td></tr>
+        <tr><td class="est_vvalue">_angola</td></tr>
+        <tr><td class="est_vvalue">_anguilla</td></tr>
+        <tr><td class="est_vvalue">_antarctica</td></tr>
+        <tr><td class="est_vvalue">_antiguaAndBarbuda</td></tr>
+        <tr><td class="est_vvalue">_argentina</td></tr>
+        <tr><td class="est_vvalue">_armenia</td></tr>
+        <tr><td class="est_vvalue">_aruba</td></tr>
+        <tr><td class="est_vvalue">_australia</td></tr>
+        <tr><td class="est_vvalue">_austria</td></tr>
+        <tr><td class="est_vvalue">_azerbaijan</td></tr>
+        <tr><td class="est_vvalue">_bahamas</td></tr>
+        <tr><td class="est_vvalue">_bahrain</td></tr>
+        <tr><td class="est_vvalue">_bangladesh</td></tr>
+        <tr><td class="est_vvalue">_barbados</td></tr>
+        <tr><td class="est_vvalue">_belarus</td></tr>
+        <tr><td class="est_vvalue">_belgium</td></tr>
+        <tr><td class="est_vvalue">_belize</td></tr>
+        <tr><td class="est_vvalue">_benin</td></tr>
+        <tr><td class="est_vvalue">_bermuda</td></tr>
+        <tr><td class="est_vvalue">_bhutan</td></tr>
+        <tr><td class="est_vvalue">_boliviaPlurinationalStateOf</td></tr>
+        <tr><td class="est_vvalue">_bonaireSintEustatiusAndSaba</td></tr>
+        <tr><td class="est_vvalue">_bosniaAndHerzegovina</td></tr>
+        <tr><td class="est_vvalue">_botswana</td></tr>
+        <tr><td class="est_vvalue">_bouvetIsland</td></tr>
+        <tr><td class="est_vvalue">_brazil</td></tr>
+        <tr><td class="est_vvalue">_britishIndianOceanTerritory</td></tr>
+        <tr><td class="est_vvalue">_bruneiDarussalam</td></tr>
+        <tr><td class="est_vvalue">_bulgaria</td></tr>
+        <tr><td class="est_vvalue">_burkinaFaso</td></tr>
+        <tr><td class="est_vvalue">_burundi</td></tr>
+        <tr><td class="est_vvalue">_caboVerde</td></tr>
+        <tr><td class="est_vvalue">_cambodia</td></tr>
+        <tr><td class="est_vvalue">_cameroon</td></tr>
+        <tr><td class="est_vvalue">_canada</td></tr>
+        <tr><td class="est_vvalue">_canaryIslands</td></tr>
+        <tr><td class="est_vvalue">_caymanIslands</td></tr>
+        <tr><td class="est_vvalue">_centralAfricanRepublic</td></tr>
+        <tr><td class="est_vvalue">_ceutaAndMelilla</td></tr>
+        <tr><td class="est_vvalue">_chad</td></tr>
+        <tr><td class="est_vvalue">_chile</td></tr>
+        <tr><td class="est_vvalue">_china</td></tr>
+        <tr><td class="est_vvalue">_christmasIsland</td></tr>
+        <tr><td class="est_vvalue">_cocosKeelingIslands</td></tr>
+        <tr><td class="est_vvalue">_colombia</td></tr>
+        <tr><td class="est_vvalue">_comoros</td></tr>
+        <tr><td class="est_vvalue">_congo</td></tr>
+        <tr><td class="est_vvalue">_congoTheDemocraticRepublicOfThe</td></tr>
+        <tr><td class="est_vvalue">_cookIslands</td></tr>
+        <tr><td class="est_vvalue">_costaRica</td></tr>
+        <tr><td class="est_vvalue">_coteDIvoire</td></tr>
+        <tr><td class="est_vvalue">_croatia</td></tr>
+        <tr><td class="est_vvalue">_cuba</td></tr>
+        <tr><td class="est_vvalue">_curacao</td></tr>
+        <tr><td class="est_vvalue">_cyprus</td></tr>
+        <tr><td class="est_vvalue">_czechia</td></tr>
+        <tr><td class="est_vvalue">_denmark</td></tr>
+        <tr><td class="est_vvalue">_djibouti</td></tr>
+        <tr><td class="est_vvalue">_dominica</td></tr>
+        <tr><td class="est_vvalue">_dominicanRepublic</td></tr>
+        <tr><td class="est_vvalue">_ecuador</td></tr>
+        <tr><td class="est_vvalue">_egypt</td></tr>
+        <tr><td class="est_vvalue">_elSalvador</td></tr>
+        <tr><td class="est_vvalue">_equatorialGuinea</td></tr>
+        <tr><td class="est_vvalue">_eritrea</td></tr>
+        <tr><td class="est_vvalue">_estonia</td></tr>
+        <tr><td class="est_vvalue">_eswatini</td></tr>
+        <tr><td class="est_vvalue">_ethiopia</td></tr>
+        <tr><td class="est_vvalue">_falklandIslandsMalvinas</td></tr>
+        <tr><td class="est_vvalue">_faroeIslands</td></tr>
+        <tr><td class="est_vvalue">_fiji</td></tr>
+        <tr><td class="est_vvalue">_finland</td></tr>
+        <tr><td class="est_vvalue">_france</td></tr>
+        <tr><td class="est_vvalue">_frenchGuiana</td></tr>
+        <tr><td class="est_vvalue">_frenchPolynesia</td></tr>
+        <tr><td class="est_vvalue">_frenchSouthernTerritories</td></tr>
+        <tr><td class="est_vvalue">_gabon</td></tr>
+        <tr><td class="est_vvalue">_gambia</td></tr>
+        <tr><td class="est_vvalue">_georgia</td></tr>
+        <tr><td class="est_vvalue">_germany</td></tr>
+        <tr><td class="est_vvalue">_ghana</td></tr>
+        <tr><td class="est_vvalue">_gibraltar</td></tr>
+        <tr><td class="est_vvalue">_greece</td></tr>
+        <tr><td class="est_vvalue">_greenland</td></tr>
+        <tr><td class="est_vvalue">_grenada</td></tr>
+        <tr><td class="est_vvalue">_guadeloupe</td></tr>
+        <tr><td class="est_vvalue">_guam</td></tr>
+        <tr><td class="est_vvalue">_guatemala</td></tr>
+        <tr><td class="est_vvalue">_guernsey</td></tr>
+        <tr><td class="est_vvalue">_guinea</td></tr>
+        <tr><td class="est_vvalue">_guineaBissau</td></tr>
+        <tr><td class="est_vvalue">_guyana</td></tr>
+        <tr><td class="est_vvalue">_haiti</td></tr>
+        <tr><td class="est_vvalue">_heardIslandAndMcdonaldIslands</td></tr>
+        <tr><td class="est_vvalue">_holySee</td></tr>
+        <tr><td class="est_vvalue">_honduras</td></tr>
+        <tr><td class="est_vvalue">_hongKong</td></tr>
+        <tr><td class="est_vvalue">_hungary</td></tr>
+        <tr><td class="est_vvalue">_iceland</td></tr>
+        <tr><td class="est_vvalue">_india</td></tr>
+        <tr><td class="est_vvalue">_indonesia</td></tr>
+        <tr><td class="est_vvalue">_iranIslamicRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_iraq</td></tr>
+        <tr><td class="est_vvalue">_ireland</td></tr>
+        <tr><td class="est_vvalue">_isleOfMan</td></tr>
+        <tr><td class="est_vvalue">_israel</td></tr>
+        <tr><td class="est_vvalue">_italy</td></tr>
+        <tr><td class="est_vvalue">_jamaica</td></tr>
+        <tr><td class="est_vvalue">_japan</td></tr>
+        <tr><td class="est_vvalue">_jersey</td></tr>
+        <tr><td class="est_vvalue">_jordan</td></tr>
+        <tr><td class="est_vvalue">_kazakhstan</td></tr>
+        <tr><td class="est_vvalue">_kenya</td></tr>
+        <tr><td class="est_vvalue">_kiribati</td></tr>
+        <tr><td class="est_vvalue">_koreaTheDemocraticPeoplesRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_koreaTheRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_kosovo</td></tr>
+        <tr><td class="est_vvalue">_kuwait</td></tr>
+        <tr><td class="est_vvalue">_kyrgyzstan</td></tr>
+        <tr><td class="est_vvalue">_laoPeoplesDemocraticRepublic</td></tr>
+        <tr><td class="est_vvalue">_latvia</td></tr>
+        <tr><td class="est_vvalue">_lebanon</td></tr>
+        <tr><td class="est_vvalue">_lesotho</td></tr>
+        <tr><td class="est_vvalue">_liberia</td></tr>
+        <tr><td class="est_vvalue">_libya</td></tr>
+        <tr><td class="est_vvalue">_liechtenstein</td></tr>
+        <tr><td class="est_vvalue">_lithuania</td></tr>
+        <tr><td class="est_vvalue">_luxembourg</td></tr>
+        <tr><td class="est_vvalue">_macao</td></tr>
+        <tr><td class="est_vvalue">_madagascar</td></tr>
+        <tr><td class="est_vvalue">_malawi</td></tr>
+        <tr><td class="est_vvalue">_malaysia</td></tr>
+        <tr><td class="est_vvalue">_maldives</td></tr>
+        <tr><td class="est_vvalue">_mali</td></tr>
+        <tr><td class="est_vvalue">_malta</td></tr>
+        <tr><td class="est_vvalue">_marshallIslands</td></tr>
+        <tr><td class="est_vvalue">_martinique</td></tr>
+        <tr><td class="est_vvalue">_mauritania</td></tr>
+        <tr><td class="est_vvalue">_mauritius</td></tr>
+        <tr><td class="est_vvalue">_mayotte</td></tr>
+        <tr><td class="est_vvalue">_mexico</td></tr>
+        <tr><td class="est_vvalue">_micronesiaFederatedStatesOf</td></tr>
+        <tr><td class="est_vvalue">_moldovaTheRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_monaco</td></tr>
+        <tr><td class="est_vvalue">_mongolia</td></tr>
+        <tr><td class="est_vvalue">_montenegro</td></tr>
+        <tr><td class="est_vvalue">_montserrat</td></tr>
+        <tr><td class="est_vvalue">_morocco</td></tr>
+        <tr><td class="est_vvalue">_mozambique</td></tr>
+        <tr><td class="est_vvalue">_myanmar</td></tr>
+        <tr><td class="est_vvalue">_namibia</td></tr>
+        <tr><td class="est_vvalue">_nauru</td></tr>
+        <tr><td class="est_vvalue">_nepal</td></tr>
+        <tr><td class="est_vvalue">_netherlands</td></tr>
+        <tr><td class="est_vvalue">_newCaledonia</td></tr>
+        <tr><td class="est_vvalue">_newZealand</td></tr>
+        <tr><td class="est_vvalue">_nicaragua</td></tr>
+        <tr><td class="est_vvalue">_niger</td></tr>
+        <tr><td class="est_vvalue">_nigeria</td></tr>
+        <tr><td class="est_vvalue">_niue</td></tr>
+        <tr><td class="est_vvalue">_norfolkIsland</td></tr>
+        <tr><td class="est_vvalue">_northernMarianaIslands</td></tr>
+        <tr><td class="est_vvalue">_northMacedonia</td></tr>
+        <tr><td class="est_vvalue">_norway</td></tr>
+        <tr><td class="est_vvalue">_oman</td></tr>
+        <tr><td class="est_vvalue">_pakistan</td></tr>
+        <tr><td class="est_vvalue">_palau</td></tr>
+        <tr><td class="est_vvalue">_palestineStateOf</td></tr>
+        <tr><td class="est_vvalue">_panama</td></tr>
+        <tr><td class="est_vvalue">_papuaNewGuinea</td></tr>
+        <tr><td class="est_vvalue">_paraguay</td></tr>
+        <tr><td class="est_vvalue">_peru</td></tr>
+        <tr><td class="est_vvalue">_philippines</td></tr>
+        <tr><td class="est_vvalue">_pitcairn</td></tr>
+        <tr><td class="est_vvalue">_poland</td></tr>
+        <tr><td class="est_vvalue">_portugal</td></tr>
+        <tr><td class="est_vvalue">_puertoRico</td></tr>
+        <tr><td class="est_vvalue">_qatar</td></tr>
+        <tr><td class="est_vvalue">_reunion</td></tr>
+        <tr><td class="est_vvalue">_romania</td></tr>
+        <tr><td class="est_vvalue">_russianFederation</td></tr>
+        <tr><td class="est_vvalue">_rwanda</td></tr>
+        <tr><td class="est_vvalue">_saintBarthelemy</td></tr>
+        <tr><td class="est_vvalue">_saintHelenaAscensionAndTristanDaCunha</td></tr>
+        <tr><td class="est_vvalue">_saintKittsAndNevis</td></tr>
+        <tr><td class="est_vvalue">_saintLucia</td></tr>
+        <tr><td class="est_vvalue">_saintMartinFrenchPart</td></tr>
+        <tr><td class="est_vvalue">_saintPierreAndMiquelon</td></tr>
+        <tr><td class="est_vvalue">_saintVincentAndTheGrenadines</td></tr>
+        <tr><td class="est_vvalue">_samoa</td></tr>
+        <tr><td class="est_vvalue">_sanMarino</td></tr>
+        <tr><td class="est_vvalue">_saoTomeAndPrincipe</td></tr>
+        <tr><td class="est_vvalue">_saudiArabia</td></tr>
+        <tr><td class="est_vvalue">_senegal</td></tr>
+        <tr><td class="est_vvalue">_serbia</td></tr>
+        <tr><td class="est_vvalue">_seychelles</td></tr>
+        <tr><td class="est_vvalue">_sierraLeone</td></tr>
+        <tr><td class="est_vvalue">_singapore</td></tr>
+        <tr><td class="est_vvalue">_sintMaartenDutchPart</td></tr>
+        <tr><td class="est_vvalue">_slovakia</td></tr>
+        <tr><td class="est_vvalue">_slovenia</td></tr>
+        <tr><td class="est_vvalue">_solomonIslands</td></tr>
+        <tr><td class="est_vvalue">_somalia</td></tr>
+        <tr><td class="est_vvalue">_southAfrica</td></tr>
+        <tr><td class="est_vvalue">_southGeorgiaAndTheSouthSandwichIslands</td></tr>
+        <tr><td class="est_vvalue">_southSudan</td></tr>
+        <tr><td class="est_vvalue">_spain</td></tr>
+        <tr><td class="est_vvalue">_sriLanka</td></tr>
+        <tr><td class="est_vvalue">_sudan</td></tr>
+        <tr><td class="est_vvalue">_suriname</td></tr>
+        <tr><td class="est_vvalue">_svalbardAndJanMayen</td></tr>
+        <tr><td class="est_vvalue">_sweden</td></tr>
+        <tr><td class="est_vvalue">_switzerland</td></tr>
+        <tr><td class="est_vvalue">_syrianArabRepublic</td></tr>
+        <tr><td class="est_vvalue">_taiwan</td></tr>
+        <tr><td class="est_vvalue">_tajikistan</td></tr>
+        <tr><td class="est_vvalue">_tanzaniaTheUnitedRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_thailand</td></tr>
+        <tr><td class="est_vvalue">_timorLeste</td></tr>
+        <tr><td class="est_vvalue">_togo</td></tr>
+        <tr><td class="est_vvalue">_tokelau</td></tr>
+        <tr><td class="est_vvalue">_tonga</td></tr>
+        <tr><td class="est_vvalue">_trinidadAndTobago</td></tr>
+        <tr><td class="est_vvalue">_tunisia</td></tr>
+        <tr><td class="est_vvalue">_turkiye</td></tr>
+        <tr><td class="est_vvalue">_turkmenistan</td></tr>
+        <tr><td class="est_vvalue">_turksAndCaicosIslands</td></tr>
+        <tr><td class="est_vvalue">_tuvalu</td></tr>
+        <tr><td class="est_vvalue">_uganda</td></tr>
+        <tr><td class="est_vvalue">_ukraine</td></tr>
+        <tr><td class="est_vvalue">_unitedArabEmirates</td></tr>
+        <tr><td class="est_vvalue">_unitedKingdom</td></tr>
+        <tr><td class="est_vvalue">_unitedStates</td></tr>
+        <tr><td class="est_vvalue">_unitedStatesMinorOutlyingIslands</td></tr>
+        <tr><td class="est_vvalue">_uruguay</td></tr>
+        <tr><td class="est_vvalue">_uzbekistan</td></tr>
+        <tr><td class="est_vvalue">_vanuatu</td></tr>
+        <tr><td class="est_vvalue">_venezuelaBolivarianRepublicOf</td></tr>
+        <tr><td class="est_vvalue">_vietNam</td></tr>
+        <tr><td class="est_vvalue">_virginIslandsBritish</td></tr>
+        <tr><td class="est_vvalue">_virginIslandsUS</td></tr>
+        <tr><td class="est_vvalue">_wallisAndFutunaIslands</td></tr>
+        <tr><td class="est_vvalue">_westernSahara</td></tr>
+        <tr><td class="est_vvalue">_yemen</td></tr>
+        <tr><td class="est_vvalue">_zambia</td></tr>
+        <tr><td class="est_vvalue">_zimbabwe</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

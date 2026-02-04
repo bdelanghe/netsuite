@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__paymentitem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__paymentitem','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Payment Item</H1>
+    <H3>Internal ID: paymentitem</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_account">
+                <td class="rt_fname">account</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you clicked Deposit To Account above, now select the appropriate account.</td>
+            </tr>
+                <tr id="field_availabletopartners">
+                <td class="rt_fname">availabletopartners</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Available to Adv. Partners</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make this item available to partners with the Advanced Partner Center role for viewing.
+
+These items are also available to partners with roles that are customized for the Advanced Partner Center and include view, create or edit access to item records.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a class to associate with this item.
+
+Click New to enter a new class record.
+
+Go to Setup &gt; Company &gt; Classes for details about existing class records.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the form you want to use to enter this record.
+
+You can select the standard form, a custom form you have already created, or select New to create a custom form.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a department to associate with this item.
+
+Click New to enter a new department record.
+
+Go to Setup &gt; Company &gt; Departments for details about existing department records.</td>
+            </tr>
+                <tr id="field_description">
+                <td class="rt_fname">description</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a description for this item. This description will appear in the Description column of sales forms.
+
+If you see the Enhance text button next to this field, you can get writing help for this field from our generative AI service, NetSuite Text Enhance. Click the Enhance Text button to use the available options. Learn more about Text Enhance.</td>
+            </tr>
+                <tr id="field_displayname">
+                <td class="rt_fname">displayname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display Name/Code</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an optional name of up to 250 characters for this item in addition to the Item Name. If you are integrating with a Yahoo! store, this field is imported from Yahoo!.
+
+The display name prints in the Item column of sales forms when Basic printing is used. If this item is a member of a kit, this name appears in the Item column when the Print Items box is checked.
+
+If you do not enter a display name, the item name appears on printed forms.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_includechildren">
+                <td class="rt_fname">includechildren</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Include Children</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Include Children box to share the item with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.
+
+Note: When sharing items across subsidiaries, all of the options selected on the item record must be compatible across subsidiaries.
+ 
+For example, when entering an inventory item to be shared across subsidiaries, you should select Income and Asset accounts on the item record that are also shared across the same subsidiaries.</td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, this item will no longer appear on a list unless you check the Show All box at the bottom of the list page.</td>
+            </tr>
+                <tr id="field_issueproduct">
+                <td class="rt_fname">issueproduct</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Product Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the product this item is associated with.
+
+Product records are tracked with versions and builds for issue management.
+
+To create product records, go to Setup &gt; Issues &gt; Products &gt; New.</td>
+            </tr>
+                <tr id="field_itemid">
+                <td class="rt_fname">itemid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Name/Number</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter up to 250 characters for the name of this item. This name appears in lists on transactions.
+
+If you have the option of entering a display name and do not, the item name prints in the Item column of sales forms when Basic printing is used.
+
+If you have the option to enter a vendor name and do not, the item name prints in the Item column of purchase forms. If you have entered a display name, it will print on purchases instead of the item name when Basic printing is used.</td>
+            </tr>
+                <tr id="field_itemtype">
+                <td class="rt_fname">itemtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the type of item you want to print labels for.
+
+Select All to show all types of items.</td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Modified</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a location to associate with this item.
+To use a location, the Multi-Location Inventory feature must be enabled.
+
+    * If the Multi-Location Inventory feature is not enabled:
+
+      Selecting an item record location limits the items that certain roles can access.
+      For example, Role A is set up to access only items associated with Location One. Therefore, employees who have Role A can access only items associated with Location One.
+
+      Note: If the Multi-Location Inventory feature is not enabled, you cannot use this field to track inventory by locations. For example, you cannot track how many widgets you have in stock in Location One.
+
+      For more information click here.
+
+    * If the Multi-Location Inventory feature is enabled:
+
+      Selecting an item record location classifies the item by that location to limit the items that certain roles can access. To track inventory per location, use the Locations subtab at the bottom of this form.
+
+      For more information click here.
+
+Select New to enter a new location record.
+
+Go to Setup &gt; Company &gt; Locations for details about existing location records.</td>
+            </tr>
+                <tr id="field_paymentmethod">
+                <td class="rt_fname">paymentmethod</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Payment Method</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a payment method to associate with this payment item.
+
+The payment method you choose here is for reference only. It does not initiate a payment transaction.
+
+To add choices to this list, go to Setup &gt; Accounting &gt; Accounting Lists &gt; New &gt; Payment Method.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select one or multiple subsidiaries.
+To select multiple subsidiaries, press and hold the Ctrl key while selecting each subsidiary.
+A subsidiary must be associated with an item in order for the item to be added to a transaction related to that Subsidiary.
+
+For example, you can enter a sales order and select the Wolfe US subsidiary on the transaction. When you select an item to add to the sales order, only items associated with Wolfe US can be added to the sales order.</td>
+            </tr>
+                <tr id="field_undepfunds">
+                <td class="rt_fname">undepfunds</td>
+                <td class="rt_ftype">radio</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Group with Undeposited Funds</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">1. Click the button after Group with Undeposited Funds if you want these payments to be processed as any other undeposited funds.
+   2. If these are to be deposited immediately into an account, click the button between Deposit To and Account.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_translations_">translations - Translations</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_translations_displayname">
+                        <td class="rt_sname">displayname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Display Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_featureddescription">
+                        <td class="rt_sname">featureddescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Featured Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_language">
+                        <td class="rt_sname">language</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Language</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_locale">
+                        <td class="rt_sname">locale</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_nopricemessage">
+                        <td class="rt_sname">nopricemessage</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">No Price Message</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_outofstockmessage">
+                        <td class="rt_sname">outofstockmessage</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Out Of Stock Message</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_pagetitle">
+                        <td class="rt_sname">pagetitle</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Page Title</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_salesdescription">
+                        <td class="rt_sname">salesdescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Sales Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedescription">
+                        <td class="rt_sname">storedescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Store Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedetaileddescription">
+                        <td class="rt_sname">storedetaileddescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Detailed Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedisplayname">
+                        <td class="rt_sname">storedisplayname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Store Display Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_basic">
+                <td class="rt_tname">basic</td>
+                <td class="rt_tlabel">Basic</td>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_translation">
+                <td class="rt_tname">translation</td>
+                <td class="rt_tlabel">Translation</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+        <H2>Search Data</H2>
+        <H3><a href="item.html">Item</a></H3>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__manufacturingoperationtask','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__manufacturingoperationtask','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>ManufacturingOperationTask</H1>
+
+
+    Namespace: <a href="../../schema/record/manufacturingoperationtask.html?mode=package">urn:supplychain.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">actualWork</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Actual Hours displays the time in hours it took to complete this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">autoCalculateLag</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Auto-calculate Lag</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Auto-Calculate Lag box if you want NetSuite to calculate lag times for operation tasks.
+For more information, see Operations Overlap.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">completedQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Completed Quantity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Completed Quantity is the total number of items created during this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">costDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/manufacturingcostdetaillist.html?mode=package">ManufacturingCostDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Custom Form list, select the form to use with this work order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Production End Date field, enter the date you expect to complete assembly production. This field defaults to today's date plus lead time.
+
+    * Demand Planning bases assembly supply on the production end date.
+    * Manufacturing Routing production end date depends on whether NetSuite uses forward or backward scheduling to calculate production requirements.
+
+To learn more, see Production Scheduling Methods Overview.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estimatedWork</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimated Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite calculates Estimated Hours as the expected time to complete a task based on total setup time + quantity x run rate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inputQuantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Input Quantity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Input Quantity represents the number of items entered or created during this task.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">laborResources</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Labor Resources</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the number of Labor Resources required for this work center. If this labor resource is used in multiple work centers, enter a decimal amount. For example, if a welder only spends two hours in this work center in a day, enter .025.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">machineResources</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Machine Resources</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the number of Machine Resources required for this work center. If this machine is used in multiple work centers, enter a decimal amount. For example, if this machine is used by another work center for half the day, enter .05.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturingCostTemplate</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturing Cost Template</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the Manufacturing Cost Template that has recorded the costs for this task. When time is recorded against the task, the cost is updated based on the charges listed on the template.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturingWorkCenter</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturing Work Center</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select a Work Center for this operation. A work center is a group of people and machines that perform a specific step in the manufacturing process.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Comments</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Additional Comments that are intended to accompany this operation task. For example, &quot;use Shimano spokes when Bontrager spokes are not available.&quot;</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">operationSequence</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Operation Sequence</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The Operation Sequence represents when the assembly task is scheduled to begin. For example, bicycle assembly setup could be sequence 1.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">order</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">The Insert Before field identifies the next step in the sequence.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">predecessorList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/manufacturingoperationtaskpredecessorlist.html?mode=package">ManufacturingOperationTaskPredecessorList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">remainingWork</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Remaining Work</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Remaining Hours of work needed to complete this task are displayed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">runRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Run Rate (Min/Unit)</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">You can change the operation Run Rate (in minutes). This is the amount of time required to complete a run and produce one unit.
+
+This is the amount of time required to complete a run and produce one unit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">setupTime</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Setup Time (Min)</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">You can change the Setup Time (in minutes) for the working day as defined in the work calendar.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Production Start Date field, enter the date you expect to begin assembly production. This field defaults to today's date.
+
+    * Demand Planning bases component demand on the production start date.
+    * Manufacturing Routing production start date depends on whether NetSuite uses forward or backward scheduling to calculate production requirements.
+
+To learn more, see Production Scheduling Methods Overview.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/manufacturingoperationtaskstatus.html?mode=package">ManufacturingOperationTaskStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The operation sequence Status. For example, Not Started, Started, Completed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The Name of the Operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">workOrder</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Work Order</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Work Order identifier related to this operation task.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/manufacturingoperationtasksearch.html?mode=package">ManufacturingOperationTaskSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/manufacturingoperationtasksearchadvanced.html?mode=package">ManufacturingOperationTaskSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/manufacturingoperationtasksearchbasic.html?mode=package">ManufacturingOperationTaskSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/manufacturingoperationtasksearchrow.html?mode=package">ManufacturingOperationTaskSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/manufacturingoperationtasksearchrowbasic.html?mode=package">ManufacturingOperationTaskSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

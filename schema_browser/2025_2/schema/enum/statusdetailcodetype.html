@@ -1,0 +1,1666 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.faults.platform.webservices.netsuite.com__statusdetailcodetype','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.faults.platform.webservices.netsuite.com__statusdetailcodetype','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>StatusDetailCodeType</H1>
+    Namespace: urn:types.faults.platform.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">ABORT_SEARCH_EXCEEDED_MAX_TIME</td></tr>
+        <tr><td class="est_vvalue">ABORT_UPLOAD_VIRUS_DETECTED</td></tr>
+        <tr><td class="est_vvalue">ACCESSING_FIELD_1_IS_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">ACCESSING_SUBLIST_1_IS_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">ACCESS_DENIED</td></tr>
+        <tr><td class="est_vvalue">ACCTNG_PRD_REQD</td></tr>
+        <tr><td class="est_vvalue">ACCT_DISABLED</td></tr>
+        <tr><td class="est_vvalue">ACCT_MERGE_DUP</td></tr>
+        <tr><td class="est_vvalue">ACCT_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">ACCT_NEEDS_CAMPAIGN_PROVISION</td></tr>
+        <tr><td class="est_vvalue">ACCT_NOT_CREATED</td></tr>
+        <tr><td class="est_vvalue">ACCT_NUMS_REQD_OR_DONT_MATCH</td></tr>
+        <tr><td class="est_vvalue">ACCT_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">ACCT_PERIOD_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">ACCT_PRDS_BEING_ADDED</td></tr>
+        <tr><td class="est_vvalue">ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">ACCT_TEMP_DISABLED</td></tr>
+        <tr><td class="est_vvalue">ACCT_TEMP_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">ACH_NOT_AVAILBL</td></tr>
+        <tr><td class="est_vvalue">ACH_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">ACTIVE_AP_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">ACTIVE_ROLE_REQD</td></tr>
+        <tr><td class="est_vvalue">ACTIVE_TRANS_EXIST</td></tr>
+        <tr><td class="est_vvalue">ADDITIONAL_AUTHENTICATION_REQUIRED_2FA</td></tr>
+        <tr><td class="est_vvalue">ADDITIONAL_AUTHENTICATION_REQUIRED_SQ</td></tr>
+        <tr><td class="est_vvalue">ADDRESS_LINE_1_REQD</td></tr>
+        <tr><td class="est_vvalue">ADMIN_ACCESS_REQ</td></tr>
+        <tr><td class="est_vvalue">ADMIN_ACCESS_REQD</td></tr>
+        <tr><td class="est_vvalue">ADMIN_ONLY_ACCESS</td></tr>
+        <tr><td class="est_vvalue">ADMIN_USER_REQD</td></tr>
+        <tr><td class="est_vvalue">ADMISSIBILITY_PACKG_TYP_REQD</td></tr>
+        <tr><td class="est_vvalue">ALL_DATA_DELETE_REQD</td></tr>
+        <tr><td class="est_vvalue">ALL_MTRX_SUBITMES_OPTNS_REQD</td></tr>
+        <tr><td class="est_vvalue">ALREADY_IN_INVT</td></tr>
+        <tr><td class="est_vvalue">AMORTZN_INVALID_DATE_RANGE</td></tr>
+        <tr><td class="est_vvalue">AMORTZN_TMPLT_DATA_MISSING</td></tr>
+        <tr><td class="est_vvalue">AMT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">AMT_EXCEEDS_APPROVAL_LIMIT</td></tr>
+        <tr><td class="est_vvalue">ANSWER_REQD</td></tr>
+        <tr><td class="est_vvalue">APPROVAL_PERMS_REQD</td></tr>
+        <tr><td class="est_vvalue">AREA_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">ASSIGNEE_REQD</td></tr>
+        <tr><td class="est_vvalue">ATTACHMNT_CONTAINS_VIRUS</td></tr>
+        <tr><td class="est_vvalue">ATTACH_SIZE_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">AT_LEAST_ONE_FILE_REQD</td></tr>
+        <tr><td class="est_vvalue">AT_LEAST_ONE_PACKAGE_REQD</td></tr>
+        <tr><td class="est_vvalue">AT_LEAST_ONE_RETURN_FLD_REQD</td></tr>
+        <tr><td class="est_vvalue">AT_LEAST_ONE_SUB_REQD</td></tr>
+        <tr><td class="est_vvalue">AUDIT_W2_1099</td></tr>
+        <tr><td class="est_vvalue">AVS_ERROR</td></tr>
+        <tr><td class="est_vvalue">BALANCE_EXCEEDS_CREDIT_LIMIT</td></tr>
+        <tr><td class="est_vvalue">BANK_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">BASE_CRNCY_REQD</td></tr>
+        <tr><td class="est_vvalue">BILLABLES_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">BILLING_ISSUES</td></tr>
+        <tr><td class="est_vvalue">BILLING_SCHDUL_INVALID_RECURR</td></tr>
+        <tr><td class="est_vvalue">BILLPAY_APPROVAL_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">BILLPAY_REGSTRTN_REQD</td></tr>
+        <tr><td class="est_vvalue">BILLPAY_SRVC_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">BILL_PAY_STATUS_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">BILL_PMTS_MADE_FROM_ACCT_ONLY</td></tr>
+        <tr><td class="est_vvalue">BIN_DSNT_CONTAIN_ENOUGH_ITEM</td></tr>
+        <tr><td class="est_vvalue">BIN_ITEM_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">BIN_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">BIN_UNDEFND</td></tr>
+        <tr><td class="est_vvalue">BUNDLE_IS_DEPRECATED</td></tr>
+        <tr><td class="est_vvalue">CALENDAR_PREFS_REQD</td></tr>
+        <tr><td class="est_vvalue">CAMPAGIN_ALREADY_EXECUTED</td></tr>
+        <tr><td class="est_vvalue">CAMPAIGN_IN_USE</td></tr>
+        <tr><td class="est_vvalue">CAMPAIGN_SET_UP_REQD</td></tr>
+        <tr><td class="est_vvalue">CANNOT_CREATE_RCRD_DRFT_OF_EXISTING</td></tr>
+        <tr><td class="est_vvalue">CANNOT_RESET_PASSWORD</td></tr>
+        <tr><td class="est_vvalue">CANT_APPLY_PMT</td></tr>
+        <tr><td class="est_vvalue">CANT_AUTO_CREATE_ADJSTMNT</td></tr>
+        <tr><td class="est_vvalue">CANT_CALC_FEDEX_RATES</td></tr>
+        <tr><td class="est_vvalue">CANT_CANCEL_APPRVD_RETRN_AUTH</td></tr>
+        <tr><td class="est_vvalue">CANT_CANCEL_BILL_PMT</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_COMMSSN</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_CONTACT_RESTRICTN</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_EVENT_PRIMARY_TYP</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_IP_ADDRESS</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_LEAD_SOURCE_CAT</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_PSWD</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_REV_REC_TMPLT</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_SUB</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_TASK_LINK</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_UNITS_TYP</td></tr>
+        <tr><td class="est_vvalue">CANT_CHANGE_VSOE_ALLOCTN</td></tr>
+        <tr><td class="est_vvalue">CANT_CHG_POSTED_BILL_VRNC</td></tr>
+        <tr><td class="est_vvalue">CANT_COMPLETE_FULFILL</td></tr>
+        <tr><td class="est_vvalue">CANT_CONNECT_TO_STORE</td></tr>
+        <tr><td class="est_vvalue">CANT_CONVERT_CLASS_DEPT</td></tr>
+        <tr><td class="est_vvalue">CANT_CONVERT_CLASS_LOC</td></tr>
+        <tr><td class="est_vvalue">CANT_CONVERT_INVT_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_CREATE_FILES</td></tr>
+        <tr><td class="est_vvalue">CANT_CREATE_NON_UNIQUE_RCRD</td></tr>
+        <tr><td class="est_vvalue">CANT_CREATE_PO</td></tr>
+        <tr><td class="est_vvalue">CANT_CREATE_SHIP_LABEL</td></tr>
+        <tr><td class="est_vvalue">CANT_CREATE_WORK_ORD</td></tr>
+        <tr><td class="est_vvalue">CANT_CREAT_SHIP_LABEL</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ACCT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ACCT_PRD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ALLOCTN</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_BIN</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CATEGORY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CC_PROCESSOR</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CELL</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CHILD_RCRDS_EXIST</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CHILD_RCRD_FOUND</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CLASS</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_COLOR_THEME</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_COMMSSN_SCHDUL</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_COMPANY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_COMPANY_TYP</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CONTACT_HAS_CHILD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_FIELD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_FORM</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_ITEM_FIELD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_LIST</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_RCRD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CSTM_RCRD_ENTRY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CUST</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_CUSTOMER</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_FLDR</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_PRIORITY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_SALES_REP</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_STATUS</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_VALUE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_DEFAULT_WEBSITE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_EMPL</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ENTITY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_FIN_STATMNT_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_FLDR</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_HAS_CHILD_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_INFO_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ITEM_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_ITEM_TMPLT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_JOB_RESOURCE_ROLE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_LEGACY_CATEGORY</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_LINE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_MEDIA_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_MEMRZD_TRANS</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_OR_CHANGE_ACCT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_PLAN_ASSGNMNT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_PRESNTN_CAT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_RCRD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_RCRDS</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_SITE_TAG</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_SITE_THEME</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_SOLUTN</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_STATUS_TYPE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_SUBTAB</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_SYSTEM_NOTE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_TMPLT_RCRD</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_TRANS</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_TRAN_LINE</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_TRAN_LINES</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_UPDATE_ACCT</td></tr>
+        <tr><td class="est_vvalue">CANT_DELETE_VENDOR</td></tr>
+        <tr><td class="est_vvalue">CANT_DEL_DEFAULT_CALENDAR</td></tr>
+        <tr><td class="est_vvalue">CANT_DEL_DEFAULT_SHIP_METHOD</td></tr>
+        <tr><td class="est_vvalue">CANT_DEL_REALIZED_GAINLOSS</td></tr>
+        <tr><td class="est_vvalue">CANT_DEL_TRANS_RVRSL</td></tr>
+        <tr><td class="est_vvalue">CANT_DIVIDE_BY_ZERO</td></tr>
+        <tr><td class="est_vvalue">CANT_DOWNLOAD_EXPIRED_FILE</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_CUST_LIST</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_CUST_PMT</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_DPLYMNT_IN_PROGRESS</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_FOLDER</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_OLD_CASE</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_STANDARD_OBJ</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_TAGATA</td></tr>
+        <tr><td class="est_vvalue">CANT_EDIT_TRAN</td></tr>
+        <tr><td class="est_vvalue">CANT_ESTABLISH_LINK</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_BUG</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_MAIL_MERGE_ID</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_RCRD</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_SAVED_IMPORT</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_SOURCE_AMORTZN_ACCT</td></tr>
+        <tr><td class="est_vvalue">CANT_FIND_UPS_REG_FOR_LOC</td></tr>
+        <tr><td class="est_vvalue">CANT_FULFILL_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_INACTIVATE_COMMSSN_PLAN</td></tr>
+        <tr><td class="est_vvalue">CANT_INACTIVE_DEFAULT_SYNC_CAT</td></tr>
+        <tr><td class="est_vvalue">CANT_INACTIVE_DEFAULT_TMPLT</td></tr>
+        <tr><td class="est_vvalue">CANT_LOAD_SAVED_SEARCH_PARAM</td></tr>
+        <tr><td class="est_vvalue">CANT_LOGIN_WITH_OAUTH</td></tr>
+        <tr><td class="est_vvalue">CANT_LOOKUP_FLD</td></tr>
+        <tr><td class="est_vvalue">CANT_MAKE_CONTACT_PRIVATE</td></tr>
+        <tr><td class="est_vvalue">CANT_MARK_SHIPPED</td></tr>
+        <tr><td class="est_vvalue">CANT_MERGE_EMPLS</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_APPRVD_TIME</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_FULFILL_STATUS</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_ISSUE_STATUS</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_LOCKED_FLD</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_PARENT</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_REV_REC</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_SUB</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_TAGATA</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_TEGATA</td></tr>
+        <tr><td class="est_vvalue">CANT_MODIFY_VOID_TRANS</td></tr>
+        <tr><td class="est_vvalue">CANT_MOVE_REALIZED_GAINLOSS</td></tr>
+        <tr><td class="est_vvalue">CANT_PAY_TAGATA</td></tr>
+        <tr><td class="est_vvalue">CANT_PRINT_EMPTY</td></tr>
+        <tr><td class="est_vvalue">CANT_PROCESS_IMG</td></tr>
+        <tr><td class="est_vvalue">CANT_RCEIV_BEFORE_FULFILL</td></tr>
+        <tr><td class="est_vvalue">CANT_RCEIV_ITEM</td></tr>
+        <tr><td class="est_vvalue">CANT_RECEIVE_TAGATA</td></tr>
+        <tr><td class="est_vvalue">CANT_REJECT_ORDER</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOVE_ACH_PAY_METHOD</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOVE_APPROVAL</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOVE_DOMAIN</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOVE_SCHDUL</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOVE_SUB</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOV_ALL_FULFILMNT_LINKS</td></tr>
+        <tr><td class="est_vvalue">CANT_REMOV_ITEM_SUB</td></tr>
+        <tr><td class="est_vvalue">CANT_RESUBMIT_FAILED_DPLYMNT</td></tr>
+        <tr><td class="est_vvalue">CANT_RETURN_FLD</td></tr>
+        <tr><td class="est_vvalue">CANT_RETURN_USED_GIFT_CERT</td></tr>
+        <tr><td class="est_vvalue">CANT_REVERSE_AUTH</td></tr>
+        <tr><td class="est_vvalue">CANT_REV_REC_BODY_AND_LINE</td></tr>
+        <tr><td class="est_vvalue">CANT_SCHDUL_RECUR_EVENT</td></tr>
+        <tr><td class="est_vvalue">CANT_SEND_EMAIL</td></tr>
+        <tr><td class="est_vvalue">CANT_SET_CLOSE_DATE</td></tr>
+        <tr><td class="est_vvalue">CANT_SET_INTERNALID</td></tr>
+        <tr><td class="est_vvalue">CANT_SET_STATUS</td></tr>
+        <tr><td class="est_vvalue">CANT_SWITCH_ROLES_FROM_LOGIN</td></tr>
+        <tr><td class="est_vvalue">CANT_SWITCH_SHIP_METHOD</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_ACCTNG_PRDS</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_AMT</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_DYNAMIC_GROUP</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_FLDR</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_LINKED_TRANS_LINES</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_PRODUCT_FEED</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_RECRD_HAS_CHANGED</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_RECUR_EVENT</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_STATUS_TYPE</td></tr>
+        <tr><td class="est_vvalue">CANT_UPDATE_THIS_WEBSITE_CATEGORY</td></tr>
+        <tr><td class="est_vvalue">CANT_VERIFY_CARD</td></tr>
+        <tr><td class="est_vvalue">CANT_VOID_TRANS</td></tr>
+        <tr><td class="est_vvalue">CARD_EXPIRED</td></tr>
+        <tr><td class="est_vvalue">CARD_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">CASE_ALREADY_ASSIGNED</td></tr>
+        <tr><td class="est_vvalue">CASE_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">CASE_NOT_GROUP_MEMBER</td></tr>
+        <tr><td class="est_vvalue">CASH_SALE_EDIT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CC_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">CC_ALREADY_SAVED</td></tr>
+        <tr><td class="est_vvalue">CC_EMAIL_ADDRESS_REQD</td></tr>
+        <tr><td class="est_vvalue">CC_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">CC_PROCESSOR_ERROR</td></tr>
+        <tr><td class="est_vvalue">CC_PROCESSOR_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">CC_SECURITY_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">CERT_AUTH_EXPD</td></tr>
+        <tr><td class="est_vvalue">CERT_EXPD</td></tr>
+        <tr><td class="est_vvalue">CERT_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">CHANGE_PMT_DATE_AND_REAPPROVE</td></tr>
+        <tr><td class="est_vvalue">CHAR_ERROR</td></tr>
+        <tr><td class="est_vvalue">CHECKOUT_EMAIL_REQD</td></tr>
+        <tr><td class="est_vvalue">CITY_REQD</td></tr>
+        <tr><td class="est_vvalue">CLASS_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">CLASS_OR_DEPT_OR_CUST_REQD</td></tr>
+        <tr><td class="est_vvalue">CLEAR_AUTOCALC</td></tr>
+        <tr><td class="est_vvalue">CLOSED_TRAN_PRD</td></tr>
+        <tr><td class="est_vvalue">CLOSE_PREVIOUSE_PERIOD</td></tr>
+        <tr><td class="est_vvalue">COGS_ERROR</td></tr>
+        <tr><td class="est_vvalue">COMMSSN_ALREADY_CALCLTD</td></tr>
+        <tr><td class="est_vvalue">COMMSSN_FEATURE_DISABLED</td></tr>
+        <tr><td class="est_vvalue">COMMSSN_PAYROLL_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">COMPANION_PROP_REQD</td></tr>
+        <tr><td class="est_vvalue">COMPANY_FLD_REQD</td></tr>
+        <tr><td class="est_vvalue">COMP_DELETED_OR_MERGED</td></tr>
+        <tr><td class="est_vvalue">CONCURRENCY_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">CONCUR_BILLPAY_JOB_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CONCUR_BULK_JOB_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CONCUR_MASS_UPDATE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CONCUR_SEARCH_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CONSLD_PRNT_AND_CHILD_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CONTACT_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">CONTACT_NOT_GROUP_MEMBR</td></tr>
+        <tr><td class="est_vvalue">COOKIES_DISABLED</td></tr>
+        <tr><td class="est_vvalue">COUNTRY_STATE_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">CREATEDFROM_REQD</td></tr>
+        <tr><td class="est_vvalue">CREDITS_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">CRNCY_MISMATCH_BASE_CRNCY</td></tr>
+        <tr><td class="est_vvalue">CRNCY_NOT_UPDATED</td></tr>
+        <tr><td class="est_vvalue">CRNCY_RCRD_DELETED</td></tr>
+        <tr><td class="est_vvalue">CRNCY_REQD</td></tr>
+        <tr><td class="est_vvalue">CSC_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">CSTM_FIELD_KEY_REQD</td></tr>
+        <tr><td class="est_vvalue">CSTM_FIELD_VALUE_REQD</td></tr>
+        <tr><td class="est_vvalue">CUST_ARLEADY_HAS_ACCT</td></tr>
+        <tr><td class="est_vvalue">CUST_CNTR_USER_ACCESS_ONLY</td></tr>
+        <tr><td class="est_vvalue">CUST_LEAD_NOT_GROUP_MEMBR</td></tr>
+        <tr><td class="est_vvalue">CYBERSOURCE_ERROR</td></tr>
+        <tr><td class="est_vvalue">CYCLE_IN_PROJECT_PLAN</td></tr>
+        <tr><td class="est_vvalue">DASHBOARD_LOCKED</td></tr>
+        <tr><td class="est_vvalue">DATA_MUST_BE_UNIQUE</td></tr>
+        <tr><td class="est_vvalue">DATA_REQD</td></tr>
+        <tr><td class="est_vvalue">DATA_RETRIEVAL_ERROR</td></tr>
+        <tr><td class="est_vvalue">DATE_EXPECTED</td></tr>
+        <tr><td class="est_vvalue">DATE_PARAM_REQD</td></tr>
+        <tr><td class="est_vvalue">DATE_PRD_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">DEFAULT_CUR_REQD</td></tr>
+        <tr><td class="est_vvalue">DEFAULT_EXPENSE_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">DEFAULT_ISSUE_OWNER_REQD</td></tr>
+        <tr><td class="est_vvalue">DEFAULT_LIAB_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">DEFAULT_TYPE_DELETE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">DEFERRAL_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">DEFERRED_REV_REC_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">DEPT_IN_USE</td></tr>
+        <tr><td class="est_vvalue">DFRNT_SWAP_PRICE_LEVELS_REQD</td></tr>
+        <tr><td class="est_vvalue">DISALLWD_IP_ADDRESS</td></tr>
+        <tr><td class="est_vvalue">DISCOUNT_ACCT_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">DISCOUNT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">DISCOUNT_DISALLWD_VSOE</td></tr>
+        <tr><td class="est_vvalue">DISCOUNT_EXCEED_TOTAL</td></tr>
+        <tr><td class="est_vvalue">DISTRIB_REQD_ONE_DAY_BFORE</td></tr>
+        <tr><td class="est_vvalue">DOMAIN_IN_USE</td></tr>
+        <tr><td class="est_vvalue">DOMAIN_WEBSITE_REQD</td></tr>
+        <tr><td class="est_vvalue">DROP_SHIP_ERROR</td></tr>
+        <tr><td class="est_vvalue">DROP_SHIP_OR_SPECIAL_ORD_ALLWD</td></tr>
+        <tr><td class="est_vvalue">DUE_DATE_BFORE_START_DATE</td></tr>
+        <tr><td class="est_vvalue">DUE_DATE_REQD</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_INVENTORY_NUM</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_KEYS</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_METHOD_NAME</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_NAME_FOR_PRD</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_NAME_FOR_ROLE</td></tr>
+        <tr><td class="est_vvalue">DUPLICATE_RELATIONSHIP</td></tr>
+        <tr><td class="est_vvalue">DUP_ACCT_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_ACCT_NOT_ALLWD</td></tr>
+        <tr><td class="est_vvalue">DUP_ACCT_NUM</td></tr>
+        <tr><td class="est_vvalue">DUP_ACCT_ON_TRANS</td></tr>
+        <tr><td class="est_vvalue">DUP_BIN</td></tr>
+        <tr><td class="est_vvalue">DUP_BUNDLE_IN_ACCT</td></tr>
+        <tr><td class="est_vvalue">DUP_CATEGORY</td></tr>
+        <tr><td class="est_vvalue">DUP_CATEGORY_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_COLOR_THEME</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_FIELD</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_LIST</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_RCRD</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_RCRD_ENTRY</td></tr>
+        <tr><td class="est_vvalue">DUP_CSTM_TAB</td></tr>
+        <tr><td class="est_vvalue">DUP_EMPL_EMAIL</td></tr>
+        <tr><td class="est_vvalue">DUP_EMPL_ENTITY_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_EMPL_TMPLT</td></tr>
+        <tr><td class="est_vvalue">DUP_ENTITY</td></tr>
+        <tr><td class="est_vvalue">DUP_ENTITY_EMAIL</td></tr>
+        <tr><td class="est_vvalue">DUP_ENTITY_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_FEDEX_ACCT_NUM</td></tr>
+        <tr><td class="est_vvalue">DUP_FINANCL_STATMNT_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">DUP_INFO_ITEM</td></tr>
+        <tr><td class="est_vvalue">DUP_ISSUE_NAME_OR_NUM</td></tr>
+        <tr><td class="est_vvalue">DUP_ITEM</td></tr>
+        <tr><td class="est_vvalue">DUP_ITEM_LAYOUT</td></tr>
+        <tr><td class="est_vvalue">DUP_ITEM_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_ITEM_OPTION</td></tr>
+        <tr><td class="est_vvalue">DUP_ITEM_TMPLT</td></tr>
+        <tr><td class="est_vvalue">DUP_MATRIX_OPTN_ABBRV</td></tr>
+        <tr><td class="est_vvalue">DUP_MEMRZD_TRANS</td></tr>
+        <tr><td class="est_vvalue">DUP_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_PAYROLL_ITEM</td></tr>
+        <tr><td class="est_vvalue">DUP_PRESNTN_CAT</td></tr>
+        <tr><td class="est_vvalue">DUP_RCRD</td></tr>
+        <tr><td class="est_vvalue">DUP_RCRD_LINK</td></tr>
+        <tr><td class="est_vvalue">DUP_SHIPPING_ITEM</td></tr>
+        <tr><td class="est_vvalue">DUP_SHORT_NAME</td></tr>
+        <tr><td class="est_vvalue">DUP_SITE_THEME</td></tr>
+        <tr><td class="est_vvalue">DUP_SOURCE_ACCT</td></tr>
+        <tr><td class="est_vvalue">DUP_TAX_CODE</td></tr>
+        <tr><td class="est_vvalue">DUP_TRACKING_NUM</td></tr>
+        <tr><td class="est_vvalue">DUP_TRANS</td></tr>
+        <tr><td class="est_vvalue">DUP_UPS_ACCT_NUM</td></tr>
+        <tr><td class="est_vvalue">DUP_VENDOR_EMAIL</td></tr>
+        <tr><td class="est_vvalue">DUP_VENDOR_NAME</td></tr>
+        <tr><td class="est_vvalue">EARNING_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">EDITION_DSNT_SUPRT_WORLDPAY</td></tr>
+        <tr><td class="est_vvalue">EIN_OR_TIN_REQD</td></tr>
+        <tr><td class="est_vvalue">EMAIL_ADDRS_REQD</td></tr>
+        <tr><td class="est_vvalue">EMAIL_ADDRS_REQD_TO_NOTIFY</td></tr>
+        <tr><td class="est_vvalue">EMAIL_REQD</td></tr>
+        <tr><td class="est_vvalue">EMAIL_REQD_ACCT_PROVISION</td></tr>
+        <tr><td class="est_vvalue">EMAIL_REQ_HANDLER_ERROR</td></tr>
+        <tr><td class="est_vvalue">EMPL_IN_USE</td></tr>
+        <tr><td class="est_vvalue">ERROR_DELETE_CARD_DATA</td></tr>
+        <tr><td class="est_vvalue">ERROR_IN_TERRITORY_ASSGNMNT</td></tr>
+        <tr><td class="est_vvalue">ERROR_REFUND_TRANS</td></tr>
+        <tr><td class="est_vvalue">ERROR_REVERSE_AUTH</td></tr>
+        <tr><td class="est_vvalue">ERROR_SENDING_TRAN_EMAIL</td></tr>
+        <tr><td class="est_vvalue">ERROR_VOID_TRANS</td></tr>
+        <tr><td class="est_vvalue">EVENT_ID_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_ALLWD_LOC</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_CONCUR_RQST</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_EMAILS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_FEATURED_ITEMS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_FIELD_LENGTH</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_MATRIX_OPTNS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_PDF_ELEMENTS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_PDF_EXPORT_COL</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_PIN_RETRIES</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_RCRD</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_REPORT_COL</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_REPORT_ROWS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_REPORT_SIZE</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_SESSIONS</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_SHIP_PACKAGE</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_TIME</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_TRANS_LINES</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_MAX_USERS_ALLWD</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_PER_TRANS_MAX</td></tr>
+        <tr><td class="est_vvalue">EXCEEDED_RQST_SIZE_LIMIT</td></tr>
+        <tr><td class="est_vvalue">EXCEEDS_ALLWD_LICENSES</td></tr>
+        <tr><td class="est_vvalue">EXPENSE_ENTRY_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">EXPIRED_SEARCH_CRITERIA</td></tr>
+        <tr><td class="est_vvalue">EXTERNALID_NOT_SUPPORTED</td></tr>
+        <tr><td class="est_vvalue">EXTERNALID_REQD</td></tr>
+        <tr><td class="est_vvalue">EXT_CAT_LINK_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">FAILED_FEDEX_LABEL_VOID</td></tr>
+        <tr><td class="est_vvalue">FAILED_FORM_VALIDATION</td></tr>
+        <tr><td class="est_vvalue">FAILED_UPS_LABEL_VOID</td></tr>
+        <tr><td class="est_vvalue">FAX_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">FAX_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">FEATURE_DISABLED</td></tr>
+        <tr><td class="est_vvalue">FEATURE_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">FEDEX_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_CANT_INTEGRATE_FULFILL</td></tr>
+        <tr><td class="est_vvalue">FEDEX_DROPOFF_TYP_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_INVALID_ACCT_NUM</td></tr>
+        <tr><td class="est_vvalue">FEDEX_ITEM_CONTENTS_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_METER_NOT_RETRIEVED</td></tr>
+        <tr><td class="est_vvalue">FEDEX_METER_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_ONE_PACKG_ALLWD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_ORIGIN_COUNTRY_US_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_RATING_SRVC_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">FEDEX_REG_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">FEDEX_SHIP_SRVC_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_SHIP_SRVC_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">FEDEX_UNSUPRTD_ORIGIN_COUNTRY</td></tr>
+        <tr><td class="est_vvalue">FEDEX_USD_EXCHANGE_RATE_REQD</td></tr>
+        <tr><td class="est_vvalue">FEDEX_USER_ERROR</td></tr>
+        <tr><td class="est_vvalue">FEDEX_VOID_ERROR</td></tr>
+        <tr><td class="est_vvalue">FED_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">FED_WITHHOLDING_REQD</td></tr>
+        <tr><td class="est_vvalue">FIELD_CALL_DATE_REQD</td></tr>
+        <tr><td class="est_vvalue">FIELD_DEFN_REQD</td></tr>
+        <tr><td class="est_vvalue">FIELD_NOT_SETTABLE_ON_ADD</td></tr>
+        <tr><td class="est_vvalue">FIELD_PARAM_REQD</td></tr>
+        <tr><td class="est_vvalue">FIELD_REQD</td></tr>
+        <tr><td class="est_vvalue">FILE_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">FILE_DISALLWD_IN_ROOT_FLDR</td></tr>
+        <tr><td class="est_vvalue">FILE_MISSING</td></tr>
+        <tr><td class="est_vvalue">FILE_NOT_DOWNLOADABLE</td></tr>
+        <tr><td class="est_vvalue">FILE_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">FILE_REQD</td></tr>
+        <tr><td class="est_vvalue">FILE_UPLOAD_IN_PROGRESS</td></tr>
+        <tr><td class="est_vvalue">FILTER_BY_AMT_REQD</td></tr>
+        <tr><td class="est_vvalue">FINANCE_CHARGE_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">FINANCE_CHARGE_SET_PREFS</td></tr>
+        <tr><td class="est_vvalue">FIRST_LAST_NAMES_REQD</td></tr>
+        <tr><td class="est_vvalue">FIRST_QTY_BUCKET_MUST_BE_ZERO</td></tr>
+        <tr><td class="est_vvalue">FLD_CANNOT_BE_EMPTY</td></tr>
+        <tr><td class="est_vvalue">FLD_VALUE_REQD</td></tr>
+        <tr><td class="est_vvalue">FLD_VALUE_TOO_LARGE</td></tr>
+        <tr><td class="est_vvalue">FOLDER_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">FORMULA_ERROR</td></tr>
+        <tr><td class="est_vvalue">FORM_RESUBMISSION_REQD</td></tr>
+        <tr><td class="est_vvalue">FORM_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">FORM_UNAVAILBL_ONLINE</td></tr>
+        <tr><td class="est_vvalue">FRIENDLY_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">FULFILL_REQD_FIELDS_MISSING</td></tr>
+        <tr><td class="est_vvalue">FULFILL_REQD_PARAMS_MISSING</td></tr>
+        <tr><td class="est_vvalue">FULL_DISTRIB_REQD</td></tr>
+        <tr><td class="est_vvalue">FULL_USERS_REQD_TO_INTEGRATE</td></tr>
+        <tr><td class="est_vvalue">FX_RATE_REQD_FEDEX_RATE</td></tr>
+        <tr><td class="est_vvalue">FX_TRANS_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">GETALL_RCRD_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_AMT_EXCEED_AVAILBL</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_AUTH_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_CAN_BE_USED_ONCE</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_INVALID_NUM</td></tr>
+        <tr><td class="est_vvalue">GIFT_CERT_IN_USE</td></tr>
+        <tr><td class="est_vvalue">GROUP_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">GROUP_REQD</td></tr>
+        <tr><td class="est_vvalue">GROUP_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">GRTR_QTY_PRICE_LEVEL_REQD</td></tr>
+        <tr><td class="est_vvalue">IDEMPOTENCY_ERROR</td></tr>
+        <tr><td class="est_vvalue">ILLEGAL_PERIOD_STRUCTURE</td></tr>
+        <tr><td class="est_vvalue">INACTIVE_CC_PROFILE</td></tr>
+        <tr><td class="est_vvalue">INACTIVE_RCRD_FOR_ROLE</td></tr>
+        <tr><td class="est_vvalue">INAVLID_FILE_TYP</td></tr>
+        <tr><td class="est_vvalue">INAVLID_ITEM_TYP</td></tr>
+        <tr><td class="est_vvalue">INAVLID_PRICING_MTRX</td></tr>
+        <tr><td class="est_vvalue">INCOMPATIBLE_ACCT_CHANGE</td></tr>
+        <tr><td class="est_vvalue">INCOMPLETE_BILLING_ADDR</td></tr>
+        <tr><td class="est_vvalue">INCOMPLETE_FILE_UPLOAD</td></tr>
+        <tr><td class="est_vvalue">INCRCT_ORD_INFO</td></tr>
+        <tr><td class="est_vvalue">INFINITE_LOOP_DETECTED</td></tr>
+        <tr><td class="est_vvalue">INITIALIZE_ARG_REQD</td></tr>
+        <tr><td class="est_vvalue">INITIALIZE_AUXREF_REQD</td></tr>
+        <tr><td class="est_vvalue">INSTALL_SCRIPT_ERROR</td></tr>
+        <tr><td class="est_vvalue">INSUFCNT_NUM_PRDS_FOR_REV_REC</td></tr>
+        <tr><td class="est_vvalue">INSUFCNT_OPEN_PRDS_FOR_REV_REC</td></tr>
+        <tr><td class="est_vvalue">INSUFFICIENT_CHARS_IN_SEARCH</td></tr>
+        <tr><td class="est_vvalue">INSUFFICIENT_FLD_PERMISSION</td></tr>
+        <tr><td class="est_vvalue">INSUFFICIENT_FUND</td></tr>
+        <tr><td class="est_vvalue">INSUFFICIENT_PERMISSION</td></tr>
+        <tr><td class="est_vvalue">INTEGER_REQD_FOR_QTY</td></tr>
+        <tr><td class="est_vvalue">INTL_FEDEX_ONE_PACKG_ALLWD</td></tr>
+        <tr><td class="est_vvalue">INTL_SHIP_EXCEED_MAX_ITEM</td></tr>
+        <tr><td class="est_vvalue">INVALID_ABN</td></tr>
+        <tr><td class="est_vvalue">INVALID_ACCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_ACCT_NUM_CSTM_FIELD</td></tr>
+        <tr><td class="est_vvalue">INVALID_ACCT_PRD</td></tr>
+        <tr><td class="est_vvalue">INVALID_ACCT_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_ACTION</td></tr>
+        <tr><td class="est_vvalue">INVALID_ADDRESS_OR_SHIPPER_NO</td></tr>
+        <tr><td class="est_vvalue">INVALID_ADJUSTMENT_ACCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_AES_FTSR_EXEMPTN_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_ALGORITHM</td></tr>
+        <tr><td class="est_vvalue">INVALID_ALLOCTN_METHOD</td></tr>
+        <tr><td class="est_vvalue">INVALID_AMORTZN_ACCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_APP_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_ASSIGN_STATUS_COMBO</td></tr>
+        <tr><td class="est_vvalue">INVALID_AUTH_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_AUTOAPPLY_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_AVS_ADDR</td></tr>
+        <tr><td class="est_vvalue">INVALID_AVS_ZIP</td></tr>
+        <tr><td class="est_vvalue">INVALID_BALANCE_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_BILLING_SCHDUL</td></tr>
+        <tr><td class="est_vvalue">INVALID_BILLING_SCHDUL_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_BILLING_SCHDUL_ENTRY</td></tr>
+        <tr><td class="est_vvalue">INVALID_BIN_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_BOM_QTY</td></tr>
+        <tr><td class="est_vvalue">INVALID_BOOLEAN_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_BUG_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_CAMPAIGN_CHANNEL</td></tr>
+        <tr><td class="est_vvalue">INVALID_CAMPAIGN_GROUP_SIZE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CAMPAIGN_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_CARD</td></tr>
+        <tr><td class="est_vvalue">INVALID_CARD_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_CARD_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_CARD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_CASE_FORM</td></tr>
+        <tr><td class="est_vvalue">INVALID_CC_EMAIL_ADDRESS</td></tr>
+        <tr><td class="est_vvalue">INVALID_CC_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_CERT</td></tr>
+        <tr><td class="est_vvalue">INVALID_CERTIFICATE_TYPE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CERT_AUTH</td></tr>
+        <tr><td class="est_vvalue">INVALID_CHARS_IN_EMAIL</td></tr>
+        <tr><td class="est_vvalue">INVALID_CHARS_IN_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_CHARS_IN_PARAM_FIELD</td></tr>
+        <tr><td class="est_vvalue">INVALID_CHARS_IN_URL</td></tr>
+        <tr><td class="est_vvalue">INVALID_CHECKOUT_EMAIL</td></tr>
+        <tr><td class="est_vvalue">INVALID_CITY</td></tr>
+        <tr><td class="est_vvalue">INVALID_COLUMN_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_COLUMN_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CONTENT</td></tr>
+        <tr><td class="est_vvalue">INVALID_CONTENT_TYPE</td></tr>
+        <tr><td class="est_vvalue">INVALID_COSTING_METHOD</td></tr>
+        <tr><td class="est_vvalue">INVALID_CRNCY_EXCH_RATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CRYPT_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_FIELD_DATA_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_FIELD_RCRD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_FIELD_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_FORM</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_RCRD_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_RCRD_QUERY</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_RCRD_TYPE_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_CSTM_RCRD_TYP_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_CUR</td></tr>
+        <tr><td class="est_vvalue">INVALID_CURRENCY_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CURRENCY_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_CURR_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_CUSTOMER_RCRD</td></tr>
+        <tr><td class="est_vvalue">INVALID_DATA</td></tr>
+        <tr><td class="est_vvalue">INVALID_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_DATE_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_DATE_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_DATE_TIME</td></tr>
+        <tr><td class="est_vvalue">INVALID_DEAL_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_DELETE_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_DESTINATION_FLDR</td></tr>
+        <tr><td class="est_vvalue">INVALID_DESTNTN_COUNTRY</td></tr>
+        <tr><td class="est_vvalue">INVALID_DESTNTN_POST_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_DESTNTN_STATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_DETACH_RECORD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_DISCOUNT_MARKUP</td></tr>
+        <tr><td class="est_vvalue">INVALID_DOMAIN_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_DOMAIN_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_DUP_ISSUE_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_EMAIL</td></tr>
+        <tr><td class="est_vvalue">INVALID_EMAIL_ADDR</td></tr>
+        <tr><td class="est_vvalue">INVALID_END_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_END_TIME</td></tr>
+        <tr><td class="est_vvalue">INVALID_ENTITY_INTERNALID</td></tr>
+        <tr><td class="est_vvalue">INVALID_ENTITY_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_EVENT_TIME</td></tr>
+        <tr><td class="est_vvalue">INVALID_EXPNS_ACCT_SUB</td></tr>
+        <tr><td class="est_vvalue">INVALID_EXPRESSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_EXP_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FAX_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_FAX_PHONE_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_FIELD_FOR_RCRD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_FIELD_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_FIELD_NAME_FOR_NULL</td></tr>
+        <tr><td class="est_vvalue">INVALID_FILE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FILE_ENCODING</td></tr>
+        <tr><td class="est_vvalue">INVALID_FILE_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_FLD</td></tr>
+        <tr><td class="est_vvalue">INVALID_FLDR_SIZE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FLD_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FLD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_FLD_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FORMAT_IN_PARAM_FIELD</td></tr>
+        <tr><td class="est_vvalue">INVALID_FORMULA</td></tr>
+        <tr><td class="est_vvalue">INVALID_FORMULA_FIELD</td></tr>
+        <tr><td class="est_vvalue">INVALID_FROM_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_FROM_TIME</td></tr>
+        <tr><td class="est_vvalue">INVALID_FULFILMNT_ITEM</td></tr>
+        <tr><td class="est_vvalue">INVALID_FX_BASE_CURRENCY</td></tr>
+        <tr><td class="est_vvalue">INVALID_FX_RATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_GET_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_GIFT_CERT</td></tr>
+        <tr><td class="est_vvalue">INVALID_GIFT_CERT_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_GIFT_CERT_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_GROUP_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_GROUP_TYPE</td></tr>
+        <tr><td class="est_vvalue">INVALID_GRP</td></tr>
+        <tr><td class="est_vvalue">INVALID_HEADER</td></tr>
+        <tr><td class="est_vvalue">INVALID_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_ID_LENGTH</td></tr>
+        <tr><td class="est_vvalue">INVALID_INITIALIZE_ARG</td></tr>
+        <tr><td class="est_vvalue">INVALID_INITIALIZE_AUXREF</td></tr>
+        <tr><td class="est_vvalue">INVALID_INITIALIZE_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_INSURED_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_INTERNALID</td></tr>
+        <tr><td class="est_vvalue">INVALID_INVENTORY_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_INV_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_IP_ADDRESS_RULE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ISSUE_BUILD_VERSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_ISSUE_PRIORITY</td></tr>
+        <tr><td class="est_vvalue">INVALID_ISSUE_PRODUCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_ISSUE_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_ITEM_OPTION</td></tr>
+        <tr><td class="est_vvalue">INVALID_ITEM_OPTIONS</td></tr>
+        <tr><td class="est_vvalue">INVALID_ITEM_SUBTYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_ITEM_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_ITEM_WEIGHT</td></tr>
+        <tr><td class="est_vvalue">INVALID_JOB_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_KEY_OR_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_KEY_PASSWORD_REQD</td></tr>
+        <tr><td class="est_vvalue">INVALID_LINE_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_LINK_SUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_LIST_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_LIST_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOC</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOC_SUB_RESTRICTN</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOGIN</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOGIN_ATTEMPT</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOGIN_CREDENTIALS</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOGIN_IP</td></tr>
+        <tr><td class="est_vvalue">INVALID_LOT_NUM_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_MARKUP_DISCOUNT</td></tr>
+        <tr><td class="est_vvalue">INVALID_MCC</td></tr>
+        <tr><td class="est_vvalue">INVALID_MEMBER_HIERARCHY</td></tr>
+        <tr><td class="est_vvalue">INVALID_MEMRZD_TRANS</td></tr>
+        <tr><td class="est_vvalue">INVALID_MERCHANT_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_MERCHANT_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_METHOD</td></tr>
+        <tr><td class="est_vvalue">INVALID_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_NAME_LENGTH</td></tr>
+        <tr><td class="est_vvalue">INVALID_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_NUMBER</td></tr>
+        <tr><td class="est_vvalue">INVALID_OBJ</td></tr>
+        <tr><td class="est_vvalue">INVALID_OFFSET</td></tr>
+        <tr><td class="est_vvalue">INVALID_ONLINE_FORM</td></tr>
+        <tr><td class="est_vvalue">INVALID_ONLINE_FORM_URL</td></tr>
+        <tr><td class="est_vvalue">INVALID_OPENID_DOMAIN</td></tr>
+        <tr><td class="est_vvalue">INVALID_OPERATION</td></tr>
+        <tr><td class="est_vvalue">INVALID_ORD_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_ORIGIN_COUNTRY</td></tr>
+        <tr><td class="est_vvalue">INVALID_ORIGIN_POSTCODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ORIGIN_STATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PAGER_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_PAGE_INDEX</td></tr>
+        <tr><td class="est_vvalue">INVALID_PAGE_PARAM</td></tr>
+        <tr><td class="est_vvalue">INVALID_PARAM</td></tr>
+        <tr><td class="est_vvalue">INVALID_PARAMETER</td></tr>
+        <tr><td class="est_vvalue">INVALID_PARENT</td></tr>
+        <tr><td class="est_vvalue">INVALID_PARTNER_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PARTNER_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_PASSWORD</td></tr>
+        <tr><td class="est_vvalue">INVALID_PASSWORD_LENGTH</td></tr>
+        <tr><td class="est_vvalue">INVALID_PAYCHECK_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PERIOD</td></tr>
+        <tr><td class="est_vvalue">INVALID_PHONE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PHONE_FAX_PAGER_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_PHONE_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_PHONE_NUMBER</td></tr>
+        <tr><td class="est_vvalue">INVALID_PICKUP_POSTAL_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PIN</td></tr>
+        <tr><td class="est_vvalue">INVALID_PIN_DEBIT_TRANS_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_PORTLET_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_POST</td></tr>
+        <tr><td class="est_vvalue">INVALID_PROBABILITY_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_PROFILE_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_PROJ_BILLING_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_PSWD</td></tr>
+        <tr><td class="est_vvalue">INVALID_PSWD_HINT</td></tr>
+        <tr><td class="est_vvalue">INVALID_PSWD_ILLEGAL_CHAR</td></tr>
+        <tr><td class="est_vvalue">INVALID_PURCHASE_TAX_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_QTY</td></tr>
+        <tr><td class="est_vvalue">INVALID_QUANTITY</td></tr>
+        <tr><td class="est_vvalue">INVALID_QUESTION</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_CONVERSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_HEADER_</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_INITIALIZE</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_OBJ</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_TRANSFRM</td></tr>
+        <tr><td class="est_vvalue">INVALID_RCRD_TYPE</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECIPIENT</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECR_REF</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_DATE_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_DESC_REQD</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_DOW</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_DOWIM</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_DOWMASK</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_FREQUENCY</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_PATTERN</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_PERIOD</td></tr>
+        <tr><td class="est_vvalue">INVALID_RECUR_TIME_ZONE_REQD</td></tr>
+        <tr><td class="est_vvalue">INVALID_REFFERER_EMAIL</td></tr>
+        <tr><td class="est_vvalue">INVALID_REFUND_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_REF_CANT_INITIALIZE</td></tr>
+        <tr><td class="est_vvalue">INVALID_REF_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_REPORT</td></tr>
+        <tr><td class="est_vvalue">INVALID_REPORT_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_REPORT_ROW</td></tr>
+        <tr><td class="est_vvalue">INVALID_REQUEST</td></tr>
+        <tr><td class="est_vvalue">INVALID_RESOURCE_TIME</td></tr>
+        <tr><td class="est_vvalue">INVALID_RESULT_SUMMARY_FUNC</td></tr>
+        <tr><td class="est_vvalue">INVALID_RETURN_DATA_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_RETURN_DATA_OBJECT</td></tr>
+        <tr><td class="est_vvalue">INVALID_REV_REC_DATE_RANGE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ROLE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ROLE_FOR_EVENT</td></tr>
+        <tr><td class="est_vvalue">INVALID_RQST_CONTACTS_EXIST</td></tr>
+        <tr><td class="est_vvalue">INVALID_RQST_PARENT_REQD</td></tr>
+        <tr><td class="est_vvalue">INVALID_RQST_SBCUST_JOBS_EXIST</td></tr>
+        <tr><td class="est_vvalue">INVALID_SAVEDSEARCH</td></tr>
+        <tr><td class="est_vvalue">INVALID_SAVED_SRCH</td></tr>
+        <tr><td class="est_vvalue">INVALID_SCHDUL_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_SCHDUL_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_SCRIPT_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_CRITERIA</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_FIELD_KEY</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_FIELD_NAME</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_FIELD_OBJ</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_JOIN_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_MORE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_OPERATOR</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_PAGE_INDEX</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_PAGE_SIZE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_PREF</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_SELECT_OBJ</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_TYPE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SEARCH_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SECONDARY_EMAIL</td></tr>
+        <tr><td class="est_vvalue">INVALID_SERIAL_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_SERIAL_OR_LOT_NUMBER</td></tr>
+        <tr><td class="est_vvalue">INVALID_SERVICE_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SESSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIPPER_STATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIP_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIP_FROM_STATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIP_GRP</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIP_SRVC</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHIP_TO_SATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHOPPER_CURRENCY</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHOPPER_LOCALE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SHOPPER_SUBSIDIARY</td></tr>
+        <tr><td class="est_vvalue">INVALID_SIGNATURE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SIGNATURE_TAG</td></tr>
+        <tr><td class="est_vvalue">INVALID_SITE_CSTM_FILE</td></tr>
+        <tr><td class="est_vvalue">INVALID_SOAP_HEADER</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_CRITERIA</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_CSTM_FLD</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_FUNCTN</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_SORT</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_SUMMARY_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRCH_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_SRVC_ITEM_SUB</td></tr>
+        <tr><td class="est_vvalue">INVALID_SSO</td></tr>
+        <tr><td class="est_vvalue">INVALID_SSS_DEBUG_SESSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_STATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_SUB</td></tr>
+        <tr><td class="est_vvalue">INVALID_SUBLIST_DESC</td></tr>
+        <tr><td class="est_vvalue">INVALID_SUBSCRIPTION_STATUS</td></tr>
+        <tr><td class="est_vvalue">INVALID_SUMMARY_SRCH</td></tr>
+        <tr><td class="est_vvalue">INVALID_SUPERVISOR</td></tr>
+        <tr><td class="est_vvalue">INVALID_TASK_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_CODES</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_CODE_FOR_SUB</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_PMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TAX_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TIME_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TOP_K_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TO_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRACKING_NUM</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANSACTION_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANSACTIO_DATE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_AMT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_COMPNT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_ID</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_ACCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_ACCT_FOR_PAYROLL_ITEM</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_CLASS</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_DEPT</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_ENTITY</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_ITEM</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_SUB_LOC</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRANS_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRAN_ITEM_LINE</td></tr>
+        <tr><td class="est_vvalue">INVALID_TRIAL_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_UNIT_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_UNSUPRTD_RCRD_TYP</td></tr>
+        <tr><td class="est_vvalue">INVALID_UPS_ACCT</td></tr>
+        <tr><td class="est_vvalue">INVALID_UPS_PACKG_WEIGHT</td></tr>
+        <tr><td class="est_vvalue">INVALID_UPS_VALUES</td></tr>
+        <tr><td class="est_vvalue">INVALID_URL</td></tr>
+        <tr><td class="est_vvalue">INVALID_URL_PARAM</td></tr>
+        <tr><td class="est_vvalue">INVALID_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVALID_VAT_AMOUNT</td></tr>
+        <tr><td class="est_vvalue">INVALID_VSOE_ALLOCTN</td></tr>
+        <tr><td class="est_vvalue">INVALID_WEBSITE_SECTION</td></tr>
+        <tr><td class="est_vvalue">INVALID_WO</td></tr>
+        <tr><td class="est_vvalue">INVALID_WO_ITEM</td></tr>
+        <tr><td class="est_vvalue">INVALID_WS_VERSION</td></tr>
+        <tr><td class="est_vvalue">INVALID_YEAR</td></tr>
+        <tr><td class="est_vvalue">INVALID_YEAR_FORMAT</td></tr>
+        <tr><td class="est_vvalue">INVALID_ZIP_CODE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ZIP_FILE</td></tr>
+        <tr><td class="est_vvalue">INVALID_ZIP_POST_CODE</td></tr>
+        <tr><td class="est_vvalue">INVENTORY_NUM_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">INVLAID_BOOLEAN_VALUE</td></tr>
+        <tr><td class="est_vvalue">INVOKING_METHOD_1_IS_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">IP_REQUEST</td></tr>
+        <tr><td class="est_vvalue">ISSUE_ASSIGNEE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">ISSUE_PRODUCT_VERSION_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">ISSUE_VERSION_BUILD_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">ITEM_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">ITEM_COUNT_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">ITEM_IS_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">ITEM_NAME_MUST_BE_UNIQUE</td></tr>
+        <tr><td class="est_vvalue">ITEM_NOT_UNIQUE</td></tr>
+        <tr><td class="est_vvalue">ITEM_PARAM_REQD_IN_URL</td></tr>
+        <tr><td class="est_vvalue">ITEM_QTY_AMT_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">ITEM_TYP_REQS_UNIT</td></tr>
+        <tr><td class="est_vvalue">JE_AMOUNTS_MUST_BALANCE</td></tr>
+        <tr><td class="est_vvalue">JE_LINE_MISSING_REQD_DATA</td></tr>
+        <tr><td class="est_vvalue">JE_MAX_ONE_LINE</td></tr>
+        <tr><td class="est_vvalue">JE_REV_REC_IN_PROGRESS</td></tr>
+        <tr><td class="est_vvalue">JE_UNEXPECTED_ERROR</td></tr>
+        <tr><td class="est_vvalue">JOB_NOT_COMPLETE</td></tr>
+        <tr><td class="est_vvalue">JS_EXCEPTION</td></tr>
+        <tr><td class="est_vvalue">KEY_REQD</td></tr>
+        <tr><td class="est_vvalue">KPI_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">LABEL_REQD</td></tr>
+        <tr><td class="est_vvalue">LANGUAGE_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">LINKED_ACCT_DONT_MATCH</td></tr>
+        <tr><td class="est_vvalue">LINKED_ENTITIES_DONT_MATCH</td></tr>
+        <tr><td class="est_vvalue">LINKED_ITEMS_DONT_MATCH</td></tr>
+        <tr><td class="est_vvalue">LINK_LINES_TO_ONE_ORD</td></tr>
+        <tr><td class="est_vvalue">LIST_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">LIST_KEY_REQD</td></tr>
+        <tr><td class="est_vvalue">LOCATIONS_IN_USE</td></tr>
+        <tr><td class="est_vvalue">LOCATIONS_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">LOCATION_REQD</td></tr>
+        <tr><td class="est_vvalue">LOCKED_DASHBOARD</td></tr>
+        <tr><td class="est_vvalue">LOGIN_DISABLED</td></tr>
+        <tr><td class="est_vvalue">LOGIN_DISABLED_PARTNER_CTR</td></tr>
+        <tr><td class="est_vvalue">LOGIN_EMAIL_REQD</td></tr>
+        <tr><td class="est_vvalue">LOGIN_NAME_AND_PSWD_REQD</td></tr>
+        <tr><td class="est_vvalue">LOGIN_REQD</td></tr>
+        <tr><td class="est_vvalue">LOST_UPSELL_CRITERIA</td></tr>
+        <tr><td class="est_vvalue">MACHN_LIST_KEY_NAMES_REQD</td></tr>
+        <tr><td class="est_vvalue">MANDATORY_PRD_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">MASS_UPDATE_CRITERIA_LOST</td></tr>
+        <tr><td class="est_vvalue">MATCHING_CUR_SUB_REQD</td></tr>
+        <tr><td class="est_vvalue">MATCHING_SERIAL_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">MATRIX_INFO_TEMP_LOST</td></tr>
+        <tr><td class="est_vvalue">MATRIX_SUBITEM_NAME_TOO_LONG</td></tr>
+        <tr><td class="est_vvalue">MAX_16_LINES_ALLWD_PER_BILLPAY</td></tr>
+        <tr><td class="est_vvalue">MAX_200_LINES_ALLWD_ON_TRANS</td></tr>
+        <tr><td class="est_vvalue">MAX_BARCODE_PRINT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MAX_BULK_MERGE_RCRDS_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MAX_EMAILS_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MAX_PARALLEL_LLM_REQUESTS_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MAX_RCRDS_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MAX_VALUES_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MEDIA_FILE_INVALID_JSCRIPT</td></tr>
+        <tr><td class="est_vvalue">MEDIA_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">MEDIA_NOT_INITIALIZED</td></tr>
+        <tr><td class="est_vvalue">MEMORIZED_TRANS_ERROR</td></tr>
+        <tr><td class="est_vvalue">MERGE_OPERATION_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">MERGE_RCRD_REQD</td></tr>
+        <tr><td class="est_vvalue">METAVANTE_SECRET_ANSWER_REQD</td></tr>
+        <tr><td class="est_vvalue">METAVANTE_SECRET_QESTION_REQD</td></tr>
+        <tr><td class="est_vvalue">METAVANTE_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">METAVANTE_TEMP_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">METHOD_NAME_CANNOT_BE_EMPTY</td></tr>
+        <tr><td class="est_vvalue">MISMATCHED_CURRENCY</td></tr>
+        <tr><td class="est_vvalue">MISMATCHED_QTY_PRICING</td></tr>
+        <tr><td class="est_vvalue">MISMATCHED_SEARCH_PARENTHESIS</td></tr>
+        <tr><td class="est_vvalue">MISMATCH_EVENT_ISSUE_STATUS</td></tr>
+        <tr><td class="est_vvalue">MISMATCH_ISSUE_PRODUCT_VERSION</td></tr>
+        <tr><td class="est_vvalue">MISMATCH_SALES_CONTRIBUTION</td></tr>
+        <tr><td class="est_vvalue">MISSING_ACCT_PRD</td></tr>
+        <tr><td class="est_vvalue">MISSING_CRNCY_EXCH_RATE</td></tr>
+        <tr><td class="est_vvalue">MISSING_ENUM</td></tr>
+        <tr><td class="est_vvalue">MISSING_MANDATORY_FIELDS</td></tr>
+        <tr><td class="est_vvalue">MISSING_REQD_FLD</td></tr>
+        <tr><td class="est_vvalue">MISSNG_ACCT_PRD</td></tr>
+        <tr><td class="est_vvalue">MISSNG_REC_SERVICE</td></tr>
+        <tr><td class="est_vvalue">MISSNG_REV_REC_RCRD</td></tr>
+        <tr><td class="est_vvalue">MISSNG_SO_REV_REC_PARAMS</td></tr>
+        <tr><td class="est_vvalue">MISSNG_SO_START_END_DATES</td></tr>
+        <tr><td class="est_vvalue">MLI_REQD</td></tr>
+        <tr><td class="est_vvalue">MODEL_DOES_NOT_ACCEPT_PREAMBLE</td></tr>
+        <tr><td class="est_vvalue">MONTHLY_QOUTA_OF_LLM_REQUESTS_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">MSNG_FIELD_OWRTE_MUST_BE_TRUE</td></tr>
+        <tr><td class="est_vvalue">MST_UPDATE_ITEMS_THEN_RATES</td></tr>
+        <tr><td class="est_vvalue">MULTISELECT_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">MULTI_ACCT_CANT_CHANGE_PSWD</td></tr>
+        <tr><td class="est_vvalue">MULTI_LOC_INVT_ERROR</td></tr>
+        <tr><td class="est_vvalue">MULTI_PRIMARY_PARTNER_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">MULTI_SHIP_ROUTES_REQD</td></tr>
+        <tr><td class="est_vvalue">MUST_DEFINE_BASE_UNIT</td></tr>
+        <tr><td class="est_vvalue">MUST_RESUBMIT_RCRD</td></tr>
+        <tr><td class="est_vvalue">NAME_ALREADY_IN_USE</td></tr>
+        <tr><td class="est_vvalue">NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">NAME_TYPE_FLDR_FIELDS_REQD</td></tr>
+        <tr><td class="est_vvalue">NARROW_KEYWORD_SEARCH</td></tr>
+        <tr><td class="est_vvalue">NEED_BILL_VARIANCE_ACCT</td></tr>
+        <tr><td class="est_vvalue">NEGATIVE_PAYMENT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">NEITHER_ARGUMENT_DEFINED</td></tr>
+        <tr><td class="est_vvalue">NEW_CONNECTION_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">NEXUS_REQD</td></tr>
+        <tr><td class="est_vvalue">NONEXISTENT_EXTERNAL_ID</td></tr>
+        <tr><td class="est_vvalue">NONEXISTENT_FIELD</td></tr>
+        <tr><td class="est_vvalue">NONEXISTENT_ID</td></tr>
+        <tr><td class="est_vvalue">NONEXISTENT_SUBLIST_KEY</td></tr>
+        <tr><td class="est_vvalue">NONMATCHING_EMAILS</td></tr>
+        <tr><td class="est_vvalue">NONUNIQUE_INDEX_VALUE</td></tr>
+        <tr><td class="est_vvalue">NONZERO_AMT_REQD</td></tr>
+        <tr><td class="est_vvalue">NONZERO_QTY_REQD</td></tr>
+        <tr><td class="est_vvalue">NONZERO_WEIGHT_REQD</td></tr>
+        <tr><td class="est_vvalue">NON_ADMIN_CANNOT_INITIATE_LINK</td></tr>
+        <tr><td class="est_vvalue">NOT_AN_INVITEE</td></tr>
+        <tr><td class="est_vvalue">NOT_ENOUGH_PERMISSIONS</td></tr>
+        <tr><td class="est_vvalue">NOT_IMPLEMENTED</td></tr>
+        <tr><td class="est_vvalue">NOT_IN_INVT</td></tr>
+        <tr><td class="est_vvalue">NO_DATA_FOUND</td></tr>
+        <tr><td class="est_vvalue">NO_EXPENSES_FOR_PRD</td></tr>
+        <tr><td class="est_vvalue">NO_ITEMS_TO_PRINT</td></tr>
+        <tr><td class="est_vvalue">NO_MASS_UPDATES_RUNNING</td></tr>
+        <tr><td class="est_vvalue">NO_MTRX_ITEMS_TO_UPDATE</td></tr>
+        <tr><td class="est_vvalue">NO_ORD_SHPMNT</td></tr>
+        <tr><td class="est_vvalue">NO_RCRDS_MATCH</td></tr>
+        <tr><td class="est_vvalue">NO_RCRD_FOR_USER</td></tr>
+        <tr><td class="est_vvalue">NO_SCHDUL_APPLIED</td></tr>
+        <tr><td class="est_vvalue">NO_UPSERT</td></tr>
+        <tr><td class="est_vvalue">NULL_CHECK_NUMBER</td></tr>
+        <tr><td class="est_vvalue">NUMERIC_CHECK_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">NUMERIC_REF_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">NUM_ITEMS_GRTR_THAN_QTY</td></tr>
+        <tr><td class="est_vvalue">NUM_ITEMS_NOT_EQUAL_TO_QTY</td></tr>
+        <tr><td class="est_vvalue">NUM_REQD_FOR_FIRST_LABEL</td></tr>
+        <tr><td class="est_vvalue">OI_FEATURE_REQD</td></tr>
+        <tr><td class="est_vvalue">OI_PERMISSION_REQD</td></tr>
+        <tr><td class="est_vvalue">ONE_ADMIN_REQD_PER_ACCT</td></tr>
+        <tr><td class="est_vvalue">ONE_DIRECT_DEPOSIT_ACT_ALLWD</td></tr>
+        <tr><td class="est_vvalue">ONE_EMPL_REQD</td></tr>
+        <tr><td class="est_vvalue">ONE_PAY_ITEM_PER_EMPL</td></tr>
+        <tr><td class="est_vvalue">ONE_POSITIVE_VALUE_REQD</td></tr>
+        <tr><td class="est_vvalue">ONE_RCRD_REQD_FOR_MASS_UPDATE</td></tr>
+        <tr><td class="est_vvalue">ONE_ROLE_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLINE_BANK_FILE_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLINE_BILL_PAY_DUP</td></tr>
+        <tr><td class="est_vvalue">ONLINE_BILL_PAY_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLINE_FORM_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">ONLINE_FORM_EMPTY</td></tr>
+        <tr><td class="est_vvalue">ONLINE_FORM_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLINE_FORM_USER_ACCESS_ONLY</td></tr>
+        <tr><td class="est_vvalue">ONLINE_ORD_FEATURE_DISABLED</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_CONTRIB_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_DEDCT_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_DISTRIB_ALLWD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_EARNING_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_LOT_NUM_ALLWD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_PREF_BIN_ALLWD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_UNIT_AS_BASE_UNIT</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_UPLOAD_ALLWD</td></tr>
+        <tr><td class="est_vvalue">ONLY_ONE_WITHLD_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">ONLY_PERMITTED_FOR_LOGGED_IN_USER</td></tr>
+        <tr><td class="est_vvalue">ONLY_PERMITTED_WHEN_NOT_LOGGED_IN</td></tr>
+        <tr><td class="est_vvalue">OPENID_DOMAIN_IN_USE</td></tr>
+        <tr><td class="est_vvalue">OPENID_NOT_ENABLED</td></tr>
+        <tr><td class="est_vvalue">OPERATION_NOT_FINISHED</td></tr>
+        <tr><td class="est_vvalue">OPERATOR_ARITY_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">OPRTN_UNAVAILBL_TO_GATEWAY</td></tr>
+        <tr><td class="est_vvalue">ORDER_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">ORD_ALREADY_APPRVD</td></tr>
+        <tr><td class="est_vvalue">OTHER_PMT_AUTH_IN_PROGRESS</td></tr>
+        <tr><td class="est_vvalue">OVERAGE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">OVERLAPPING_PRDS_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">OVER_FULFILL_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">OVER_FULFILL_RECEIV_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">OWNER_REQD</td></tr>
+        <tr><td class="est_vvalue">PACKAGE_WEIGHT_REQD</td></tr>
+        <tr><td class="est_vvalue">PACKG_LEVEL_REF_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PACKG_VALUE_TOO_LARGE</td></tr>
+        <tr><td class="est_vvalue">PARENT_CANT_ITSELF_BE_MEMBER</td></tr>
+        <tr><td class="est_vvalue">PARENT_MUST_BE_MATRIX_ITEM</td></tr>
+        <tr><td class="est_vvalue">PARENT_REQD</td></tr>
+        <tr><td class="est_vvalue">PARSING_ERROR</td></tr>
+        <tr><td class="est_vvalue">PARTIAL_FULFILL_RCEIV_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PARTNER_ACCESS_DENIED</td></tr>
+        <tr><td class="est_vvalue">PARTNER_ACCT_NOT_LINKED</td></tr>
+        <tr><td class="est_vvalue">PARTNER_CODE_ALREADY_USED</td></tr>
+        <tr><td class="est_vvalue">PAYCHECK_ALREADY_PAID</td></tr>
+        <tr><td class="est_vvalue">PAYCHECK_IN_USE</td></tr>
+        <tr><td class="est_vvalue">PAYEE_REQD_FOR_PMT</td></tr>
+        <tr><td class="est_vvalue">PAYPAL_FUND_SOURCE_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYPAL_INVALID_PMT_METHOD</td></tr>
+        <tr><td class="est_vvalue">PAYPAL_PMT_NOTIFICATION</td></tr>
+        <tr><td class="est_vvalue">PAYPAL_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_COMMITTED</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_EXPENSE_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_FEATURE_DISABLED</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_FEATURE_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_FUND_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_IN_PROCESS</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_ITEM_DELETE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_LIABILITY_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_MAINTENANCE</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">PAYROLL_UPDATE_REQD</td></tr>
+        <tr><td class="est_vvalue">PAY_HOLD_ON_SO</td></tr>
+        <tr><td class="est_vvalue">PERMISSION_VIOLATION</td></tr>
+        <tr><td class="est_vvalue">PHONE_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">PIN_DEBIT_TRANS_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PLAN_IN_USE</td></tr>
+        <tr><td class="est_vvalue">PLAN_OVERLAP_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PMT_ALREADY_APPRVD</td></tr>
+        <tr><td class="est_vvalue">PMT_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">PMT_ALREADY_SBMTD</td></tr>
+        <tr><td class="est_vvalue">PMT_EDIT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">POSITIVE_BIN_QTY_REQD</td></tr>
+        <tr><td class="est_vvalue">POSITIVE_QTY_REQD</td></tr>
+        <tr><td class="est_vvalue">POSITIVE_UNITCOST_REQD</td></tr>
+        <tr><td class="est_vvalue">POSTING_DISCOUNT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">POSTING_PRD_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">PRDS_DISALLWD_NAMES_NOT_UNIQUE</td></tr>
+        <tr><td class="est_vvalue">PRD_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">PREF_VENDOR_COST_REQD</td></tr>
+        <tr><td class="est_vvalue">PREF_VENDOR_REQD</td></tr>
+        <tr><td class="est_vvalue">PRIMARY_CURRENCY_CHANGE_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">PRIVATE_RCRD_ACCESS_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PRIVATE_STATUS_CHNG_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">PRODUCT_MODULE_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">PSWD_EXPIRED</td></tr>
+        <tr><td class="est_vvalue">PSWD_REQD</td></tr>
+        <tr><td class="est_vvalue">PWSDS_DONT_MATCH</td></tr>
+        <tr><td class="est_vvalue">QTY_EXCEEDED_QTY_BUCKETS</td></tr>
+        <tr><td class="est_vvalue">QTY_REQD</td></tr>
+        <tr><td class="est_vvalue">QUANTITY_NOT_SPECIFIED_FOR_ITEM_1</td></tr>
+        <tr><td class="est_vvalue">RATE_REQUEST_SHPMNT_REQD</td></tr>
+        <tr><td class="est_vvalue">RATE_SRVC_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">RCRD_DELETED_SINCE_RETRIEVED</td></tr>
+        <tr><td class="est_vvalue">RCRD_DRFT_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">RCRD_DRFT_INVALID_TTL</td></tr>
+        <tr><td class="est_vvalue">RCRD_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">RCRD_EDITED_SINCE_RETRIEVED</td></tr>
+        <tr><td class="est_vvalue">RCRD_HAS_BEEN_CHANGED</td></tr>
+        <tr><td class="est_vvalue">RCRD_ID_NOT_INT</td></tr>
+        <tr><td class="est_vvalue">RCRD_LOCKED_BY_WF</td></tr>
+        <tr><td class="est_vvalue">RCRD_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">RCRD_PREVSLY_DELETED</td></tr>
+        <tr><td class="est_vvalue">RCRD_REF_RCRD_TYP_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">RCRD_SUB_MISMATCH_WITH_CLASS</td></tr>
+        <tr><td class="est_vvalue">RCRD_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">RCRD_UNEDITABLE</td></tr>
+        <tr><td class="est_vvalue">REACHED_LIST_END</td></tr>
+        <tr><td class="est_vvalue">REACHED_LIST_START</td></tr>
+        <tr><td class="est_vvalue">RECALCING_PLAN_SCHDUL</td></tr>
+        <tr><td class="est_vvalue">RECURSV_REF_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">RECUR_EVENT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">REC_TYP_REQD</td></tr>
+        <tr><td class="est_vvalue">REPORT_EXPIRED</td></tr>
+        <tr><td class="est_vvalue">REQD_FORM_TAG_MISSING</td></tr>
+        <tr><td class="est_vvalue">REQD_LOC_FIELDS_MISSING</td></tr>
+        <tr><td class="est_vvalue">REQD_SUB_FIELDS_MISSING</td></tr>
+        <tr><td class="est_vvalue">REQUEST_PARAM_REQD</td></tr>
+        <tr><td class="est_vvalue">REQUIRED_FEATURE_IS_NOT_ENABLED</td></tr>
+        <tr><td class="est_vvalue">RESPONSE_GENERATION_FAILED</td></tr>
+        <tr><td class="est_vvalue">REVERSAL_DATE_WARNING</td></tr>
+        <tr><td class="est_vvalue">REV_REC_DATE_REQD</td></tr>
+        <tr><td class="est_vvalue">REV_REC_TMPLT_DATA_MISSING</td></tr>
+        <tr><td class="est_vvalue">REV_REC_UPDATE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">ROLE_REQD</td></tr>
+        <tr><td class="est_vvalue">ROLE_REQUIRED</td></tr>
+        <tr><td class="est_vvalue">ROUNDING_ERROR</td></tr>
+        <tr><td class="est_vvalue">ROUTING_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">SALES_DISCOUNT_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">SALES_ORDER_EDIT_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">SASS_FILE_INACCESSIBLE</td></tr>
+        <tr><td class="est_vvalue">SASS_FILE_NON_EXISTENT</td></tr>
+        <tr><td class="est_vvalue">SASS_ILLEGAL_ARGUMENT</td></tr>
+        <tr><td class="est_vvalue">SASS_INPUT_SIZE_EXCEEDED_BY_FILE</td></tr>
+        <tr><td class="est_vvalue">SASS_UNABLE_TO_COMPILE</td></tr>
+        <tr><td class="est_vvalue">SASS_UNABLE_TO_READ_FILE</td></tr>
+        <tr><td class="est_vvalue">SAVED_SRCH_EMAIL_ERROR</td></tr>
+        <tr><td class="est_vvalue">SCHDUL_EDIT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">SCHEDULED_REPORT_ERROR</td></tr>
+        <tr><td class="est_vvalue">SCP_HISTORY_TOO_MANY_RESULTS</td></tr>
+        <tr><td class="est_vvalue">SEARCH_DATE_FILTER_REQD</td></tr>
+        <tr><td class="est_vvalue">SEARCH_ERROR</td></tr>
+        <tr><td class="est_vvalue">SEARCH_INTEGER_REQD</td></tr>
+        <tr><td class="est_vvalue">SEARCH_TIMED_OUT</td></tr>
+        <tr><td class="est_vvalue">SECURE_TRANS_REQD_ON_CHECKOUT</td></tr>
+        <tr><td class="est_vvalue">SELECT_OPTION_ALREADY_PRESENT</td></tr>
+        <tr><td class="est_vvalue">SELECT_OPTION_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">SERIAL_NUM_MATCH_MULTI_ITEMS</td></tr>
+        <tr><td class="est_vvalue">SERVER_SIDE_VALIDATION_FAILED</td></tr>
+        <tr><td class="est_vvalue">SESSION_TERMD_2ND_LOGIN_DECTD</td></tr>
+        <tr><td class="est_vvalue">SESSION_TIMED_OUT</td></tr>
+        <tr><td class="est_vvalue">SETTING_VALUE_IS_FORBIDDEN</td></tr>
+        <tr><td class="est_vvalue">SETUP_METER_REQD</td></tr>
+        <tr><td class="est_vvalue">SET_SHIPPING_PICKUP_TYP</td></tr>
+        <tr><td class="est_vvalue">SHIPFROM_ADDRESS_NOT_SET</td></tr>
+        <tr><td class="est_vvalue">SHIPMNT_INSURANCE_NOT_AVAILABLE</td></tr>
+        <tr><td class="est_vvalue">SHIP_ADDR_REQD</td></tr>
+        <tr><td class="est_vvalue">SHIP_MANIFEST_ALREADY_PRCSSD</td></tr>
+        <tr><td class="est_vvalue">SHIP_MANIFEST_ERROR</td></tr>
+        <tr><td class="est_vvalue">SHIP_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">SHIP_TALBE_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">SHIP_USER_ERROR</td></tr>
+        <tr><td class="est_vvalue">SIGNATURE_VERIFICATION_FAILED</td></tr>
+        <tr><td class="est_vvalue">SINGLE_VALUE_REQD</td></tr>
+        <tr><td class="est_vvalue">SITEMAP_GEN_ERROR</td></tr>
+        <tr><td class="est_vvalue">SITE_DOMAIN_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">SITE_TAG_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">SO_LINE_HAS_PO</td></tr>
+        <tr><td class="est_vvalue">SRVC_UNAVAILBL_FOR_LOC</td></tr>
+        <tr><td class="est_vvalue">SSS_APP_SERVER_RESTART</td></tr>
+        <tr><td class="est_vvalue">SSS_AUTHOR_MUST_BE_EMPLOYEE</td></tr>
+        <tr><td class="est_vvalue">SSS_CONNECTION_TIME_OUT</td></tr>
+        <tr><td class="est_vvalue">SSS_DEBUG_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">SSS_DRIP_EMAIL_RAN_OUT_OF_COUPON_CODES</td></tr>
+        <tr><td class="est_vvalue">SSS_DUPLICATE_ALIAS</td></tr>
+        <tr><td class="est_vvalue">SSS_DUP_DRIP_EMAIL</td></tr>
+        <tr><td class="est_vvalue">SSS_FILE_SIZE_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_INSTRUCTION_COUNT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_ACTION_ID</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_ATTACH_RECORD_TYPE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_BCC_EMAIL</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_CC_EMAIL</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_CMPGN_EVENT_ID</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_EMAIL_TEMPLATE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_FORM_ELEMENT_NAME</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_GSO_FLTR_OPRTOR</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_HEADER</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_HOST_CERT</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_LIST_COLUMN_NAME</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_LOCK_WAIT_TIME</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_LOG_TYPE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_MACRO_ID</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_PORTLET_INTERVAL</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_READ_SIZE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SCRIPTLET_ID</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SEGMENT_SEPARATOR</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_COL</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_COLUMN_JOIN</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_COLUMN_SUM</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_FILTER</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_FILTER_JOIN</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SRCH_OPERATOR</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SUBLIST</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SUBLIST_OPERATION</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_SUBMIT_OPTION</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_TYPE_ARG</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_UI_OBJECT_TYPE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_URL</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_URL_CATEGORY</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_WF_RCRD_TYPE</td></tr>
+        <tr><td class="est_vvalue">SSS_INVALID_XML_SCHEMA_OR_DEPENDENCY</td></tr>
+        <tr><td class="est_vvalue">SSS_MEMORY_USAGE_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_METHOD_NOT_IMPLEMENTED</td></tr>
+        <tr><td class="est_vvalue">SSS_MISSING_ALIAS</td></tr>
+        <tr><td class="est_vvalue">SSS_MISSING_REQD_ARGUMENT</td></tr>
+        <tr><td class="est_vvalue">SSS_PERSISTED_DATA_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_QUEUE_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_RECORD_DOES_NOT_SATISFY_CONDITION</td></tr>
+        <tr><td class="est_vvalue">SSS_RECORD_DOES_NOT_SATISFY_CONDITION_1</td></tr>
+        <tr><td class="est_vvalue">SSS_RECORD_TYPE_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">SSS_REQUEST_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_REQUEST_TIME_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_RETRY_COUNT_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_SCRIPT_DESERIALIZATION_FAILURE</td></tr>
+        <tr><td class="est_vvalue">SSS_SCRIPT_SECURITY_VIOLATION</td></tr>
+        <tr><td class="est_vvalue">SSS_SEARCH_TIMEOUT</td></tr>
+        <tr><td class="est_vvalue">SSS_SSO_CONFIG_REQD</td></tr>
+        <tr><td class="est_vvalue">SSS_STACK_FRAME_DEPTH_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_STATEMENT_COUNT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_TAG_CANNOT_BE_EMPTY</td></tr>
+        <tr><td class="est_vvalue">SSS_TIME_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_TRANSACTION_REQD</td></tr>
+        <tr><td class="est_vvalue">SSS_TRANS_IN_PROGRESS</td></tr>
+        <tr><td class="est_vvalue">SSS_UNKNOWN_HOST</td></tr>
+        <tr><td class="est_vvalue">SSS_USAGE_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">SSS_XML_DOES_NOT_CONFORM_TO_SCHEMA</td></tr>
+        <tr><td class="est_vvalue">SSS_XML_DOM_EXCEPTION</td></tr>
+        <tr><td class="est_vvalue">START_DATE_AFTER_END_DATE</td></tr>
+        <tr><td class="est_vvalue">START_DATE_REQD</td></tr>
+        <tr><td class="est_vvalue">STATE_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">STATE_REQD</td></tr>
+        <tr><td class="est_vvalue">STATUS_ASSIGNEE_REQD</td></tr>
+        <tr><td class="est_vvalue">STORAGE_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">STORE_ALIAS_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">STORE_DOMAIN_UNAVAILABLE</td></tr>
+        <tr><td class="est_vvalue">SUBITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">SUBSIDIARY_CHANGE_NOT_ALLOWED</td></tr>
+        <tr><td class="est_vvalue">SUBSIDIARY_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">SUB_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">SUB_RESTRICT_VIEW_REQD</td></tr>
+        <tr><td class="est_vvalue">SUCCESS_TRANS</td></tr>
+        <tr><td class="est_vvalue">SUPRT_CNTR_LOGIN_ERROR</td></tr>
+        <tr><td class="est_vvalue">TAGATA_ALREADY_ENDORSED</td></tr>
+        <tr><td class="est_vvalue">TAG_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">TAG_SUBSTITUTN_ERROR</td></tr>
+        <tr><td class="est_vvalue">TAX_ACCT_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">TAX_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">TAX_GROUP_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">TAX_PRD_REQD</td></tr>
+        <tr><td class="est_vvalue">TAX_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">TEMPLATE_NOT_FOUND</td></tr>
+        <tr><td class="est_vvalue">THE_MAX_QTY_FOR_ITEM_1_IS_2</td></tr>
+        <tr><td class="est_vvalue">THE_MIN_QTY_FOR_ITEM_1_IS_2</td></tr>
+        <tr><td class="est_vvalue">THIRD_PARTY_BILLING_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">TICKET_NOT_LOCATED</td></tr>
+        <tr><td class="est_vvalue">TIMEOUT_THE_RECORD_DOESNT_EXIST_ANYMORE</td></tr>
+        <tr><td class="est_vvalue">TIME_ENTRY_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">TOPIC_REQD</td></tr>
+        <tr><td class="est_vvalue">TOS_IS_NOT_ACCEPTED</td></tr>
+        <tr><td class="est_vvalue">TRANSACTION_DELETED</td></tr>
+        <tr><td class="est_vvalue">TRANSORD_SHIP_REC_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">TRANS_ALREADY_REFUNDED</td></tr>
+        <tr><td class="est_vvalue">TRANS_ALREADY_SETTLED</td></tr>
+        <tr><td class="est_vvalue">TRANS_ALREADY_VOIDED</td></tr>
+        <tr><td class="est_vvalue">TRANS_AMTS_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_APPLIED_AMTS_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_CLASS_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_DEPT_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_DOES_NOT_EXIST</td></tr>
+        <tr><td class="est_vvalue">TRANS_DSNT_EXIST</td></tr>
+        <tr><td class="est_vvalue">TRANS_EDIT_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">TRANS_FORGN_CRNCY_MISMATCH</td></tr>
+        <tr><td class="est_vvalue">TRANS_FORGN_CUR_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_IN_USE</td></tr>
+        <tr><td class="est_vvalue">TRANS_LINES_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_LINE_AND_PMT_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_LOC_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRANS_NOT_CLEANED</td></tr>
+        <tr><td class="est_vvalue">TRANS_NOT_COMPLETED</td></tr>
+        <tr><td class="est_vvalue">TRANS_PRCSSNG_ERROR</td></tr>
+        <tr><td class="est_vvalue">TRANS_UNBALNCD</td></tr>
+        <tr><td class="est_vvalue">TRAN_DATE_REQD</td></tr>
+        <tr><td class="est_vvalue">TRAN_LINE_FX_AMT_REQD</td></tr>
+        <tr><td class="est_vvalue">TRAN_LINK_FX_AMT_REQD</td></tr>
+        <tr><td class="est_vvalue">TRAN_PERIOD_CLOSED</td></tr>
+        <tr><td class="est_vvalue">TRAN_PRD_CLOSED</td></tr>
+        <tr><td class="est_vvalue">TWO_FA_AUTH_REQD</td></tr>
+        <tr><td class="est_vvalue">TWO_FA_REQD</td></tr>
+        <tr><td class="est_vvalue">UNABLE_TO_PRINT_CHECKS</td></tr>
+        <tr><td class="est_vvalue">UNABLE_TO_PRINT_DEPOSITS</td></tr>
+        <tr><td class="est_vvalue">UNACCEPTABLE_HEADER_VALUE</td></tr>
+        <tr><td class="est_vvalue">UNAUTH_CAMPAIGN_RSPNS_RQST</td></tr>
+        <tr><td class="est_vvalue">UNAUTH_UNSUBSCRIBE_RQST</td></tr>
+        <tr><td class="est_vvalue">UNDEFINED_ACCTNG_PRD</td></tr>
+        <tr><td class="est_vvalue">UNDEFINED_CSTM_FIELD</td></tr>
+        <tr><td class="est_vvalue">UNDEFINED_TAX_PRD</td></tr>
+        <tr><td class="est_vvalue">UNEXPECTED_ERROR</td></tr>
+        <tr><td class="est_vvalue">UNEXPECTED_FAILURE</td></tr>
+        <tr><td class="est_vvalue">UNEXPECTED_PROBLEM_LOADING_RECORD</td></tr>
+        <tr><td class="est_vvalue">UNHANDLED_ERRORS_ON_RESTORE</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_CUST_EMAIL_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_CUST_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_ENTITY_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_GROUPID_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_PARTNER_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_QTY_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_RCRD_ID_REQD</td></tr>
+        <tr><td class="est_vvalue">UNIQUE_SOLUTION_CODE_REQD</td></tr>
+        <tr><td class="est_vvalue">UNITS_TYP_IN_USE</td></tr>
+        <tr><td class="est_vvalue">UNKNOWN_CARRIER</td></tr>
+        <tr><td class="est_vvalue">UNKNOWN_RCRD_TYPE</td></tr>
+        <tr><td class="est_vvalue">UNKNOWN_SCRIPT_TYP</td></tr>
+        <tr><td class="est_vvalue">UNKNWN_ALLOCTN_SCHDUL_FREQ_TYP</td></tr>
+        <tr><td class="est_vvalue">UNKNWN_EMAIL_AUTHOR</td></tr>
+        <tr><td class="est_vvalue">UNKNWN_EXCHANGE_RATE</td></tr>
+        <tr><td class="est_vvalue">UNRECOGNIZED_METHOD</td></tr>
+        <tr><td class="est_vvalue">UNSUBSCRIBE_REQD</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_FIELD_OPTION</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_FIELD_VALUE</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_METHOD</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_SUBLIST_FIELD_VALUE</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_VALUE_TYPE</td></tr>
+        <tr><td class="est_vvalue">UNSUPPORTED_WS_VERSION</td></tr>
+        <tr><td class="est_vvalue">UPDATE_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">UPDATE_PRICE_AMT_REQD</td></tr>
+        <tr><td class="est_vvalue">UPGRADE_WS_VERSION</td></tr>
+        <tr><td class="est_vvalue">UPS_CANT_INTEGRATE_FULFILL</td></tr>
+        <tr><td class="est_vvalue">UPS_CONFIG_ERROR</td></tr>
+        <tr><td class="est_vvalue">UPS_LICENSE_AGREEMNT_REQD</td></tr>
+        <tr><td class="est_vvalue">UPS_ONLINE_RATE_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">UPS_ONLINE_SHIP_UNAVAILBL</td></tr>
+        <tr><td class="est_vvalue">UPS_REG_NUM_IN_USE</td></tr>
+        <tr><td class="est_vvalue">UPS_SETUP_REQD</td></tr>
+        <tr><td class="est_vvalue">UPS_USER_ERROR</td></tr>
+        <tr><td class="est_vvalue">UPS_VOID_ERROR</td></tr>
+        <tr><td class="est_vvalue">UPS_XML_ERROR</td></tr>
+        <tr><td class="est_vvalue">URL_ID_PARAM_REQD</td></tr>
+        <tr><td class="est_vvalue">URL_REQD</td></tr>
+        <tr><td class="est_vvalue">USER_CONTEXT_REQD</td></tr>
+        <tr><td class="est_vvalue">USER_DISABLED</td></tr>
+        <tr><td class="est_vvalue">USER_ERROR</td></tr>
+        <tr><td class="est_vvalue">USPS_ACCT_NUM_ALREADY_EXISTS</td></tr>
+        <tr><td class="est_vvalue">USPS_INVALID_INSURED_VALUE</td></tr>
+        <tr><td class="est_vvalue">USPS_INVALID_PACKAGING</td></tr>
+        <tr><td class="est_vvalue">USPS_INVALID_PSWD</td></tr>
+        <tr><td class="est_vvalue">USPS_LABEL_VOIDED</td></tr>
+        <tr><td class="est_vvalue">USPS_MAX_ITEM_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">USPS_ONE_PACKAGE_ALLWD</td></tr>
+        <tr><td class="est_vvalue">USPS_PASS_PHRASE_NOT_UPDATED</td></tr>
+        <tr><td class="est_vvalue">USPS_REFUND_FAILED</td></tr>
+        <tr><td class="est_vvalue">USPS_RETRY</td></tr>
+        <tr><td class="est_vvalue">USPS_VALIDATE_ADDR</td></tr>
+        <tr><td class="est_vvalue">USPS_VERIFY_TRACKING_NUM</td></tr>
+        <tr><td class="est_vvalue">USPS_VOID_ERROR</td></tr>
+        <tr><td class="est_vvalue">VALID_EMAIL_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_EMAIL_REQD_FOR_LOGIN</td></tr>
+        <tr><td class="est_vvalue">VALID_FIRST_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_LAST_NAME_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_LINE_ITEM_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_PHONE_NUM_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_PRD_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_URL_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_VERSION_REQD_IN_URL</td></tr>
+        <tr><td class="est_vvalue">VALID_WORK_PHONE_REQD</td></tr>
+        <tr><td class="est_vvalue">VALID_ZIPCODE_REQD</td></tr>
+        <tr><td class="est_vvalue">VENDOR_TYPE_REQD</td></tr>
+        <tr><td class="est_vvalue">VERIFY_DESTNTN_ZIP_CODE</td></tr>
+        <tr><td class="est_vvalue">VERIFY_PAYROLL_FUND_ACCT</td></tr>
+        <tr><td class="est_vvalue">VERIFY_ZIP_CODE_SETUP</td></tr>
+        <tr><td class="est_vvalue">VISA_ERROR</td></tr>
+        <tr><td class="est_vvalue">VOIDING_REVERSAL_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">VOID_FAILED</td></tr>
+        <tr><td class="est_vvalue">VSOE_CANT_ADD_ITEM_GROUP</td></tr>
+        <tr><td class="est_vvalue">VSOE_REV_REC_TMPLT_REQD</td></tr>
+        <tr><td class="est_vvalue">VSOE_TOTAL_ALLOCATION_ERROR</td></tr>
+        <tr><td class="est_vvalue">VSOE_TRAN_VSOE_BUNDLE_ERROR</td></tr>
+        <tr><td class="est_vvalue">WARNING</td></tr>
+        <tr><td class="est_vvalue">WF_EXEC_USAGE_LIMIT_EXCEEDED</td></tr>
+        <tr><td class="est_vvalue">WORK_DAYS_REQD</td></tr>
+        <tr><td class="est_vvalue">WOULD_TRANSFORM</td></tr>
+        <tr><td class="est_vvalue">WRITE_OFF_ACCT_REQD</td></tr>
+        <tr><td class="est_vvalue">WRONG_DC_OR_VERSION</td></tr>
+        <tr><td class="est_vvalue">WS_CONCUR_SESSION_DISALLWD</td></tr>
+        <tr><td class="est_vvalue">WS_EXCEEDED_CONCUR_USERS_ALLWD</td></tr>
+        <tr><td class="est_vvalue">WS_FEATURE_REQD</td></tr>
+        <tr><td class="est_vvalue">WS_INVALID_SEARCH_OPERATN</td></tr>
+        <tr><td class="est_vvalue">WS_LOG_IN_REQD</td></tr>
+        <tr><td class="est_vvalue">WS_PERMISSION_REQD</td></tr>
+        <tr><td class="est_vvalue">WS_REQUEST_BLOCKED</td></tr>
+        <tr><td class="est_vvalue">ZIP_FILE_CONTAINS_VIRUS</td></tr>
+        <tr><td class="est_vvalue">_IGNORE</td></tr>
+        <tr><td class="est_vvalue">_INVESTIGATE</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

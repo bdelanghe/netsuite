@@ -1,0 +1,2036 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__transaction','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__transaction','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Transactions
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Transaction Body Fields custom field is available for the Transactions table.  <div class="th_imp"><b>Important: </b>Credit and debit amounts are not exposed as columns in the Transactions table. However, you can query the Transaction Lines table to obtain transaction credit and debit amounts. For more details, see <a href="https://system.netsuite.com/app/help/helpcenter.nl?topic=DOC_section_4400769955" target="_blank">Connect Access to Transaction Credit and Debit Amounts</a>.</div><div class="th_imp"><b>Important: </b>Item count and quantity values are not exposed as columns in the Transactions table. However, you can query the Transaction Lines table to obtain these values. For more details, see <a href="https://system.netsuite.com/app/help/helpcenter.nl?topic=DOC_section_1512507697" target="_blank">Connect Access to Transaction Quantities</a>.</div>
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ACCOUNT_BASED_NUMBER">
+            <td class="rt_fname">account_based_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Account based number</td>
+        </tr>
+        <tr id="field_ACCOUNTING_BOOK_ID">
+            <td class="rt_fname">accounting_book_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Accounting book ID</td>
+        </tr>
+        <tr id="field_ACCOUNTING_PERIOD_ID">
+            <td class="rt_fname">accounting_period_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Accounting period ID</td>
+        </tr>
+        <tr id="field_ACCT_CORP_CARD_EXPENSES_ID" class="foreignKeyField">
+            <td class="rt_fname">acct_corp_card_expenses_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                account_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a><br/>
+            </td>
+            <td class="rt_fhelp">ID of the account for corporate card in expense report</td>
+        </tr>
+        <tr id="field_AMOUNT_UNBILLED">
+            <td class="rt_fname">amount_unbilled</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Amount unbilled</td>
+        </tr>
+        <tr id="field_BILL_PAY_TRANSACTION">
+            <td class="rt_fname">bill_pay_transaction</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bill pay transaction</td>
+        </tr>
+        <tr id="field_BILLADDRESS">
+            <td class="rt_fname">billaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Billing address</td>
+        </tr>
+        <tr id="field_BILLING_ACCOUNT_ID">
+            <td class="rt_fname">billing_account_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Billing account ID</td>
+        </tr>
+        <tr id="field_BILLING_INSTRUCTIONS">
+            <td class="rt_fname">billing_instructions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Billing instructions</td>
+        </tr>
+        <tr id="field_BUILDABLE">
+            <td class="rt_fname">buildable</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">The number of assemblies that can be built with the current supplies.</td>
+        </tr>
+        <tr id="field_BULK_SUBMISSION_ID">
+            <td class="rt_fname">bulk_submission_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bulk submission ID</td>
+        </tr>
+        <tr id="field_CARRIER">
+            <td class="rt_fname">carrier</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Carrier</td>
+        </tr>
+        <tr id="field_CLOSED">
+            <td class="rt_fname">closed</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Closed</td>
+        </tr>
+        <tr id="field_COMPANY_STATUS_ID">
+            <td class="rt_fname">company_status_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Company status ID</td>
+        </tr>
+        <tr id="field_CONTRACT_COST_AMOUNT">
+            <td class="rt_fname">contract_cost_amount</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Contract cost amount</td>
+        </tr>
+        <tr id="field_CONTRACT_DEFER_EXPENSE_ACCT_ID">
+            <td class="rt_fname">contract_defer_expense_acct_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Contract defer expense account ID</td>
+        </tr>
+        <tr id="field_CONTRACT_EXPENSE_ACCT_ID">
+            <td class="rt_fname">contract_expense_acct_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Contract expense account ID</td>
+        </tr>
+        <tr id="field_CONTRACT_EXPENSE_SRC_ACCT_ID">
+            <td class="rt_fname">contract_expense_src_acct_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Contract acquisition expense source account</td>
+        </tr>
+        <tr id="field_CREATE_DATE">
+            <td class="rt_fname">create_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Creation date (GMT)</td>
+        </tr>
+        <tr id="field_CREATED_BY_ID">
+            <td class="rt_fname">created_by_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">ID of the creator</td>
+        </tr>
+        <tr id="field_CREATED_FROM_ID">
+            <td class="rt_fname">created_from_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Created from ID</td>
+        </tr>
+        <tr id="field_CURRENCY_ID">
+            <td class="rt_fname">currency_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Currency ID</td>
+        </tr>
+        <tr id="field_CUSTOM_FORM_ID">
+            <td class="rt_fname">custom_form_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Custom form ID</td>
+        </tr>
+        <tr id="field_DATE_ACTUAL_PROD_END">
+            <td class="rt_fname">date_actual_prod_end</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">The date production ends.</td>
+        </tr>
+        <tr id="field_DATE_ACTUAL_PROD_START">
+            <td class="rt_fname">date_actual_prod_start</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">The date production starts.</td>
+        </tr>
+        <tr id="field_DATE_AS_OF">
+            <td class="rt_fname">date_as_of</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">As of date</td>
+        </tr>
+        <tr id="field_DATE_BID_CLOSE">
+            <td class="rt_fname">date_bid_close</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bid close date</td>
+        </tr>
+        <tr id="field_DATE_BID_OPEN">
+            <td class="rt_fname">date_bid_open</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Bid open date</td>
+        </tr>
+        <tr id="field_DATE_CONTRACT_COST_ACCRUAL">
+            <td class="rt_fname">date_contract_cost_accrual</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date contract cost accrual</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified (GMT)</td>
+        </tr>
+        <tr id="field_DATE_TAX_POINT">
+            <td class="rt_fname">date_tax_point</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction date determining taxability rules</td>
+        </tr>
+        <tr id="field_DUE_DATE">
+            <td class="rt_fname">due_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Due date</td>
+        </tr>
+        <tr id="field_EMAIL">
+            <td class="rt_fname">email</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">256</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Email</td>
+        </tr>
+        <tr id="field_END_DATE">
+            <td class="rt_fname">end_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">End date</td>
+        </tr>
+        <tr id="field_ENTITY_ID">
+            <td class="rt_fname">entity_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Entity ID</td>
+        </tr>
+        <tr id="field_ENTITY_TAX_REG_NUM">
+            <td class="rt_fname">entity_tax_reg_num</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">30</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Entity's tax registration number</td>
+        </tr>
+        <tr id="field_EXCHANGE_RATE">
+            <td class="rt_fname">exchange_rate</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">30</td>
+            <td class="rt_fscale">15</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Exchange rate</td>
+        </tr>
+        <tr id="field_EXPECTED_CLOSE">
+            <td class="rt_fname">expected_close</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Expected close</td>
+        </tr>
+        <tr id="field_EXTERNAL_REF_NUMBER">
+            <td class="rt_fname">external_ref_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">External reference number</td>
+        </tr>
+        <tr id="field_FAX">
+            <td class="rt_fname">fax</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Fax</td>
+        </tr>
+        <tr id="field_FOB">
+            <td class="rt_fname">fob</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">13</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">FOB</td>
+        </tr>
+        <tr id="field_FORECAST_TYPE">
+            <td class="rt_fname">forecast_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">384</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Forecast type</td>
+        </tr>
+        <tr id="field_INCLUDE_IN_FORECAST">
+            <td class="rt_fname">include_in_forecast</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Include in forecast</td>
+        </tr>
+        <tr id="field_INCOTERM">
+            <td class="rt_fname">incoterm</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">International commercial term (Incoterm)</td>
+        </tr>
+        <tr id="field_INTERCOMPANY_TRANSACTION_ID">
+            <td class="rt_fname">intercompany_transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Intercompany transaction ID</td>
+        </tr>
+        <tr id="field_IS_ACTUALPRODENDDATE_MANUAL">
+            <td class="rt_fname">is_actualprodenddate_manual</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the actual production end date needs to be entered manually.</td>
+        </tr>
+        <tr id="field_IS_ACTUALPRODSTARTDATE_MANUAL">
+            <td class="rt_fname">is_actualprodstartdate_manual</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the actual production start date needs to be entered manually.</td>
+        </tr>
+        <tr id="field_IS_ADVANCED_INTERCOMPANY">
+            <td class="rt_fname">is_advanced_intercompany</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Indicates whether the transaction is an advanced intercompany journal entry</td>
+        </tr>
+        <tr id="field_IS_AUTOCALCULATE_LAG">
+            <td class="rt_fname">is_autocalculate_lag</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether lag times for operation tasks should be calculated.</td>
+        </tr>
+        <tr id="field_IS_COMPLIANT">
+            <td class="rt_fname">is_compliant</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is compliant</td>
+        </tr>
+        <tr id="field_IS_CREATED_FROM_MERGE">
+            <td class="rt_fname">is_created_from_merge</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction was created from a merge</td>
+        </tr>
+        <tr id="field_IS_CROSS_SUB_TRANSACTIONS">
+            <td class="rt_fname">is_cross_sub_transactions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is a cross-subsidiary transaction</td>
+        </tr>
+        <tr id="field_IS_FINANCE_CHARGE">
+            <td class="rt_fname">is_finance_charge</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is finance charge line</td>
+        </tr>
+        <tr id="field_IS_FIRMED">
+            <td class="rt_fname">is_firmed</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is in the Firmed status</td>
+        </tr>
+        <tr id="field_IS_IN_TRANSIT_PAYMENT">
+            <td class="rt_fname">is_in_transit_payment</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the payment is in transit</td>
+        </tr>
+        <tr id="field_IS_INTERCOMPANY">
+            <td class="rt_fname">is_intercompany</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is an intercompany transaction</td>
+        </tr>
+        <tr id="field_IS_MERGED_INTO_ARRANGEMENTS">
+            <td class="rt_fname">is_merged_into_arrangements</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is to be merged into arrangements</td>
+        </tr>
+        <tr id="field_IS_NON_POSTING">
+            <td class="rt_fname">is_non_posting</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is non-posting</td>
+        </tr>
+        <tr id="field_IS_OVERRIDE_INSTALLMENTS">
+            <td class="rt_fname">is_override_installments</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether installments have been overridden</td>
+        </tr>
+        <tr id="field_IS_PAYMENT_HOLD">
+            <td class="rt_fname">is_payment_hold</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction has a payment hold</td>
+        </tr>
+        <tr id="field_IS_RECURRING_BILL">
+            <td class="rt_fname">is_recurring_bill</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the bill is recurring</td>
+        </tr>
+        <tr id="field_IS_REVERSAL">
+            <td class="rt_fname">is_reversal</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the transaction is a reversal</td>
+        </tr>
+        <tr id="field_IS_SHIP_COMPLETE">
+            <td class="rt_fname">is_ship_complete</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is ship complete</td>
+        </tr>
+        <tr id="field_IS_TAX_POINT_DATE_OVERRIDE">
+            <td class="rt_fname">is_tax_point_date_override</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Indicates whether the tax point date was set manually by the user</td>
+        </tr>
+        <tr id="field_IS_TAX_REG_OVERRIDE">
+            <td class="rt_fname">is_tax_reg_override</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether a tax regulation override is applied</td>
+        </tr>
+        <tr id="field_IS_WIP">
+            <td class="rt_fname">is_wip</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Is wip</td>
+        </tr>
+        <tr id="field_ITEM_REVISION">
+            <td class="rt_fname">item_revision</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Item revision</td>
+        </tr>
+        <tr id="field_JOB_ID">
+            <td class="rt_fname">job_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name / job ID</td>
+        </tr>
+        <tr id="field_LANDED_COST_ALLOCATION_METHOD">
+            <td class="rt_fname">landed_cost_allocation_method</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">8</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Cost allocation method (for example: weight, quantity, or value)</td>
+        </tr>
+        <tr id="field_LAST_MODIFIED_DATE">
+            <td class="rt_fname">last_modified_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified (GMT)</td>
+        </tr>
+        <tr id="field_LEAD_SOURCE_ID">
+            <td class="rt_fname">lead_source_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Lead source ID</td>
+        </tr>
+        <tr id="field_LOCATION_ID">
+            <td class="rt_fname">location_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Location ID</td>
+        </tr>
+        <tr id="field_MEMO">
+            <td class="rt_fname">memo</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Memo</td>
+        </tr>
+        <tr id="field_MEMORIZED">
+            <td class="rt_fname">memorized</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Memorized</td>
+        </tr>
+        <tr id="field_MESSAGE">
+            <td class="rt_fname">message</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Message</td>
+        </tr>
+        <tr id="field_NEEDS_BILL">
+            <td class="rt_fname">needs_bill</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Needs to be billed</td>
+        </tr>
+        <tr id="field_NEEDS_REVENUE_COMMITMENT">
+            <td class="rt_fname">needs_revenue_commitment</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Needs revenue commitment</td>
+        </tr>
+        <tr id="field_NUMBER_OF_PRICING_TIERS">
+            <td class="rt_fname">number_of_pricing_tiers</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Number of pricing tiers</td>
+        </tr>
+        <tr id="field_OPENING_BALANCE_TRANSACTION">
+            <td class="rt_fname">opening_balance_transaction</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Opening balance transaction</td>
+        </tr>
+        <tr id="field_OWNERSHIP_TRANSFER_ID">
+            <td class="rt_fname">ownership_transfer_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Ownership ID</td>
+        </tr>
+        <tr id="field_PACKING_LIST_INSTRUCTIONS">
+            <td class="rt_fname">packing_list_instructions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Packing list instructions</td>
+        </tr>
+        <tr id="field_PARTNER_ID">
+            <td class="rt_fname">partner_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Partner ID</td>
+        </tr>
+        <tr id="field_PAYMENT_TERMS_ID">
+            <td class="rt_fname">payment_terms_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Payment terms ID</td>
+        </tr>
+        <tr id="field_PN_REF_NUM">
+            <td class="rt_fname">pn_ref_num</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">P/N reference number</td>
+        </tr>
+        <tr id="field_PROBABILITY">
+            <td class="rt_fname">probability</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">6</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Probability</td>
+        </tr>
+        <tr id="field_PRODUCT_LABEL_INSTRUCTIONS">
+            <td class="rt_fname">product_label_instructions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Product label instructions</td>
+        </tr>
+        <tr id="field_PROJECTED_TOTAL">
+            <td class="rt_fname">projected_total</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">20</td>
+            <td class="rt_fscale">2</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Projected total</td>
+        </tr>
+        <tr id="field_PROMOTION_CODE_ID">
+            <td class="rt_fname">promotion_code_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Promotion code ID</td>
+        </tr>
+        <tr id="field_PROMOTION_CODE_INSTANCE_ID">
+            <td class="rt_fname">promotion_code_instance_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Promotion code insurance ID</td>
+        </tr>
+        <tr id="field_PURCHASE_ORDER_INSTRUCTIONS">
+            <td class="rt_fname">purchase_order_instructions</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Purchase order instructions</td>
+        </tr>
+        <tr id="field_RELATED_TRANID">
+            <td class="rt_fname">related_tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Related transaction ID</td>
+        </tr>
+        <tr id="field_RENEWAL">
+            <td class="rt_fname">renewal</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Renewal date</td>
+        </tr>
+        <tr id="field_REVENUE_COMMITMENT_STATUS">
+            <td class="rt_fname">revenue_commitment_status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">480</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue committed status</td>
+        </tr>
+        <tr id="field_REVENUE_COMMITTED">
+            <td class="rt_fname">revenue_committed</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue committed</td>
+        </tr>
+        <tr id="field_REVENUE_STATUS">
+            <td class="rt_fname">revenue_status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">480</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Revenue Status</td>
+        </tr>
+        <tr id="field_REVERSING_TRANSACTION_ID">
+            <td class="rt_fname">reversing_transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Reversing transaction ID</td>
+        </tr>
+        <tr id="field_SALES_CHANNEL_ID" class="foreignKeyField">
+            <td class="rt_fname">sales_channel_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                sales_channel_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__saleschannel" href="../../odbc/record/saleschannel.html?mode=">Sales_channels</a><br/>
+            </td>
+            <td class="rt_fhelp">Sales channel ID</td>
+        </tr>
+        <tr id="field_SALES_EFFECTIVE_DATE">
+            <td class="rt_fname">sales_effective_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales effective date (for commissions)</td>
+        </tr>
+        <tr id="field_SALES_REP_ID">
+            <td class="rt_fname">sales_rep_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Sales rep ID</td>
+        </tr>
+        <tr id="field_SCHEDULING_METHOD_ID">
+            <td class="rt_fname">scheduling_method_id</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">15</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Scheduling method ID</td>
+        </tr>
+        <tr id="field_SHIPADDRESS">
+            <td class="rt_fname">shipaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping address</td>
+        </tr>
+        <tr id="field_SHIPMENT_RECEIVED">
+            <td class="rt_fname">shipment_received</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipment received</td>
+        </tr>
+        <tr id="field_SHIPPING_ITEM_ID">
+            <td class="rt_fname">shipping_item_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Shipping item ID</td>
+        </tr>
+        <tr id="field_START_DATE">
+            <td class="rt_fname">start_date</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Start date</td>
+        </tr>
+        <tr id="field_STATUS">
+            <td class="rt_fname">status</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Status</td>
+        </tr>
+        <tr id="field_TAX_REG_ID">
+            <td class="rt_fname">tax_reg_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Tax regulation ID. This field is no longer supported.</td>
+        </tr>
+        <tr id="field_TITLE">
+            <td class="rt_fname">title</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">200</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Title</td>
+        </tr>
+        <tr id="field_TRANDATE">
+            <td class="rt_fname">trandate</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction date</td>
+        </tr>
+        <tr id="field_TRANID">
+            <td class="rt_fname">tranid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Check or document #</td>
+        </tr>
+        <tr id="field_TRANS_IS_VSOE_BUNDLE">
+            <td class="rt_fname">trans_is_vsoe_bundle</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction is VSOE bundle</td>
+        </tr>
+        <tr id="field_TRANSACTION_EXTID">
+            <td class="rt_fname">transaction_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction external ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_ID" class="primaryKeyField">
+            <td class="rt_fname">transaction_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Internal transaction ID</td>
+        </tr>
+        <tr id="field_TRANSACTION_NUMBER">
+            <td class="rt_fname">transaction_number</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">138</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction number</td>
+        </tr>
+        <tr id="field_TRANSACTION_PARTNER">
+            <td class="rt_fname">transaction_partner</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">40</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction partner</td>
+        </tr>
+        <tr id="field_TRANSACTION_SOURCE">
+            <td class="rt_fname">transaction_source</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Source of transaction (name of web site if source is web store)</td>
+        </tr>
+        <tr id="field_TRANSACTION_TYPE">
+            <td class="rt_fname">transaction_type</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">192</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction type</td>
+        </tr>
+        <tr id="field_TRANSACTION_WEBSITE">
+            <td class="rt_fname">transaction_website</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Numerical ID of source web site</td>
+        </tr>
+        <tr id="field_TRANSFER_LOCATION">
+            <td class="rt_fname">transfer_location</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transfer location</td>
+        </tr>
+        <tr id="field_USE_ITEM_COST_AS_TRANSFER_COST">
+            <td class="rt_fname">use_item_cost_as_transfer_cost</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether the Use Item Cost as Transfer Cost preference applies to the transaction</td>
+        </tr>
+        <tr id="field_VISIBLE_IN_CUSTOMER_CENTER">
+            <td class="rt_fname">visible_in_customer_center</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">1</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Visible in the Customer Center</td>
+        </tr>
+        <tr id="field_WEIGHTED_TOTAL">
+            <td class="rt_fname">weighted_total</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Weighted total</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+        </tr>
+    </table>
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">transactions_accounts_fk</td>
+            <td class="rt_tfkcolumn_name">acct_corp_card_expenses_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tpkcolumn_name">account_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">transactions_sales_channels_fk</td>
+            <td class="rt_tfkcolumn_name">sales_channel_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__saleschannel" href="../../odbc/record/saleschannel.html?mode=">Sales_channels</a></td>
+            <td class="rt_tpkcolumn_name">sales_channel_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>Foreign keys referencing this table</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tfktable_name">FK Table Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Amortization_sched_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__amortization_sched_lines" href="../../odbc/record/amortization_sched_lines.html?mode=">Amortization_sched_lines</a></td>
+            <td class="rt_tfkcolumn_name">journal_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscription_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscription_lines" href="../../odbc/record/billing_subscription_lines.html?mode=">Billing_subscription_lines</a></td>
+            <td class="rt_tfkcolumn_name">purchase_order_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscription_lines_transactions_fk_2</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscription_lines" href="../../odbc/record/billing_subscription_lines.html?mode=">Billing_subscription_lines</a></td>
+            <td class="rt_tfkcolumn_name">sales_order_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscriptions_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscriptions" href="../../odbc/record/billing_subscriptions.html?mode=">Billing_subscriptions</a></td>
+            <td class="rt_tfkcolumn_name">sales_order_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Campaignresponsehistory_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__campaignresponsehistory" href="../../odbc/record/campaignresponsehistory.html?mode=">Campaignresponsehistory</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employee_time_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee_time" href="../../odbc/record/employee_time.html?mode=">Employee_time</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_plan_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expense_plan_lines" href="../../odbc/record/expense_plan_lines.html?mode=">Expense_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">journal_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_plans_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expenseplan" href="../../odbc/record/expenseplan.html?mode=">Expense_plans</a></td>
+            <td class="rt_tfkcolumn_name">related_revenue_arrangement_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Expense_reports_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__expensereport" href="../../odbc/record/expensereport.html?mode=">Expense_reports</a></td>
+            <td class="rt_tfkcolumn_name">expense_report_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Notes_user_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__notes_user" href="../../odbc/record/notes_user.html?mode=">Notes_user</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Opportunities_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__opportunities" href="../../odbc/record/opportunities.html?mode=">Opportunities</a></td>
+            <td class="rt_tfkcolumn_name">reversing_transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_lines" href="../../odbc/record/revenue_plan_lines.html?mode=">Revenue_plan_lines</a></td>
+            <td class="rt_tfkcolumn_name">journal_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revenue_plan_version_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revenue_plan_version_lines" href="../../odbc/record/revenue_plan_version_lines.html?mode=">Revenue_plan_version_lines</a></td>
+            <td class="rt_tfkcolumn_name">journal_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Revrecschedulelines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__revrecschedulelines" href="../../odbc/record/revrecschedulelines.html?mode=">Revrecschedulelines</a></td>
+            <td class="rt_tfkcolumn_name">journal_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">System_notes_custom_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__system_notes_custom" href="../../odbc/record/system_notes_custom.html?mode=">System_notes_custom</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">System_notes_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__system_notes" href="../../odbc/record/system_notes.html?mode=">System_notes</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_address_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_address" href="../../odbc/record/transaction_address.html?mode=">Transaction_address</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_book_map_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_book_map" href="../../odbc/record/transaction_book_map.html?mode=">Transaction_book_map</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_history_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_history" href="../../odbc/record/transaction_history.html?mode=">Transaction_history</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_lines_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_lines" href="../../odbc/record/transaction_lines.html?mode=">Transaction_lines</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_links_applied_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_links" href="../../odbc/record/transaction_links.html?mode=">Transaction_links</a></td>
+            <td class="rt_tfkcolumn_name">applied_transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_links_original_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_links" href="../../odbc/record/transaction_links.html?mode=">Transaction_links</a></td>
+            <td class="rt_tfkcolumn_name">original_transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Transaction_shipping_groups_transactions_fk</td>
+            <td class="rt_tpkcolumn_name">transaction_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__transaction_shipping_groups" href="../../odbc/record/transaction_shipping_groups.html?mode=">Transaction_shipping_groups</a></td>
+            <td class="rt_tfkcolumn_name">transaction_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>This table is included in the following domains</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tpkcolumn_name">Domains</th>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=campaignevents">Campaignevents</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=expense_amortization">Expense_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=general_accounting">General_accounting</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=invoice_with_amortization">Invoice_with_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=multibooks">Multibooks</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=revenue_recognition">Revenue_recognition</a>
+            </td>
+        </tr>
+    </table>
+
+
+    <H2>Domain diagrams</H2>
+        <div class="diagramholder">
+            Campaignevents<br />
+            <a href="../diagrams/campaignevents.png"><img class="diagram" alt="" src="../diagrams/campaignevents.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Expense_amortization<br />
+            <a href="../diagrams/expense_amortization.png"><img class="diagram" alt="" src="../diagrams/expense_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            General_accounting<br />
+            <a href="../diagrams/general_accounting.png"><img class="diagram" alt="" src="../diagrams/general_accounting.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Invoice_with_amortization<br />
+            <a href="../diagrams/invoice_with_amortization.png"><img class="diagram" alt="" src="../diagrams/invoice_with_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Multibooks<br />
+            <a href="../diagrams/multibooks.png"><img class="diagram" alt="" src="../diagrams/multibooks.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Revenue_recognition<br />
+            <a href="../diagrams/revenue_recognition.png"><img class="diagram" alt="" src="../diagrams/revenue_recognition.png" height=330  /></a>
+        </div>
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

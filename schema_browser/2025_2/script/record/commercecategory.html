@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__commercecategory','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__commercecategory','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Commerce Category</H1>
+    <H3>Internal ID: commercecategory</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_addtohead">
+                <td class="rt_fname">addtohead</td>
+                <td class="rt_ftype">richtext</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Addition to &lt;head&gt;</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The addition to head field lets you specify code such as HTML, CSS, or JavaScript to include between the &lt;head&gt;&lt;/head&gt; tags on this category page.</td>
+            </tr>
+                <tr id="field_catalog">
+                <td class="rt_fname">catalog</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Catalog</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the catalog to which this category will be assigned.</td>
+            </tr>
+                <tr id="field_created">
+                <td class="rt_fname">created</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Creation Date/Time</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_description">
+                <td class="rt_fname">description</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Specifies the description for the record.</td>
+            </tr>
+                <tr id="field_displayinsite">
+                <td class="rt_fname">displayinsite</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display in Web Site</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Specifies if the category is available to visitors on your site.</td>
+            </tr>
+                <tr id="field_enddate">
+                <td class="rt_fname">enddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">End Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This identifies the end date and time for the record. When this date is passed, the content is no longer be visible the site. If there is no end date, the content does not expire. This relates to Content Visibility topic in the Help. Enter the date and time in the same format as specified in your preferences.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Mark a category as inactive when you want to prevent it from displaying on the website and also prevent any other activity from occurring with that category. For example, when a category is inactive, it cannot be assigned as a subcategory of another category. You cannot mark a category as inactive if it has subcategories assigned to it.
+When a category as marked as inactive, it is omitted, by default, from the Commerce Categories list. To include inactive categories in the list, select the Show Inactives box on the categories list page.</td>
+            </tr>
+                <tr id="field_lastmodified">
+                <td class="rt_fname">lastmodified</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Modified</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_lastmodifiedby">
+                <td class="rt_fname">lastmodifiedby</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Modified By</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_metadescription">
+                <td class="rt_fname">metadescription</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Meta Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The description you enter here is an important SEO consideration. It is normally the description that is included on search results pages.</td>
+            </tr>
+                <tr id="field_metakeywords">
+                <td class="rt_fname">metakeywords</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Meta Keywords</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Meta keywords for the page.</td>
+            </tr>
+                <tr id="field_name">
+                <td class="rt_fname">name</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Name</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Specify the name for this record.</td>
+            </tr>
+                <tr id="field_origbinactive">
+                <td class="rt_fname">origbinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_pagebanner">
+                <td class="rt_fname">pagebanner</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Page Banner</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Image file in the file cabinet that can be displayed as the banner on a category page on an SuiteCommerce site. The page template file must be configured to display the banner image.</td>
+            </tr>
+                <tr id="field_pageheading">
+                <td class="rt_fname">pageheading</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Heading</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This heading displays at the top of the category page. The page template must be configured to display the heading.</td>
+            </tr>
+                <tr id="field_pagetitle">
+                <td class="rt_fname">pagetitle</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Page Title</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a title for the page. This value populates the &lt;title&gt; element for an category page.</td>
+            </tr>
+                <tr id="field_primaryparent">
+                <td class="rt_fname">primaryparent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Primary Parent</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you are creating a subcategory, select the primary parent category to which this subcategory should be assigned. The new category is assigned as a subcategory for the parent category specified here. Leave this field empty if you do not want to assign a primary parent category.
+When a subcategory is assigned to multiple parent categories, you create a scenario where duplicate content can be accessed through multiple URLs. For SEO best practice, the primary parent flag is used to build the canonical link tag which tells webcrawlers that this is the preferred URL for accessing the content.</td>
+            </tr>
+                <tr id="field_sequencenumber">
+                <td class="rt_fname">sequencenumber</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sequence Number</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This number controls the order of how categories are displayed in SMT. If you leave this blank, sequence numbers are assigned automatically based on any manual ordering of categories in SMT.</td>
+            </tr>
+                <tr id="field_sitemappriority">
+                <td class="rt_fname">sitemappriority</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sitemap Priority</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This value populates the &lt;priority&gt;&lt;/priority&gt; element in an XML sitemap. Valid values for the priority are 0.0 to 1.0. If no priority is set in the sitemap then the default priority of 0.5 is used. These priorities let you rank the importance of the pages on your site as they relate to each other. Search results pages may consider this ranking when presenting multiple pages from your site and order the pages based on the priority.</td>
+            </tr>
+                <tr id="field_startdate">
+                <td class="rt_fname">startdate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Start Date</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This identifies the start date and time for the record you are viewing. If this is a future date, the content does not display until that date. This related to the Content Visibility topic in the help. Enter the date and time in the same format as specified in your preferences.</td>
+            </tr>
+                <tr id="field_thumbnail">
+                <td class="rt_fname">thumbnail</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Thumbnail Image</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">File in the file cabinet to display as the thumbnail image for this category.</td>
+            </tr>
+                <tr id="field_urlfragment">
+                <td class="rt_fname">urlfragment</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">URL Fragment</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The URL Fragment specifies the section of the URL used to navigate to the category page. The fragment does not include slashes.</td>
+            </tr>
+                <tr id="field_version">
+                <td class="rt_fname">version</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Version</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_customersegments_">customersegments - Customer Segment</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_customersegments_customersegment">
+                        <td class="rt_sname">customersegment</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Customer Segment</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_items_">items - Items</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_items_item">
+                        <td class="rt_sname">item</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Items</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_primarycategory">
+                        <td class="rt_sname">primarycategory</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Primary Category</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_items_sequencenumber">
+                        <td class="rt_sname">sequencenumber</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Sequence Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_subcategories_">subcategories - Subcategories</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_subcategories_addtoheadoverride">
+                        <td class="rt_sname">addtoheadoverride</td>
+                        <td class="rt_stype">richtext</td>
+                        <td class="rt_slabel">Addition to &lt;head&gt; Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_descriptionoverride">
+                        <td class="rt_sname">descriptionoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Description Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_displayinsiteoverride">
+                        <td class="rt_sname">displayinsiteoverride</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Display in Web Site Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_metadescriptionoverride">
+                        <td class="rt_sname">metadescriptionoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Meta Description Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_metakeywordsoverride">
+                        <td class="rt_sname">metakeywordsoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Meta Keywords Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_nameoverride">
+                        <td class="rt_sname">nameoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Name Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_pagebanneroverride">
+                        <td class="rt_sname">pagebanneroverride</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Page Banner Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_pageheadingoverride">
+                        <td class="rt_sname">pageheadingoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Heading Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_pagetitleoverride">
+                        <td class="rt_sname">pagetitleoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Title Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_sequencenumber">
+                        <td class="rt_sname">sequencenumber</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Sequence Number</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_sitemappriorityoverride">
+                        <td class="rt_sname">sitemappriorityoverride</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Sitemap Priority Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_subcategory">
+                        <td class="rt_sname">subcategory</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Subcategory</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_thumbnailoverride">
+                        <td class="rt_sname">thumbnailoverride</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Thumbnail Image Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_subcategories_urlfragmentoverride">
+                        <td class="rt_sname">urlfragmentoverride</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">URL Fragment Override</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_tags_">tags - Commerce Category Tag</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_tags_name">
+                        <td class="rt_sname">name</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_urls_">urls - URLs</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_urls_fullurl">
+                        <td class="rt_sname">fullurl</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Full Url</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_urls_id">
+                        <td class="rt_sname">id</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Internal ID</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_urls_idpath">
+                        <td class="rt_sname">idpath</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">ID Path</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_urls_isprimary">
+                        <td class="rt_sname">isprimary</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Primary</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_urls_nestlevel">
+                        <td class="rt_sname">nestlevel</td>
+                        <td class="rt_stype">integer</td>
+                        <td class="rt_slabel">Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_addtohead">
+                    <td class="rt_iname">addtohead</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Add to Head</td>
+                </tr>
+                    <tr id="filter_catalog">
+                    <td class="rt_iname">catalog</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Catalog</td>
+                </tr>
+                    <tr id="filter_created">
+                    <td class="rt_iname">created</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Creation Date/Time</td>
+                </tr>
+                    <tr id="filter_description">
+                    <td class="rt_iname">description</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Description</td>
+                </tr>
+                    <tr id="filter_displayinsite">
+                    <td class="rt_iname">displayinsite</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Display in Web Site</td>
+                </tr>
+                    <tr id="filter_enddate">
+                    <td class="rt_iname">enddate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">End Date</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_fullurl">
+                    <td class="rt_iname">fullurl</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Full URL</td>
+                </tr>
+                    <tr id="filter_idpath">
+                    <td class="rt_iname">idpath</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">ID Path</td>
+                </tr>
+                    <tr id="filter_internalid">
+                    <td class="rt_iname">internalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Internal ID</td>
+                </tr>
+                    <tr id="filter_internalidnumber">
+                    <td class="rt_iname">internalidnumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Internal ID (Number)</td>
+                </tr>
+                    <tr id="filter_isinactive">
+                    <td class="rt_iname">isinactive</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Inactive</td>
+                </tr>
+                    <tr id="filter_isprimaryurl">
+                    <td class="rt_iname">isprimaryurl</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Is Primary URL</td>
+                </tr>
+                    <tr id="filter_item">
+                    <td class="rt_iname">item</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item</td>
+                </tr>
+                    <tr id="filter_itemcategory">
+                    <td class="rt_iname">itemcategory</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Item Category ID</td>
+                </tr>
+                    <tr id="filter_itemdescription">
+                    <td class="rt_iname">itemdescription</td>
+                    <td class="rt_itype">textarea</td>
+                    <td class="rt_ilabel">Item Description</td>
+                </tr>
+                    <tr id="filter_lastmodified">
+                    <td class="rt_iname">lastmodified</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Last Modified</td>
+                </tr>
+                    <tr id="filter_lastmodifiedby">
+                    <td class="rt_iname">lastmodifiedby</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Modified By</td>
+                </tr>
+                    <tr id="filter_metadescription">
+                    <td class="rt_iname">metadescription</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Meta Description</td>
+                </tr>
+                    <tr id="filter_metakeywords">
+                    <td class="rt_iname">metakeywords</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Meta Keywords</td>
+                </tr>
+                    <tr id="filter_name">
+                    <td class="rt_iname">name</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Name</td>
+                </tr>
+                    <tr id="filter_nestlevel">
+                    <td class="rt_iname">nestlevel</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Nest Level</td>
+                </tr>
+                    <tr id="filter_pageheading">
+                    <td class="rt_iname">pageheading</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Page Heading</td>
+                </tr>
+                    <tr id="filter_pagetitle">
+                    <td class="rt_iname">pagetitle</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Page Title</td>
+                </tr>
+                    <tr id="filter_primarycategory">
+                    <td class="rt_iname">primarycategory</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Primary Category of Item</td>
+                </tr>
+                    <tr id="filter_primaryparent">
+                    <td class="rt_iname">primaryparent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Primary Parent</td>
+                </tr>
+                    <tr id="filter_sequencenumber">
+                    <td class="rt_iname">sequencenumber</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Sequence Number</td>
+                </tr>
+                    <tr id="filter_site">
+                    <td class="rt_iname">site</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Site</td>
+                </tr>
+                    <tr id="filter_sitemappriority">
+                    <td class="rt_iname">sitemappriority</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Sitemap Priority</td>
+                </tr>
+                    <tr id="filter_startdate">
+                    <td class="rt_iname">startdate</td>
+                    <td class="rt_itype">datetime</td>
+                    <td class="rt_ilabel">Start Date</td>
+                </tr>
+                    <tr id="filter_subcatdisplayinsiteoverride">
+                    <td class="rt_iname">subcatdisplayinsiteoverride</td>
+                    <td class="rt_itype">checkbox</td>
+                    <td class="rt_ilabel">Subcategory Display In Site Override</td>
+                </tr>
+                    <tr id="filter_subcatid">
+                    <td class="rt_iname">subcatid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subcategory ID</td>
+                </tr>
+                    <tr id="filter_subcatparent">
+                    <td class="rt_iname">subcatparent</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subcategory Parent ID</td>
+                </tr>
+                    <tr id="filter_urlfragment">
+                    <td class="rt_iname">urlfragment</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">URL</td>
+                </tr>
+                    <tr id="filter_version">
+                    <td class="rt_iname">version</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Version</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_addtohead">
+                    <td class="rt_cname">addtohead</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Add to Head</td>
+                </tr>
+                    <tr id="column_catalog">
+                    <td class="rt_cname">catalog</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Catalog</td>
+                </tr>
+                    <tr id="column_created">
+                    <td class="rt_cname">created</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Creation Date/Time</td>
+                </tr>
+                    <tr id="column_description">
+                    <td class="rt_cname">description</td>
+                    <td class="rt_ctype">textarea</td>
+                    <td class="rt_clabel">Description</td>
+                </tr>
+                    <tr id="column_displayinsite">
+                    <td class="rt_cname">displayinsite</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Display in Web Site</td>
+                </tr>
+                    <tr id="column_enddate">
+                    <td class="rt_cname">enddate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">End Date</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_fullurl">
+                    <td class="rt_cname">fullurl</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Full URL</td>
+                </tr>
+                    <tr id="column_idpath">
+                    <td class="rt_cname">idpath</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">ID Path</td>
+                </tr>
+                    <tr id="column_internalid">
+                    <td class="rt_cname">internalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Internal ID</td>
+                </tr>
+                    <tr id="column_isinactive">
+                    <td class="rt_cname">isinactive</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Inactive</td>
+                </tr>
+                    <tr id="column_isprimaryurl">
+                    <td class="rt_cname">isprimaryurl</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Is Primary URL</td>
+                </tr>
+                    <tr id="column_itemdescription">
+                    <td class="rt_cname">itemdescription</td>
+                    <td class="rt_ctype">textarea</td>
+                    <td class="rt_clabel">Item Description</td>
+                </tr>
+                    <tr id="column_itemid">
+                    <td class="rt_cname">itemid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Item ID</td>
+                </tr>
+                    <tr id="column_itemsequencenumber">
+                    <td class="rt_cname">itemsequencenumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Item Sequence Number</td>
+                </tr>
+                    <tr id="column_lastmodified">
+                    <td class="rt_cname">lastmodified</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Last Modified</td>
+                </tr>
+                    <tr id="column_lastmodifiedby">
+                    <td class="rt_cname">lastmodifiedby</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Modified By</td>
+                </tr>
+                    <tr id="column_metadescription">
+                    <td class="rt_cname">metadescription</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Meta Description</td>
+                </tr>
+                    <tr id="column_metakeywords">
+                    <td class="rt_cname">metakeywords</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Meta Tag HTML</td>
+                </tr>
+                    <tr id="column_name">
+                    <td class="rt_cname">name</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Name</td>
+                </tr>
+                    <tr id="column_nestlevel">
+                    <td class="rt_cname">nestlevel</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Nest Level</td>
+                </tr>
+                    <tr id="column_pagebanner">
+                    <td class="rt_cname">pagebanner</td>
+                    <td class="rt_ctype">image</td>
+                    <td class="rt_clabel">Category Page Banner</td>
+                </tr>
+                    <tr id="column_pagebannerurl">
+                    <td class="rt_cname">pagebannerurl</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Category Page Banner URL</td>
+                </tr>
+                    <tr id="column_pageheading">
+                    <td class="rt_cname">pageheading</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Page Heading</td>
+                </tr>
+                    <tr id="column_pagetitle">
+                    <td class="rt_cname">pagetitle</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Page Title</td>
+                </tr>
+                    <tr id="column_primarycategory">
+                    <td class="rt_cname">primarycategory</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Primary Category of Item</td>
+                </tr>
+                    <tr id="column_primaryparent">
+                    <td class="rt_cname">primaryparent</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Primary Parent</td>
+                </tr>
+                    <tr id="column_sequencenumber">
+                    <td class="rt_cname">sequencenumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Sequence Number</td>
+                </tr>
+                    <tr id="column_sitemappriority">
+                    <td class="rt_cname">sitemappriority</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Sitemap Priority</td>
+                </tr>
+                    <tr id="column_startdate">
+                    <td class="rt_cname">startdate</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Start Date</td>
+                </tr>
+                    <tr id="column_subcataddtoheadoverride">
+                    <td class="rt_cname">subcataddtoheadoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Add to Head Override</td>
+                </tr>
+                    <tr id="column_subcatdescoverride">
+                    <td class="rt_cname">subcatdescoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Description Override</td>
+                </tr>
+                    <tr id="column_subcatdisplayinsiteoverride">
+                    <td class="rt_cname">subcatdisplayinsiteoverride</td>
+                    <td class="rt_ctype">checkbox</td>
+                    <td class="rt_clabel">Subcategory Display In Site Override</td>
+                </tr>
+                    <tr id="column_subcatid">
+                    <td class="rt_cname">subcatid</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Subcategory ID</td>
+                </tr>
+                    <tr id="column_subcatmetadescoverride">
+                    <td class="rt_cname">subcatmetadescoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Meta Description Override</td>
+                </tr>
+                    <tr id="column_subcatmetakeywordsoverride">
+                    <td class="rt_cname">subcatmetakeywordsoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Meta Keywords Override</td>
+                </tr>
+                    <tr id="column_subcatnameoverride">
+                    <td class="rt_cname">subcatnameoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Name Override</td>
+                </tr>
+                    <tr id="column_subcatpagebanneroverride">
+                    <td class="rt_cname">subcatpagebanneroverride</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subcategory Page Banner Override</td>
+                </tr>
+                    <tr id="column_subcatpagebannerurloverride">
+                    <td class="rt_cname">subcatpagebannerurloverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Page Banner URL Override</td>
+                </tr>
+                    <tr id="column_subcatpageheadingoverride">
+                    <td class="rt_cname">subcatpageheadingoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Page Heading Override</td>
+                </tr>
+                    <tr id="column_subcatpagetitleoverride">
+                    <td class="rt_cname">subcatpagetitleoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Page Title Override</td>
+                </tr>
+                    <tr id="column_subcatparent">
+                    <td class="rt_cname">subcatparent</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Subcategory Parent ID</td>
+                </tr>
+                    <tr id="column_subcatsequencenumber">
+                    <td class="rt_cname">subcatsequencenumber</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Subcategory Sequence Number</td>
+                </tr>
+                    <tr id="column_subcatthumbnailoverride">
+                    <td class="rt_cname">subcatthumbnailoverride</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subcategory Thumbnail Override</td>
+                </tr>
+                    <tr id="column_subcatthumbnailurloverride">
+                    <td class="rt_cname">subcatthumbnailurloverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory Thumbnail URL Override</td>
+                </tr>
+                    <tr id="column_subcaturlfragmentoverride">
+                    <td class="rt_cname">subcaturlfragmentoverride</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Subcategory URL Fragment Override</td>
+                </tr>
+                    <tr id="column_thumbnail">
+                    <td class="rt_cname">thumbnail</td>
+                    <td class="rt_ctype">image</td>
+                    <td class="rt_clabel">Category Thumbnail</td>
+                </tr>
+                    <tr id="column_thumbnailurl">
+                    <td class="rt_cname">thumbnailurl</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Category Thumbnail URL</td>
+                </tr>
+                    <tr id="column_urlcommcat">
+                    <td class="rt_cname">urlcommcat</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">URL Category</td>
+                </tr>
+                    <tr id="column_urlcommcatassoc">
+                    <td class="rt_cname">urlcommcatassoc</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">URL Category Association</td>
+                </tr>
+                    <tr id="column_urlfragment">
+                    <td class="rt_cname">urlfragment</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">URL</td>
+                </tr>
+                    <tr id="column_version">
+                    <td class="rt_cname">version</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Version</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

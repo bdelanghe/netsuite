@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__account','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__account','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Account</H1>
+
+
+    Namespace: <a href="../../schema/record/account.html?mode=package">urn:accounting.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">acctName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Name</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Sets the account name that displays on all reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">acctNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Number</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required when the Use Account Numbers preference is enabled.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">acctType</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/accounttype.html?mode=package">AccountType</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Sets the type of account. Can only be set on Add. Some account types listed here are unavailable in the NetSuite UI. For more details, see the topic called Chart of Accounts Import in the Help Center. Account type codes are: 0 - Bank 1 - Accts Receivable 2 - Inventory 4 - Other Curr Assets 5 - Fixed Assets 6 - Accum Deprec. 8 - Other Assets 10 - Accts Payable 12 - Oth Curr Liab. 14 - Long Term Liab. 16 - Equity-No Close 18 - Retained Earnings 19 - Equity-Closes 21 - Income 23 - COGS 24 - Expense 25 - Other Income 26 - Other Expense</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billableExpensesAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Track Billable Expenses in</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">cashFlowRate</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/consolidatedrate.html?mode=package">ConsolidatedRate</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Cash Flow Rate Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the type of exchange rate that is used to translate foreign currency amounts for this account in the cash flow statement.
+
+The Current rate type is based on the currency exchange rate that is effective at the end of the reported upon period.
+
+The Average rate type is calculated from a weighted average of the exchange rates for transactions applied during the period to accounts with a general rate type of Average. This rate is the default.
+
+The Historical rate type is calculated from a weighted average of the exchange rates for transactions applied during the period to accounts with a general rate type of Historical.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">category1099misc</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">1099-MISC Category</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Restrict to Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the class to restrict use of this account to roles with permission to access it. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">curDocNum</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Next Check Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the next check number in the sequence but can be overwritten.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the currency for the funds in this account. Can only be set on Add. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">deferralAcct</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Deferral Account</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Restrict to Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the department to restrict use of this account to roles with permission to access it. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">description</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Description</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a description for this account. You can enter up to 255 alphanumeric characters.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">eliminate</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Eliminate Intercompany Transactions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to make this account an intercompany account. Intercompany accounts are used to record transactions between subsidiaries.
+
+You can post both intercompany transactions and non-intercompany transactions to most intercompany accounts. Intercompany Accounts Receivable and Intercompany Accounts Payable, however, can be used only for recording amounts that are candidates for eliminations.
+
+For details, see the help topic Intercompany Accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field based on the value selected for currency.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">generalRate</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/consolidatedrate.html?mode=package">ConsolidatedRate</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">General Rate Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Available values are: _average, _current, _historical</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeChildren</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include Children</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Include Children box to share the account with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inventory</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inventory</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If TRUE, the account balance is included in the Inventory KPI. It cannot be modified on certain system-generated OCAsset accounts.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If TRUE, inactivates the account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">legalName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Legal Name</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If the Use Legal Name in Account accounting preference is enabled at Setup &gt; Accounting &gt; Preferences &gt; Accounting Preferences, the Legal Name field appears. You can enter up to 400 characters in this field including special characters such as colon and semi colon. You can also enter characters such as Éé,Çç, and 2 byte characters such as 会計、科目.
+
+This field is useful in countries where the legal name of an entity is required by law.
+
+The Legal Name field can be added to financial reports where account is an available component. It is also available in advanced searches, SuiteScript, and ODBC. 
+
+System notes maintains an audit trail specific to the activity on the Legal Name field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">localizationsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountlocalizationslist.html?mode=package">AccountLocalizationsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Restrict to Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the location to restrict use of this account to roles with permission to access it. In order to retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">openingBalance</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opening Balance</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the opening balance for this account.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">parent</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subaccount of</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">To retrieve a list of available values for this field, use the GetSelectValue operation. For more information, see getSelectValue of the Platform Guide.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">restrictToAccountingBookList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revalue</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revalue Open Balance for Foreign Currency Transactions</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to select this account for open balance currency revaluation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordreflist.html?mode=package">RecordRefList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">unit</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Default Unit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field can be used only when the acctype field for the record is _statistical. 
+
+The unit field displays the base unit assigned to the unitsType. This field cannot be changed after the record is created.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">unitsType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Unit Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field can be used only when the acctype field for the record is _statistical.
+
+The unitstype field displays the type of unit associated with the statistical account.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/accountsearch.html?mode=package">AccountSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/accountsearchadvanced.html?mode=package">AccountSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/accountsearchbasic.html?mode=package">AccountSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/accountsearchrow.html?mode=package">AccountSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/accountsearchrowbasic.html?mode=package">AccountSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

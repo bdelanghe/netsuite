@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__workorder','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__workorder','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>WorkOrder</H1>
+
+
+    Namespace: <a href="../../schema/record/workorder.html?mode=package">urn:inventory.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">actualProductionEndDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Production End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Actual Production End Date field is automatically populated based on the latest date of the related Completion (after the Close transaction entry) or Assembly Build transactions.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">actualProductionStartDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Actual Production Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Actual Production Start Date field is automatically populated based on the earliest date of the related Issue Components, Completion, or Assembly Build transactions
+
+To override an actual production date, check Enter Manually. Select a new date from the calendar and then click Save.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">assemblyItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assembly</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the Assembly you need to build.
+
+After an item is selected, the assembly components are displayed on the Items subtab.
+This field cannot be changed after an assembly build is associated with this work order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">autoCalculateLag</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Auto-calculate Lag</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Auto-Calculate Lag box if you want NetSuite to calculate lag times for operation tasks.
+For more information, see Operations Overlap.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billOfMaterials</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill of Materials</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use Advanced Bills of Materials, the related Bill of Materials is automatically selected.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billOfMaterialsRevision</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill of Materials Revision</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use Advanced Bills of Materials, the related BOM Revision is automatically selected based on the revision effective dates and production start date (the date for the backward scheduling method).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">buildable</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">built</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Built</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Built field displays the total number of assemblies that have been completed on associated assembly builds.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Class to associate with the assemblies on this work order.
+This selection is carried over to the assembly build.
+
+Click New to set up a new class.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdFrom</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Created From</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Created From field displays the number of the sales order associated with this work order, if any.
+
+Note: The Created From field is not available if you are creating a stand-alone work order on the Enter Work Orders page. The Created From field appears only on existing work orders created from sales orders using one of these methods:
+    * By clicking on the Work Ord. link on the line item in the sales order
+    * By automatic work order creation from a sales order when the Create WO field is marked upon saving the sales order</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In the Custom Form list, select the form to use with this work order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Department to associate with the assemblies on this work order.
+This selection is carried over to the assembly build.
+
+Click New to enter a new department.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Production End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Production End Date defaults to the production start date plus lead time.
+
+When you use Routing you can set the Scheduling Method to Forward (production end date is computed automatically) or Backward (production start date is computed automatically based on the selected production end date).</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Customer to associate with this work order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expandAssembly</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Mark Sub-assemblies Phantom</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Mark Sub-Assemblies Phantom box to build member items that are also assemblies used to complete the work order.
+Sub-assembly components are displayed on the Items subtab.
+
+To learn more, see Work Orders and Sub-Assemblies</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">firmed</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Firmed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Planned work order status is displayed as either Open or Firmed.
+
+   1. Firmed planned work orders are not deleted before supply planning runs.
+Check this box to firm the order.
+   2. Open planned work orders are deleted before supply planning runs.
+Clear this box to keep the order open.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isWip</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">WIP</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the WIP box to designate the work order to use WIP instead of a standard assembly build.
+
+This option is only available when the order status is Released.
+It cannot be changed once a posting assembly transaction is logged against the work order.
+
+To learn more, see Using WIP on Work Orders.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/workorderitemlist.html?mode=package">WorkOrderItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">job</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a job if the assemblies on this work order are for a particular job. Click the Open icon to open a list of jobs.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select a Location to display only work orders for that location. This location is also displayed in the assembly build.
+If you use the Multi-Location Inventory, component inventory items are committed from the selected location.
+
+To learn more, see Mass Creating Work Orders.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">manufacturingRouting</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Manufacturing Routing</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the appropriate Manufacturing Routing.
+This list is only available when the WIP box is checked.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Optionally, enter a Memo for this work order.
+You can search for the memo text to find this work order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">options</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Options</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">orderStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/workorderorderstatus.html?mode=package">WorkOrderOrderStatus</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Order Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the work order Status.
+For example, In-Process or Built.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/partnerslist.html?mode=package">PartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">quantity</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quantity</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Enter the Quantity of assembly items you want to create.
+This can be a fractional number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">requestedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Supply Required By Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Supply Required By Date represents the date the item must be shipped to the customer.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">revision</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Revision</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">For work orders, NetSuite automatically populates the effective revision based on the effective date. If you change the revision selected on the work order, then NetSuite changes the components on the top level assembly based on the revision selected.
+
+If you change the revision selected on the work order and the Build Subassembly box is checked, then top-level components will change based on the revision selected and the lower level components are determined based on the effective date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTeamList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/salesteamlist.html?mode=package">SalesTeamList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">schedulingMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/enum/workorderschedulingmethod.html?mode=package">WorkOrderSchedulingMethod</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Scheduling Method</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Routing and Demand Planning generate supply work orders that enable you to select one of the following methods NetSuite uses to calculate production requirements:
+
+    * Forward Scheduling - set a production start date. NetSuite calculates the time, materials, and resources required to complete all necessary operations to finish the task. The production end date is determined based on these calculations.
+    * Backward Scheduling - set the production end date. This is the date items need to be completed. NetSuite calculates the time, materials, and resources required to complete all necessary operations. The production start date is determined based on these calculations.
+
+To learn more, see Production Scheduling Methods Overview.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceTransactionId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">sourceTransactionLine</td>
+                        <td class="rst_ftype">long</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">specialOrder</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Production Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Production Start Date automatically defaults to the current date. Depending on your settings, the current date will reflect your location or subsidiary time zone.
+
+Production start date automatically defaults to the current day in your location time zone, if it is set. Otherwise, NetSuite will default to the subsidiary time zone if it is set. If neither location or subsidiary are set as default time zones, NetSuite defaults to your company time zone.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The operation sequence Status. For example, Not Started, Started, Completed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you use OneWorld, select a subsidiary.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">NetSuite displays today's Date as the default work order date.
+You can enter or select another date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Order No.</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite automatically increases the largest work Order # (number) by one.
+You can enter another number, however the next order number will revert to the standard pattern.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">units</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Unit of Measure</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Units field displays the units of the component used in the parent assembly.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__supportcase','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__supportcase','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>SupportCase</H1>
+
+
+    Namespace: <a href="../../schema/record/supportcase.html?mode=package">urn:support.lists.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">assigned</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Assigned To</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an employee record that already exists in your account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">caseNumber</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">ID</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">If you use auto-generated numbering, this number is automatically assigned to give the case a unique identifier.
+
+You can use this case number to quickly access this case using the case search or the Global Search field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">category</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Support &gt; Case Types. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">company</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Company</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References an existing company record in your NetSuite account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contact</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contact</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing contact record in your NetSuite account. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Creation Date/Time</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When adding a record, this field defaults to the current system date and time. This field cannot be overwritten. The default value is set regardless of any use default settings.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing custom form for this record type. To ensure that field relationships defined within a desired custom form are maintained, you must provide the customForm value. Also, if defaults are off, then customForm is required, if defaults are on then the default form is used. Internal ID values for existing forms can be found at Setup &gt; Customization &gt; Entry Forms. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Emails</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Accepts a comma or semicolon deliminated list of e-mail addresses for the company. Note that e-mails cannot be be sent using Web services.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emailEmployeesList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/emailemployeeslist.html?mode=package">EmailEmployeesList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">emailForm</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email reply</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field allows a true or false value only.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Closed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date and time when the case was closed.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">escalateToList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/supportcaseescalatetolist.html?mode=package">SupportCaseEscalateToList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">escalationMessage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Escalation Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the message that is e-mailed to the people listed in the escalateToList. The customer does not receive a copy of this e-mail message. The message is not stored in the case record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">helpDesk</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Help Desk</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if this case is internal and is being submitted by or for an employee.
+
+Help desk cases are not included in Customer Service reports.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">inboundEmail</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inbound Email Address</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this case was submitted by email, this field displays the email address to which the case was sent to submit the case.
+
+For example, if you use two support email addresses, support@yourcompany.com and help@yourcompany.com, this field shows which address was used.
+
+The email address the customer sent the message from displays in the Email field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">incomingMessage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If this case was submitted by a customer, the customer's most recent message appears here.
+
+If you are creating this case, enter the problem or question here.
+
+If you change the customer or company who submitted this case, the last message remains, even if it is from the previous company.
+
+To view all past messages, click View History on the Messages subtab.
+
+If you see the Enhance text button next to this field, you can get writing help for this field from our generative AI service, NetSuite Text Enhance. Click the Enhance Text button to use the available options. Learn more about Text Enhance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">insertSolution</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+<td class="rst_fhelp">Add a solution to this case in one of the following ways:
+
+    * Enter the first few letters of the solution title, and press Tab.
+    * Click List to select the solution from a list.
+    * Click Search to search for a solution.
+    * Click New to create a new solution.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">internalOnly</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Internal Only</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you do not want your reply to be seen by customers.
+
+Only people in your company who view this case record can see your internal message.
+
+When editing a case, you can also send email to customers or employees using the Email button on the Messages subtab.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isInactive</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Inactive</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets whether the case is active or not. Default value of False.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">issue</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Case Issue</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Support &gt; Case Issues. This value represents an issue type. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">item</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an item record that already exists in your NetSuite account. Only items that have the Offer Support tag enabled can be referenced in this field. This tag can be set in Lists &gt; Accounting &gt; Items. It can also be set when creating item records via Web services. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastMessageDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Message Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date and time of the last message received or sent relating to the case.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Last Modified Date/Time</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read only field. When updating a record, this field defaults to the current system date and time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastReopenedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Reopened</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The date and time when the case was last changed from Closed to Re-opened.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">module</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Module</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the product module this case is related to.
+
+You can create and edit modules on product records at Setup &gt; Issues &gt; Products.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">newSolutionFromMsg</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">origin</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Origin</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Support &gt; Case Origin Types. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">outgoingMessage</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Reply</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Use this field to enter a reply to the message. This can be an answer, solution or request for more information based on the information in the Message field.
+
+Check the Send Email box to email this reply to the email address saved on this case record.
+
+Check the Internal Only box to email this reply only to those selected in the Email Employees field.
+
+If you see the Enhance text button next to this field, you can get writing help for this field from our generative AI service, NetSuite Text Enhance. Click the Enhance Text button to use the available options. Learn more about Text Enhance.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">phone</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Phone</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the contact phone number for this case.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">priority</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Priority</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Support &gt; Case Priorities. This value represents an issue status.In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">product</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Product</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the product this case is related to.
+
+You can create and edit product records at Setup &gt; Issues &gt; Products.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">profile</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Profile</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Select the profile you want to assign to this case. This profile determines the following:
+
+    * the from name and from email address shown on notification sent for this case
+    * the notification templates used
+
+You can create new case profiles at Setup &gt; Support &gt; Case Profiles &gt; New.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">searchSolution</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">serialNumber</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Serial/Lot Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">solutionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/supportcasesolutionslist.html?mode=package">SupportCaseSolutionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Incident Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">The default value for this field is the current date and time.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">References a value in a user defined list at Setup &gt; Support &gt; Case Statuses. This value represents an issue status. In order to retrieve a list of available values for this field, use the GetSelectValue operation.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The subsidiary for the customer associated with this case is displayed here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">timeItemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/supportcasetimeitemlist.html?mode=package">SupportCaseTimeItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subject</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Sets the title that is displayed in the cases list, subtabs of completed company, customer and contact records and in the subtab of completed solution records.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/supportcasesearch.html?mode=package">SupportCaseSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/supportcasesearchadvanced.html?mode=package">SupportCaseSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/supportcasesearchbasic.html?mode=package">SupportCaseSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/supportcasesearchrow.html?mode=package">SupportCaseSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/supportcasesearchrowbasic.html?mode=package">SupportCaseSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

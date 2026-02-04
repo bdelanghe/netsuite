@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','record__estimate','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','record__estimate','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>Estimate</H1>
+
+
+    Namespace: <a href="../../schema/record/estimate.html?mode=package">urn:sales.transactions.webservices.netsuite.com</a><br/>
+
+
+        <H2>Fields</H2>
+        <table class="jtable">
+            <tr><th  class="rst_fname">Name</th><th class="rst_ftype">Type</th><th class="rst_fcard">Cardinality</th><th class="rst_flabel">Label</th><th class="rst_freq">Required</th><th class="rst_fhelp">Help</th></tr>
+
+                <tr>
+                    <td  class="rst_fname">accountingBookDetailList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/accountingbookdetaillist.html?mode=package">AccountingBookDetailList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altHandlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The handling cost automatically calculates depending on the shipping method you select in the Ship Via field.
+
+To change the cost of handling, go to Lists &gt; Shipping Items and select the shipping method with the handling cost you want to change.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altSalesTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Alt. Sales Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The Alternate Sales Amount feature must be enabled in your account in order to populate this field. The value entered sets an Alternate Sales Amount for line items on the Estimate. This value can then be used for commission calculations.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">altShippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field that returns the shipping costs based on the shipping method selected in shipMethod.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Bill To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the billing address for this transaction. This field defaults to the default Billing Address set on the associated Customer record. Use CustomerAddressBookList on the Customer Record to retrieve a list of currently defined addresses for a specific customer. If an address has NOT been defined, you must first define an address on the Customer record in order to set a billing addess for this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">billingSchedule</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Billing Schedule</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Choose the billing schedule you want to associate with this transaction.
+
+When you select a billing schedule, all items on the order are billed according to the billing schedule.
+
+Click New to enter a new billing schedule.
+
+When you create a new billing schedule on-the-fly, it can be identified as Public or Private. Private billing schedules show only in the transaction it is created from. If you create a private billing schedule from an estimate, that schedule is attached to items on the resulting sales order.
+
+Go to Lists &gt; Accounting &gt; Billing Schedules for details about existing billing schedules.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">canHaveStackable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Can Stack Promotions</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">class</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Class</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Classifications &gt; Classes. This field is required when the Make Classes Mandatory preference is enabled at Setup &gt; Accounting &gt; Accounting Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">contribPct</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Contribution Percentage</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Created</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">createdFrom</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Created From</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currency</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you do not use the Multi-Currency Customers feature, the currency of the customer you are creating this transaction for is shown here.
+
+If you use the Multi-Currency Customers feature, select the transaction currency you want to create this transaction in. This customer's primary currency is selected by default.
+
+If you have already selected items on this transaction, selecting a new currency refreshes them to show the price in the new currency (except for items you entered custom prices for) and recalculates tax and gross profit.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">currencyName</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Currency</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read only field that defaults to the currency associated with the customer referenced by the entity field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customFieldList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/customfieldlist.html?mode=package">CustomFieldList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">customForm</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Custom Form</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the customized estimate form to use.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">department</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Department</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value from a user defined list at Setup &gt; Company &gt; Departments. This field is required when Make Departments Mandatory is enabled at Setup &gt; Accounting &gt; Accounting Preferences. Depending on account configuration, this field may need to be set at the item line level.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Lists &gt; Items &gt; New &gt; Discount.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountRate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the rate associated with the value set in the discountItem field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">discountTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Discount Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A read-only calculated field that returns the amount discounted on this Estimate. If this discount item is taxable, the discount is applied before taxes. If it is not taxable, the discount is applied after taxes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">dueDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Due Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the due date for this Estimate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">email</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Email</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">endDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">End Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the end date for this Estimate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Sets the customer this Estimate is associated with. Required on Add.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityStatus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status (Customer)</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Sales &gt; Setup Tasks &gt; Customer Statuses. Defaults to the value set at Setup &gt; Sales &gt; Sales Preferences.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">entityTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the entity's tax registration number associated with this estimate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfit</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit: Read-only field that equals the revenue amount minus the Est. Cost. At the transaction level, it equals the gross profit of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">estGrossProfitPercent</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Gross Profit Percent</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Gross Profit Margin, as a percentage: Read-only field that equals the Est. Gross Profit divided by revenue, expressed as a percentage. At the transaction level, it equals the gross profit percent of all lines, factoring transaction-level discounts and markups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">exchangeRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Exchange Rate</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the exchange rate associated with the Customer set in the entity field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">expectedCloseDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Expected Close Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fax</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Fax</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">fob</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">FOB</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the location where the customers technically acquire ownership.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">forecastType</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Forecast Type</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing Forecast Type defined at Setup &gt; Sales &gt; Sales Preferences &gt; Forecast (subtab on Preferences page). Note that although the display name for each forecast type can be customized, the actual internal ID associated with each forecast type is static as follows: Low Forecast Name: 1 Medium Forecast Name: 2 High Forecast Name: 3</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The handling cost automatically calculates depending on the shipping method you select in the Ship Via field.
+
+To change the cost of handling, go to Lists &gt; Accounting &gt; Shipping Items and select the shipping method with the handling cost you want to change.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTax1Rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The tax rate for this handling shipping item is shown here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTax2Rate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">handlingTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Handling Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the tax code for this handling shipping item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">includeInForecast</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Include In Forecast</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to include this estimate in sales forecast reports, key performance indicators and snapshots.
+
+If this estimate has a probability below the min. probability you set at Setup &gt; Set Up SFA &gt; Forecasts, it will not appear on reports, key performance indicators and snapshots. If you use NetSuite or NetCRM and this estimate was created from an opportunity, checking this box removes the opportunity from the sales forecast. Clearing this box includes the opportunity instead.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">isTaxable</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Taxable</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Place a check mark in this box if the order you are quoting will be taxable.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">itemList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/estimateitemlist.html?mode=package">EstimateItemList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">job</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Project</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the project this estimate is associated with.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">lastModifiedDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date Last Modified</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">leadSource</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Lead Source</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the lead source associated with the entity set in the entity field. If a lead source is not associated with the entity, and a default lead source has been set up, defaults to the value set at Setup &gt; Marketing &gt; Set Up Marketing. The lead source can reference either of the following: If marketing automation is NOT enabled, this field references a value in a user-defined list at Setup &gt; Sales &gt; Setup Tasks &gt; CRM Lists. If marketing automation IS enabled, this field references a value in the campaign list at Lists &gt; Marketing &gt; Campaigns.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">linkedTrackingNumbers</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">location</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Location</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Company &gt; Classifications &gt; Locations. This field is required when Make Locations Mandatory is enabled at Setup &gt; Accounting &gt; Accounting Preferences. Depending on account configuration, this field may need to be set at the item line level.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">memo</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Memo</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If you wish, enter a memo to describe this estimate. It will appear on reports such as the 2-line Estimates register that your customers can see if you give them permission to log in and view their transaction history.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">message</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Customer Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the value selected in messageSel.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">messageSel</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Select Message</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; New &gt; Customer Message.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">nexus</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Nexus</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the nexus of the transaction. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different nexus in the dropdown list, the corresponding tax registration number is automatically selected in the Subsidiary Tax Reg. Number field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">oneTime</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">One Time</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">opportunity</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Opportunity</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the Opportunity to associate with this Estimate. Valid options include all Opportunities associated with the selected Entity. Therefore, you will need to first perform a search for opportunities related to the desired entity</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">otherRefNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PO/Check Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the customer PO number associated with this estimate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partner</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Partner</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References an existing partner record. Defaults to the partner set on the entity record.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">partnersList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/estimatepartnerslist.html?mode=package">EstimatePartnersList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">probability</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Probability (%)</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add.Defaults to the probability of the status selected. Status probability defaults are defined at Setup &gt; Customer Status Definitions. If this estimate is for a prospect, the prospect's record is updated with the value entered here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">promoCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Promotion</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Lists &gt; Marketing &gt; Promotion Codes. If default promotion codes are setup, defaults to the value set at Setup &gt; Marketing &gt; Marketing Preferences. Entities associated with a partner can only use that partner's promotion codes.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">promotionsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/promotionslist.html?mode=package">PromotionsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurAnnually</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Annually</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurMonthly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Monthly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurQuarterly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Quarterly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">recurWeekly</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Weekly</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesGroup</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Choose Team</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">When team selling is enabled, this references a user defined sales team group at Lists &gt; Relationships &gt; Groups.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesRep</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Sales Rep</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the sales representative associated with the customer referenced by the entity field. This field is NOT available when the Team Selling feature is enabled. If Team Selling is enabled, you must define sales reps in the EstimateSalesTeamList list.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">salesTeamList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/estimatesalesteamlist.html?mode=package">EstimateSalesTeamList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipAddressList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship To Select</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the shipping address for this transaction. This field defaults to the default Shipping Address set on the associated entity record. Use CustomerAddressBookList on the Customer Record to retrieve a list of currently defined addresses for a specific customer. If an address has NOT been defined, you must first define an address on the entity record in order to set a billing addess for this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the ship date for this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipGroupList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/estimateshipgrouplist.html?mode=package">EstimateShipGroupList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipIsResidential</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping address is residential</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shipMethod</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Ship Via</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Lists &gt; Accounting &gt; Shipping Items. Sets the ship method for this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingAddress</td>
+                        <td class="rst_ftype"><a href="../../schema/record/address.html?mode=package">Address</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Address</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingCost</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the shipping cost for this transaction. If your account is set up to automatically charge for shipping, this defaults to the value that corresponds to the shipping method selected. Shipping items can be added at Lists &gt; Accounting &gt; Shipping Item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTax1Rate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">The tax rate for this shipping item tax code is show here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTax2Rate</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">shippingTaxCode</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Shipping Tax Code</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Select the tax code to apply to this shipping item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">source</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Source</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">startDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Start Date</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If there is an expected closing date for this estimate, accept today's date or enter a new date here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">status</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Status</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiary</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field displays the subsidiary associated with this transaction.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subsidiaryTaxRegNum</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subsidiary Tax Reg. Number</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This field shows the tax registration number of the transaction nexus. NetSuite automatically populates this field based on the nexus lookup logic. 
+
+You can override the transaction nexus and tax registration number that NetSuite automatically selects by checking the Nexus Override box. When you select a different tax registration number in the dropdown list, the corresponding nexus is automatically selected in the Nexus field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">subTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Subtotal</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field that returns the total before any discounts, shipping cost, handling cost or tax is added to the order.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncPartnerTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the partner team on the customer record with changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">syncSalesTeams</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Update Customer</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box if you want to update the sales team on the customer's record with changes you make here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tax2Total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">PST</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsList</td>
+                        <td class="rst_ftype"><a href="../../schema/other/taxdetailslist.html?mode=package">TaxDetailsList</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel"></td>
+                    <td class="rst_freq"></td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxDetailsOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Details Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the tax information on the Tax Details subtab of the transaction. Only roles with at least the Edit level of the Tax Details Tab permission can override the tax details.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxItem</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Item</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">A tax item is a tax that you collect at one certain rate and pay to one tax agency for this invoice. NetSuite inserts the tax item for this customer from the record at Lists &gt; Customers. To change it just for this estimate, select another tax item.
+
+To add additional choices to this list, go to Lists &gt; New Item &gt; Sales Tax Item.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxPointDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Point Date</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Rate</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite inserts the percentage rate of the tax item from its record at Lists &gt; Items. You can change it here for just this transaction if you wish.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxRegOverride</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Registration Override</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check this box to override the values in the Nexus and Subsidiary Tax Reg. Number fields. Only roles with at least the Edit level of the Tax Details Tab permission can override the values that NetSuite automatically selects in these fields.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">taxTotal</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tax Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">NetSuite multiplies the tax rate by the taxable total of line items and enters it here.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">terms</td>
+                        <td class="rst_ftype"><a href="../../schema/other/recordref.html?mode=package">RecordRef</a></td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Terms</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">References a value in a user-defined list at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; New &gt; Term. This value sets the discount term to apply to the Estimate.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">title</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Title</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Enter a title for this estimate. The estimate title text appears on lists, shows in search and reporting results, and shows on the Estimates subtab of records it is associated with.
+ 
+When an estimate is converted from an opportunity, the title from the opportunity defaults into the title field on the estimate.   If there is already an estimate against the opportunity, then the second estimate has a number following the title.
+ 
+For example, if the first estimate title is “Project Estimate”, then the second estimate title is “Project Estimate1”. For each subsequent estimate created against that opportunity, the number in the title increases by 1 to help distinguish between multiple estimates associated to a single opportunity.
+ 
+The estimate title field is also available for customization, direct list editing, and mass updates.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBeEmailed</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Emailed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Causes the Estimate to be mailed to all email addresses included in the email field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBeFaxed</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Faxed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Causes the Estimate to be faxed to the fax number included in the fax field.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">toBePrinted</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">To Be Printed</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">If enabled, this Estimate is saved in a queue of Estimates that can be printed at a later date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">total</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Total</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">This is a read-only field that returns the total of line items, tax and shipping costs.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">totalCostEstimate</td>
+                        <td class="rst_ftype">double</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Est. Cost</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Estimated Cost: Estimated cost of the specific number of items; estimated rate x quantity = estimated cost.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">trackingNumbers</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Tracking Numbers</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Sets the shipping tracking number from the shipping company.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranDate</td>
+                        <td class="rst_ftype">dateTime</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Date</td>
+                    <td class="rst_freq">T</td>                    
+<td class="rst_fhelp">Required on Add. Defaults to the current date.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">tranId</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Estimate #</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Defaults to the largest Estimate number incremented by one. You can overwrite with another number.</td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">vatRegNum</td>
+                        <td class="rst_ftype">string</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">VAT Registration</td>
+                    <td class="rst_freq">F</td>                    
+								<td class="rst_fhelp"></td>
+                </tr>
+                <tr>
+                    <td  class="rst_fname">visibleToCustomer</td>
+                        <td class="rst_ftype">boolean</td>
+                    <td class="rst_fcard">0..1</td>
+                    <td class="rst_flabel">Available In Customer Center</td>
+                    <td class="rst_freq">F</td>                    
+<td class="rst_fhelp">Check the Available in Customer Center box to make this estimate available to customers in the Customer Center.
+ 
+Clear this box to leave this estimate off the list of estimates available to customers in the Customer Center.
+
+This field is checked by default.</td>
+                </tr>
+        </table>
+
+    <H2>Attributes</H2>
+    <table class="jtable">
+        <tr><th class="rst_aname">Name</th><th class="rst_atype">Type</th></tr>
+            <tr>
+                <td class="rst_aname">externalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+            <tr>
+                <td class="rst_aname">internalId</td>
+                    <td class="rst_atype">string</td>
+            </tr>
+    </table>
+
+        <H2>Related Searches</H2>
+        <table class="jtable">
+        <tr><th class="rst_sname">Name</th></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearch.html?mode=package">TransactionSearch</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchadvanced.html?mode=package">TransactionSearchAdvanced</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchbasic.html?mode=package">TransactionSearchBasic</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrow.html?mode=package">TransactionSearchRow</a></td></tr>
+                <tr><td class="rst_sname"><a href="../../schema/search/transactionsearchrowbasic.html?mode=package">TransactionSearchRowBasic</a></td></tr>
+        </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

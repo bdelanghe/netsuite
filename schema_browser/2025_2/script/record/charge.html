@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__charge','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__charge','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Charge</H1>
+    <H3>Internal ID: charge</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_amount">
+                <td class="rt_fname">amount</td>
+                <td class="rt_ftype">poscurrency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Amount</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The charge amount is shown here.
+
+The charge amount is calculated as charge rate multiplied by charge quantity. You can manually override the charge amount.</td>
+            </tr>
+                <tr id="field_billingaccount">
+                <td class="rt_fname">billingaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Account</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_billingitem">
+                <td class="rt_fname">billingitem</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The service item associated with this charge is shown here.
+
+For project charges, the service item is used to group charges on invoices.
+
+The service item's price is only used to determine the rate if the charge rule used to generate the charge explicitly bases the charge rate on the service item.</td>
+            </tr>
+                <tr id="field_billto">
+                <td class="rt_fname">billto</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Customer:Project</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Choose the project or customer you are billing this charge to.</td>
+            </tr>
+                <tr id="field_chargedate">
+                <td class="rt_fname">chargedate</td>
+                <td class="rt_ftype">date</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This is the date this charge was generated or created.</td>
+            </tr>
+                <tr id="field_chargetype">
+                <td class="rt_fname">chargetype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Type</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">This field shows the type of rule or process used to generate this charge.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The class associated with this charge is shown here.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This is the date this charge was created either manually or by a charge run.</td>
+            </tr>
+                <tr id="field_currency">
+                <td class="rt_fname">currency</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Currency</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The currency of this charge is shown here.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The department associated with this charge is shown here.</td>
+            </tr>
+                <tr id="field_description">
+                <td class="rt_fname">description</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a description of this charge.</td>
+            </tr>
+                <tr id="field_invoice">
+                <td class="rt_fname">invoice</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Invoice</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If the sales order has been billed, the invoice is shown here.
+
+Charges that have been billed cannot be edited.</td>
+            </tr>
+                <tr id="field_invoiceline">
+                <td class="rt_fname">invoiceline</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Invoice Line</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this charge has been billed, the invoice line containing this charge is shown here.</td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The location associated with this charge is shown here.</td>
+            </tr>
+                <tr id="field_projecttask">
+                <td class="rt_fname">projecttask</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Project Task</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_quantity">
+                <td class="rt_fname">quantity</td>
+                <td class="rt_ftype">float</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Quantity</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The quantity for this charge is shown here.
+
+The quantity for a project charge is set to 1.</td>
+            </tr>
+                <tr id="field_rate">
+                <td class="rt_fname">rate</td>
+                <td class="rt_ftype">rate</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Rate</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">The rate for this charge is shown here.
+
+The charge rates for project charges are determined by charge rules.</td>
+            </tr>
+                <tr id="field_rule">
+                <td class="rt_fname">rule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Rule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this is a project charge, the charge rule used to generate this charge is shown here.</td>
+            </tr>
+                <tr id="field_runid">
+                <td class="rt_fname">runid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Run ID</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_salesorder">
+                <td class="rt_fname">salesorder</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sales Order</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this charge has been included on a sales order, the sales order is shown here.</td>
+            </tr>
+                <tr id="field_salesorderline">
+                <td class="rt_fname">salesorderline</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sales Order Line</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this charge has been included on a sales order, the sales order line is shown here.</td>
+            </tr>
+                <tr id="field_stage">
+                <td class="rt_fname">stage</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Stage</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Choose the status of this charge:
+
+    * Ready - a charge must have this status in order to be billed.
+    * Hold - a charge is given this status if it needs to be approved before it is billed or otherwise processed.
+    * Processed - a charge with this status has been billed.</td>
+            </tr>
+                <tr id="field_subscriptionline">
+                <td class="rt_fname">subscriptionline</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subscription Line</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_timerecord">
+                <td class="rt_fname">timerecord</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Time Entry</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The project time record that is being charged by this transaction is shown here.</td>
+            </tr>
+                <tr id="field_transaction">
+                <td class="rt_fname">transaction</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Expense Source</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_transactionline">
+                <td class="rt_fname">transactionline</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Expense Line</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_use">
+                <td class="rt_fname">use</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Charge Use</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">This field shows the kind of charge this record represents.
+
+Project charges uses include:
+
+    * Actual - These are charges that can be billed when in the Ready stage.
+    * Forecast - These charges represent predicted charge amounts over the entire project's life.</td>
+            </tr>
+        </table>
+
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_historytab">
+                <td class="rt_tname">historytab</td>
+                <td class="rt_tlabel">System Notes</td>
+            </tr>
+                <tr id="tab_source">
+                <td class="rt_tname">source</td>
+                <td class="rt_tlabel">Source</td>
+            </tr>
+        </table>
+
+            <H2>Search Joins</H2>
+            <table class="jtable" id="searchjoins">
+                <tr>
+                    <th class="rt_jid">Join ID</th>
+                    <th class="rt_jlabel">Join Description</th>
+                    <th class="rt_jname">Actual Join Name</th>
+                </tr>
+                    <tr id="join_invoice">
+                    <td class="rt_jid">invoice</td>
+                    <td class="rt_jlabel">Invoice</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_job">
+                    <td class="rt_jid">job</td>
+                    <td class="rt_jlabel">Job</td>
+                    <td class="rt_jname">Job</td>
+                </tr>
+                    <tr id="join_salesorder">
+                    <td class="rt_jid">salesorder</td>
+                    <td class="rt_jlabel">Sales Order</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_transaction">
+                    <td class="rt_jid">transaction</td>
+                    <td class="rt_jlabel">Transaction</td>
+                    <td class="rt_jname">Transaction</td>
+                </tr>
+                    <tr id="join_user">
+                    <td class="rt_jid">user</td>
+                    <td class="rt_jlabel">User</td>
+                    <td class="rt_jname">Employee</td>
+                </tr>
+            </table>
+
+            <H2>Search Filters</H2>
+            <table class="jtable" id="searchfilters">
+                <tr>
+                    <th class="rt_iname">Internal ID</th>
+                    <th class="rt_itype">Type</th>
+                    <th class="rt_ilabel">Label</th>
+                </tr>
+                    <tr id="filter_amount">
+                    <td class="rt_iname">amount</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Amount</td>
+                </tr>
+                    <tr id="filter_billingaccount">
+                    <td class="rt_iname">billingaccount</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Account</td>
+                </tr>
+                    <tr id="filter_billingitem">
+                    <td class="rt_iname">billingitem</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Billing Item</td>
+                </tr>
+                    <tr id="filter_billto">
+                    <td class="rt_iname">billto</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Customer:Project</td>
+                </tr>
+                    <tr id="filter_chargedate">
+                    <td class="rt_iname">chargedate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date</td>
+                </tr>
+                    <tr id="filter_chargetype">
+                    <td class="rt_iname">chargetype</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Charge Type</td>
+                </tr>
+                    <tr id="filter_class">
+                    <td class="rt_iname">class</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Class</td>
+                </tr>
+                    <tr id="filter_createddate">
+                    <td class="rt_iname">createddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date Created</td>
+                </tr>
+                    <tr id="filter_currency">
+                    <td class="rt_iname">currency</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Currency</td>
+                </tr>
+                    <tr id="filter_department">
+                    <td class="rt_iname">department</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Department</td>
+                </tr>
+                    <tr id="filter_externalid">
+                    <td class="rt_iname">externalid</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">External ID</td>
+                </tr>
+                    <tr id="filter_externalidstring">
+                    <td class="rt_iname">externalidstring</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">External ID (Text)</td>
+                </tr>
+                    <tr id="filter_formuladate">
+                    <td class="rt_iname">formuladate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Formula (Date)</td>
+                </tr>
+                    <tr id="filter_formulanumeric">
+                    <td class="rt_iname">formulanumeric</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="filter_formulatext">
+                    <td class="rt_iname">formulatext</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Formula (Text)</td>
+                </tr>
+                    <tr id="filter_id">
+                    <td class="rt_iname">id</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Charge ID</td>
+                </tr>
+                    <tr id="filter_location">
+                    <td class="rt_iname">location</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Location</td>
+                </tr>
+                    <tr id="filter_modifieddate">
+                    <td class="rt_iname">modifieddate</td>
+                    <td class="rt_itype">date</td>
+                    <td class="rt_ilabel">Date Modified</td>
+                </tr>
+                    <tr id="filter_quantity">
+                    <td class="rt_iname">quantity</td>
+                    <td class="rt_itype">float</td>
+                    <td class="rt_ilabel">Quantity</td>
+                </tr>
+                    <tr id="filter_rate">
+                    <td class="rt_iname">rate</td>
+                    <td class="rt_itype">currency</td>
+                    <td class="rt_ilabel">Rate</td>
+                </tr>
+                    <tr id="filter_rule">
+                    <td class="rt_iname">rule</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Charge Rule</td>
+                </tr>
+                    <tr id="filter_runid">
+                    <td class="rt_iname">runid</td>
+                    <td class="rt_itype">text</td>
+                    <td class="rt_ilabel">Charge Run ID</td>
+                </tr>
+                    <tr id="filter_salesorder">
+                    <td class="rt_iname">salesorder</td>
+                    <td class="rt_itype">integer</td>
+                    <td class="rt_ilabel">Sales Order</td>
+                </tr>
+                    <tr id="filter_stage">
+                    <td class="rt_iname">stage</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Stage</td>
+                </tr>
+                    <tr id="filter_subscriptionline">
+                    <td class="rt_iname">subscriptionline</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Subscription Line</td>
+                </tr>
+                    <tr id="filter_use">
+                    <td class="rt_iname">use</td>
+                    <td class="rt_itype">select</td>
+                    <td class="rt_ilabel">Charge Use</td>
+                </tr>
+            </table>
+
+            <H2>Search Columns</H2>
+            <table class="jtable" id="searchcolumns">
+                <tr>
+                    <th class="rt_cname">Internal ID</th>
+                    <th class="rt_ctype">Type</th>
+                    <th class="rt_clabel">Label</th>
+                </tr>
+                    <tr id="column_amount">
+                    <td class="rt_cname">amount</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Amount</td>
+                </tr>
+                    <tr id="column_billingaccount">
+                    <td class="rt_cname">billingaccount</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Account</td>
+                </tr>
+                    <tr id="column_billingitem">
+                    <td class="rt_cname">billingitem</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Billing Item</td>
+                </tr>
+                    <tr id="column_billto">
+                    <td class="rt_cname">billto</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Customer:Project</td>
+                </tr>
+                    <tr id="column_chargedate">
+                    <td class="rt_cname">chargedate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date</td>
+                </tr>
+                    <tr id="column_chargetype">
+                    <td class="rt_cname">chargetype</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Charge Type</td>
+                </tr>
+                    <tr id="column_class">
+                    <td class="rt_cname">class</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Class</td>
+                </tr>
+                    <tr id="column_createddate">
+                    <td class="rt_cname">createddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date Created</td>
+                </tr>
+                    <tr id="column_currency">
+                    <td class="rt_cname">currency</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Currency</td>
+                </tr>
+                    <tr id="column_department">
+                    <td class="rt_cname">department</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Department</td>
+                </tr>
+                    <tr id="column_description">
+                    <td class="rt_cname">description</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Description</td>
+                </tr>
+                    <tr id="column_externalid">
+                    <td class="rt_cname">externalid</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">External ID</td>
+                </tr>
+                    <tr id="column_formulacurrency">
+                    <td class="rt_cname">formulacurrency</td>
+                    <td class="rt_ctype">currency</td>
+                    <td class="rt_clabel">Formula (Currency)</td>
+                </tr>
+                    <tr id="column_formuladate">
+                    <td class="rt_cname">formuladate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Formula (Date)</td>
+                </tr>
+                    <tr id="column_formuladatetime">
+                    <td class="rt_cname">formuladatetime</td>
+                    <td class="rt_ctype">datetime</td>
+                    <td class="rt_clabel">Formula (Date/Time)</td>
+                </tr>
+                    <tr id="column_formulanumeric">
+                    <td class="rt_cname">formulanumeric</td>
+                    <td class="rt_ctype">float</td>
+                    <td class="rt_clabel">Formula (Numeric)</td>
+                </tr>
+                    <tr id="column_formulapercent">
+                    <td class="rt_cname">formulapercent</td>
+                    <td class="rt_ctype">percent</td>
+                    <td class="rt_clabel">Formula (Percent)</td>
+                </tr>
+                    <tr id="column_formulatext">
+                    <td class="rt_cname">formulatext</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Formula (Text)</td>
+                </tr>
+                    <tr id="column_id">
+                    <td class="rt_cname">id</td>
+                    <td class="rt_ctype">integer</td>
+                    <td class="rt_clabel">Charge ID</td>
+                </tr>
+                    <tr id="column_location">
+                    <td class="rt_cname">location</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Location</td>
+                </tr>
+                    <tr id="column_modifieddate">
+                    <td class="rt_cname">modifieddate</td>
+                    <td class="rt_ctype">date</td>
+                    <td class="rt_clabel">Date Modified</td>
+                </tr>
+                    <tr id="column_quantity">
+                    <td class="rt_cname">quantity</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Quantity</td>
+                </tr>
+                    <tr id="column_rate">
+                    <td class="rt_cname">rate</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Rate</td>
+                </tr>
+                    <tr id="column_rule">
+                    <td class="rt_cname">rule</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Charge Rule</td>
+                </tr>
+                    <tr id="column_runid">
+                    <td class="rt_cname">runid</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Charge Run ID</td>
+                </tr>
+                    <tr id="column_salesorder">
+                    <td class="rt_cname">salesorder</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Sales Order Id</td>
+                </tr>
+                    <tr id="column_stage">
+                    <td class="rt_cname">stage</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Charge Stage</td>
+                </tr>
+                    <tr id="column_subscriptionline">
+                    <td class="rt_cname">subscriptionline</td>
+                    <td class="rt_ctype">select</td>
+                    <td class="rt_clabel">Subscription Line</td>
+                </tr>
+                    <tr id="column_use">
+                    <td class="rt_cname">use</td>
+                    <td class="rt_ctype">text</td>
+                    <td class="rt_clabel">Charge Use</td>
+                </tr>
+            </table>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

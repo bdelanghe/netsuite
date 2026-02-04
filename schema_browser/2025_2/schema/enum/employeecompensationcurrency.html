@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.employees.lists.webservices.netsuite.com__employeecompensationcurrency','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.employees.lists.webservices.netsuite.com__employeecompensationcurrency','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>EmployeeCompensationCurrency</H1>
+    Namespace: urn:types.employees.lists.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">_aed</td></tr>
+        <tr><td class="est_vvalue">_afa</td></tr>
+        <tr><td class="est_vvalue">_afn</td></tr>
+        <tr><td class="est_vvalue">_all</td></tr>
+        <tr><td class="est_vvalue">_amd</td></tr>
+        <tr><td class="est_vvalue">_ang</td></tr>
+        <tr><td class="est_vvalue">_aoa</td></tr>
+        <tr><td class="est_vvalue">_ars</td></tr>
+        <tr><td class="est_vvalue">_aud</td></tr>
+        <tr><td class="est_vvalue">_awg</td></tr>
+        <tr><td class="est_vvalue">_azn</td></tr>
+        <tr><td class="est_vvalue">_bam</td></tr>
+        <tr><td class="est_vvalue">_bbd</td></tr>
+        <tr><td class="est_vvalue">_bdt</td></tr>
+        <tr><td class="est_vvalue">_bgn</td></tr>
+        <tr><td class="est_vvalue">_bhd</td></tr>
+        <tr><td class="est_vvalue">_bif</td></tr>
+        <tr><td class="est_vvalue">_bmd</td></tr>
+        <tr><td class="est_vvalue">_bnd</td></tr>
+        <tr><td class="est_vvalue">_bob</td></tr>
+        <tr><td class="est_vvalue">_brl</td></tr>
+        <tr><td class="est_vvalue">_bsd</td></tr>
+        <tr><td class="est_vvalue">_btn</td></tr>
+        <tr><td class="est_vvalue">_bwp</td></tr>
+        <tr><td class="est_vvalue">_byn</td></tr>
+        <tr><td class="est_vvalue">_byr</td></tr>
+        <tr><td class="est_vvalue">_bzd</td></tr>
+        <tr><td class="est_vvalue">_cad</td></tr>
+        <tr><td class="est_vvalue">_cdf</td></tr>
+        <tr><td class="est_vvalue">_chf</td></tr>
+        <tr><td class="est_vvalue">_clp</td></tr>
+        <tr><td class="est_vvalue">_cny</td></tr>
+        <tr><td class="est_vvalue">_cop</td></tr>
+        <tr><td class="est_vvalue">_crc</td></tr>
+        <tr><td class="est_vvalue">_csd</td></tr>
+        <tr><td class="est_vvalue">_cuc</td></tr>
+        <tr><td class="est_vvalue">_cup</td></tr>
+        <tr><td class="est_vvalue">_cve</td></tr>
+        <tr><td class="est_vvalue">_cyp</td></tr>
+        <tr><td class="est_vvalue">_czk</td></tr>
+        <tr><td class="est_vvalue">_djf</td></tr>
+        <tr><td class="est_vvalue">_dkk</td></tr>
+        <tr><td class="est_vvalue">_dop</td></tr>
+        <tr><td class="est_vvalue">_dzd</td></tr>
+        <tr><td class="est_vvalue">_ecs</td></tr>
+        <tr><td class="est_vvalue">_eek</td></tr>
+        <tr><td class="est_vvalue">_egp</td></tr>
+        <tr><td class="est_vvalue">_ern</td></tr>
+        <tr><td class="est_vvalue">_etb</td></tr>
+        <tr><td class="est_vvalue">_eur</td></tr>
+        <tr><td class="est_vvalue">_fjd</td></tr>
+        <tr><td class="est_vvalue">_fkp</td></tr>
+        <tr><td class="est_vvalue">_gbp</td></tr>
+        <tr><td class="est_vvalue">_gel</td></tr>
+        <tr><td class="est_vvalue">_ggp</td></tr>
+        <tr><td class="est_vvalue">_ghc</td></tr>
+        <tr><td class="est_vvalue">_ghs</td></tr>
+        <tr><td class="est_vvalue">_gip</td></tr>
+        <tr><td class="est_vvalue">_gmd</td></tr>
+        <tr><td class="est_vvalue">_gnf</td></tr>
+        <tr><td class="est_vvalue">_gtq</td></tr>
+        <tr><td class="est_vvalue">_gyd</td></tr>
+        <tr><td class="est_vvalue">_hkd</td></tr>
+        <tr><td class="est_vvalue">_hnl</td></tr>
+        <tr><td class="est_vvalue">_hrk</td></tr>
+        <tr><td class="est_vvalue">_htg</td></tr>
+        <tr><td class="est_vvalue">_huf</td></tr>
+        <tr><td class="est_vvalue">_idr</td></tr>
+        <tr><td class="est_vvalue">_ils</td></tr>
+        <tr><td class="est_vvalue">_imp</td></tr>
+        <tr><td class="est_vvalue">_inr</td></tr>
+        <tr><td class="est_vvalue">_iqd</td></tr>
+        <tr><td class="est_vvalue">_irr</td></tr>
+        <tr><td class="est_vvalue">_isk</td></tr>
+        <tr><td class="est_vvalue">_jep</td></tr>
+        <tr><td class="est_vvalue">_jmd</td></tr>
+        <tr><td class="est_vvalue">_jod</td></tr>
+        <tr><td class="est_vvalue">_jpy</td></tr>
+        <tr><td class="est_vvalue">_kes</td></tr>
+        <tr><td class="est_vvalue">_kgs</td></tr>
+        <tr><td class="est_vvalue">_khr</td></tr>
+        <tr><td class="est_vvalue">_kmf</td></tr>
+        <tr><td class="est_vvalue">_kpw</td></tr>
+        <tr><td class="est_vvalue">_krw</td></tr>
+        <tr><td class="est_vvalue">_kwd</td></tr>
+        <tr><td class="est_vvalue">_kyd</td></tr>
+        <tr><td class="est_vvalue">_kzt</td></tr>
+        <tr><td class="est_vvalue">_lak</td></tr>
+        <tr><td class="est_vvalue">_lbp</td></tr>
+        <tr><td class="est_vvalue">_lkr</td></tr>
+        <tr><td class="est_vvalue">_lrd</td></tr>
+        <tr><td class="est_vvalue">_lsl</td></tr>
+        <tr><td class="est_vvalue">_ltl</td></tr>
+        <tr><td class="est_vvalue">_lvl</td></tr>
+        <tr><td class="est_vvalue">_lyd</td></tr>
+        <tr><td class="est_vvalue">_mad</td></tr>
+        <tr><td class="est_vvalue">_mdl</td></tr>
+        <tr><td class="est_vvalue">_mfg</td></tr>
+        <tr><td class="est_vvalue">_mga</td></tr>
+        <tr><td class="est_vvalue">_mkd</td></tr>
+        <tr><td class="est_vvalue">_mmk</td></tr>
+        <tr><td class="est_vvalue">_mnt</td></tr>
+        <tr><td class="est_vvalue">_mop</td></tr>
+        <tr><td class="est_vvalue">_mro</td></tr>
+        <tr><td class="est_vvalue">_mru</td></tr>
+        <tr><td class="est_vvalue">_mtl</td></tr>
+        <tr><td class="est_vvalue">_mur</td></tr>
+        <tr><td class="est_vvalue">_mvr</td></tr>
+        <tr><td class="est_vvalue">_mwk</td></tr>
+        <tr><td class="est_vvalue">_mxn</td></tr>
+        <tr><td class="est_vvalue">_myr</td></tr>
+        <tr><td class="est_vvalue">_mzm</td></tr>
+        <tr><td class="est_vvalue">_mzn</td></tr>
+        <tr><td class="est_vvalue">_nad</td></tr>
+        <tr><td class="est_vvalue">_ngn</td></tr>
+        <tr><td class="est_vvalue">_nio</td></tr>
+        <tr><td class="est_vvalue">_nok</td></tr>
+        <tr><td class="est_vvalue">_npr</td></tr>
+        <tr><td class="est_vvalue">_nzd</td></tr>
+        <tr><td class="est_vvalue">_omr</td></tr>
+        <tr><td class="est_vvalue">_pab</td></tr>
+        <tr><td class="est_vvalue">_pen</td></tr>
+        <tr><td class="est_vvalue">_pgk</td></tr>
+        <tr><td class="est_vvalue">_php</td></tr>
+        <tr><td class="est_vvalue">_pkr</td></tr>
+        <tr><td class="est_vvalue">_pln</td></tr>
+        <tr><td class="est_vvalue">_pyg</td></tr>
+        <tr><td class="est_vvalue">_qar</td></tr>
+        <tr><td class="est_vvalue">_rol</td></tr>
+        <tr><td class="est_vvalue">_ron</td></tr>
+        <tr><td class="est_vvalue">_rsd</td></tr>
+        <tr><td class="est_vvalue">_rub</td></tr>
+        <tr><td class="est_vvalue">_rur</td></tr>
+        <tr><td class="est_vvalue">_rwf</td></tr>
+        <tr><td class="est_vvalue">_sar</td></tr>
+        <tr><td class="est_vvalue">_sbd</td></tr>
+        <tr><td class="est_vvalue">_scr</td></tr>
+        <tr><td class="est_vvalue">_sdd</td></tr>
+        <tr><td class="est_vvalue">_sdg</td></tr>
+        <tr><td class="est_vvalue">_sek</td></tr>
+        <tr><td class="est_vvalue">_sgd</td></tr>
+        <tr><td class="est_vvalue">_shp</td></tr>
+        <tr><td class="est_vvalue">_sit</td></tr>
+        <tr><td class="est_vvalue">_skk</td></tr>
+        <tr><td class="est_vvalue">_sle</td></tr>
+        <tr><td class="est_vvalue">_sll</td></tr>
+        <tr><td class="est_vvalue">_sos</td></tr>
+        <tr><td class="est_vvalue">_spl</td></tr>
+        <tr><td class="est_vvalue">_srd</td></tr>
+        <tr><td class="est_vvalue">_srg</td></tr>
+        <tr><td class="est_vvalue">_ssp</td></tr>
+        <tr><td class="est_vvalue">_std</td></tr>
+        <tr><td class="est_vvalue">_stn</td></tr>
+        <tr><td class="est_vvalue">_svc</td></tr>
+        <tr><td class="est_vvalue">_syp</td></tr>
+        <tr><td class="est_vvalue">_szl</td></tr>
+        <tr><td class="est_vvalue">_thb</td></tr>
+        <tr><td class="est_vvalue">_tjs</td></tr>
+        <tr><td class="est_vvalue">_tmm</td></tr>
+        <tr><td class="est_vvalue">_tmt</td></tr>
+        <tr><td class="est_vvalue">_tnd</td></tr>
+        <tr><td class="est_vvalue">_top</td></tr>
+        <tr><td class="est_vvalue">_trl</td></tr>
+        <tr><td class="est_vvalue">_try</td></tr>
+        <tr><td class="est_vvalue">_ttd</td></tr>
+        <tr><td class="est_vvalue">_tvd</td></tr>
+        <tr><td class="est_vvalue">_twd</td></tr>
+        <tr><td class="est_vvalue">_tzs</td></tr>
+        <tr><td class="est_vvalue">_uah</td></tr>
+        <tr><td class="est_vvalue">_ugx</td></tr>
+        <tr><td class="est_vvalue">_usd</td></tr>
+        <tr><td class="est_vvalue">_uyu</td></tr>
+        <tr><td class="est_vvalue">_uzs</td></tr>
+        <tr><td class="est_vvalue">_veb</td></tr>
+        <tr><td class="est_vvalue">_ved</td></tr>
+        <tr><td class="est_vvalue">_vef</td></tr>
+        <tr><td class="est_vvalue">_ves</td></tr>
+        <tr><td class="est_vvalue">_vnd</td></tr>
+        <tr><td class="est_vvalue">_vuv</td></tr>
+        <tr><td class="est_vvalue">_wst</td></tr>
+        <tr><td class="est_vvalue">_wsx</td></tr>
+        <tr><td class="est_vvalue">_xaf</td></tr>
+        <tr><td class="est_vvalue">_xag</td></tr>
+        <tr><td class="est_vvalue">_xau</td></tr>
+        <tr><td class="est_vvalue">_xcd</td></tr>
+        <tr><td class="est_vvalue">_xdr</td></tr>
+        <tr><td class="est_vvalue">_xof</td></tr>
+        <tr><td class="est_vvalue">_xop</td></tr>
+        <tr><td class="est_vvalue">_xpd</td></tr>
+        <tr><td class="est_vvalue">_xpf</td></tr>
+        <tr><td class="est_vvalue">_xpt</td></tr>
+        <tr><td class="est_vvalue">_yer</td></tr>
+        <tr><td class="est_vvalue">_yum</td></tr>
+        <tr><td class="est_vvalue">_zar</td></tr>
+        <tr><td class="est_vvalue">_zig</td></tr>
+        <tr><td class="est_vvalue">_zmk</td></tr>
+        <tr><td class="est_vvalue">_zmw</td></tr>
+        <tr><td class="est_vvalue">_zrn</td></tr>
+        <tr><td class="est_vvalue">_zwd</td></tr>
+        <tr><td class="est_vvalue">_zwg</td></tr>
+        <tr><td class="est_vvalue">_zwl</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

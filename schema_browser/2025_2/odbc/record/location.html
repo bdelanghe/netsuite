@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('odbc','record__location','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('odbc','record__location','../..'));
+        });
+    </script>
+
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+        var urlMode = getURLParameter('mode');
+        var actualDomain = null;
+        if (urlMode != null)
+            actualDomain = getURLParameter('domain');
+
+        function addDomainToUrl(url)
+        {
+            if (urlMode != null && actualDomain != null)
+                return url + urlMode + "&domain=" + actualDomain;
+            else return url;
+        }
+
+        $(".keepDomain").each(function()
+        {
+            var id = this.title;
+            if (actualDomain != null && $.inArray(id, odbcDomainMap[actualDomain]) >= 0)
+                this.setAttribute("href", addDomainToUrl(this.href));
+        });
+
+    });
+</script>
+
+<div id="contentPanel">
+
+
+
+<H1>
+Locations
+</H1>
+
+
+    <p style="max-width: 1026px;" >
+
+
+    
+    The Other &gt; Location custom field is available for the Locations table.
+
+
+
+    <H2>Columns</H2>
+    <table class="jtable">
+        <tr>
+			<th class="rt_fname">Name</th>
+			<th class="rt_ftype">Type</th>
+			<th class="rt_flength">Length</th>
+			<th class="rt_fprescision">Precision</th>
+			<th class="rt_fscale">Scale</th>
+            <th class="rt_pkcolumn">References</th>
+            <th class="rt_pktable">In</th>
+            <th class="rt_fhelp">Description</th>
+		</tr>
+        <tr id="field_ADDRESS">
+            <td class="rt_fname">address</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address</td>
+        </tr>
+        <tr id="field_ADDRESS_ONE">
+            <td class="rt_fname">address_one</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address one</td>
+        </tr>
+        <tr id="field_ADDRESS_THREE">
+            <td class="rt_fname">address_three</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address three</td>
+        </tr>
+        <tr id="field_ADDRESS_TWO">
+            <td class="rt_fname">address_two</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Address two</td>
+        </tr>
+        <tr id="field_ADDRESSEE">
+            <td class="rt_fname">addressee</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Addressee</td>
+        </tr>
+        <tr id="field_ATTENTION">
+            <td class="rt_fname">attention</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Attention</td>
+        </tr>
+        <tr id="field_CITY">
+            <td class="rt_fname">city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">City</td>
+        </tr>
+        <tr id="field_COUNTRY">
+            <td class="rt_fname">country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Country</td>
+        </tr>
+        <tr id="field_DATE_LAST_MODIFIED" class="dateField">
+            <td class="rt_fname">date_last_modified</td>
+            <td class="rt_ftype">TIMESTAMP</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Date last modified</td>
+        </tr>
+        <tr id="field_FULL_NAME">
+            <td class="rt_fname">full_name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">4000</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Full name</td>
+        </tr>
+        <tr id="field_INVENTORY_AVAILABLE">
+            <td class="rt_fname">inventory_available</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Inventory is available</td>
+        </tr>
+        <tr id="field_INVENTORY_AVAILABLE_WEB_STORE">
+            <td class="rt_fname">inventory_available_web_store</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Inventory is available in web store</td>
+        </tr>
+        <tr id="field_IS_INCLUDE_IN_SUPPLY_PLANNING">
+            <td class="rt_fname">is_include_in_supply_planning</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Whether is included in supply planning</td>
+        </tr>
+        <tr id="field_ISINACTIVE">
+            <td class="rt_fname">isinactive</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Location is inactive</td>
+        </tr>
+        <tr id="field_LOCATION_EXTID">
+            <td class="rt_fname">location_extid</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">255</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Location external ID</td>
+        </tr>
+        <tr id="field_LOCATION_ID" class="primaryKeyField">
+            <td class="rt_fname">location_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Location ID</td>
+        </tr>
+        <tr id="field_NAME">
+            <td class="rt_fname">name</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">60</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Name</td>
+        </tr>
+        <tr id="field_PARENT_ID" class="foreignKeyField">
+            <td class="rt_fname">parent_id</td>
+            <td class="rt_ftype">NUMBER</td>
+            <td class="rt_flength"></td>
+            <td class="rt_fprecision">39</td>
+            <td class="rt_fscale">0</td>
+            <td class="rt_pkcolumn">
+                location_id<br />
+            </td>
+            <td class="rt_pktable">
+                <a class="keepDomain" title="record__location" href="../../odbc/record/location.html?mode=">Locations</a><br/>
+            </td>
+            <td class="rt_fhelp">Sublocation of</td>
+        </tr>
+        <tr id="field_PHONE">
+            <td class="rt_fname">phone</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">100</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Phone</td>
+        </tr>
+        <tr id="field_RETURN_ADDRESS_ONE">
+            <td class="rt_fname">return_address_one</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address one</td>
+        </tr>
+        <tr id="field_RETURN_ADDRESS_TWO">
+            <td class="rt_fname">return_address_two</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">150</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address two</td>
+        </tr>
+        <tr id="field_RETURN_CITY">
+            <td class="rt_fname">return_city</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return city</td>
+        </tr>
+        <tr id="field_RETURN_COUNTRY">
+            <td class="rt_fname">return_country</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return country</td>
+        </tr>
+        <tr id="field_RETURN_STATE">
+            <td class="rt_fname">return_state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return state</td>
+        </tr>
+        <tr id="field_RETURN_ZIPCODE">
+            <td class="rt_fname">return_zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return zip code</td>
+        </tr>
+        <tr id="field_RETURNADDRESS">
+            <td class="rt_fname">returnaddress</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">999</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Return address</td>
+        </tr>
+        <tr id="field_STATE">
+            <td class="rt_fname">state</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">50</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">State</td>
+        </tr>
+        <tr id="field_TRAN_NUM_PREFIX">
+            <td class="rt_fname">tran_num_prefix</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">8</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Transaction number prefix</td>
+        </tr>
+        <tr id="field_USE_BINS">
+            <td class="rt_fname">use_bins</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">3</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Use bins</td>
+        </tr>
+        <tr id="field_ZIPCODE">
+            <td class="rt_fname">zipcode</td>
+            <td class="rt_ftype">VARCHAR2</td>
+            <td class="rt_flength">36</td>
+            <td class="rt_fprecision"></td>
+            <td class="rt_fscale"></td>
+            <td class="rt_pkcolumn">
+            </td>
+            <td class="rt_pktable">
+            </td>
+            <td class="rt_fhelp">Zip code</td>
+        </tr>
+    </table>
+
+    <H2><span class="primaryKeyColor">Primary key</span></H2>
+    <table class="jtable" style="clear: both;">
+        <tr>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+        </tr>
+        <tr>
+            <td class="rt_tpkcolumn_name">location_id</td>
+        </tr>
+    </table>
+
+    <H2><span class="foreignKeyColor">Foreign keys in this table</span></H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tpktable_name">PK Table Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">locations_locations_fk</td>
+            <td class="rt_tfkcolumn_name">parent_id</td>
+            <td class="rt_tpktable_name"><a class="keepDomain" title="record__location" href="../../odbc/record/location.html?mode=">Locations</a></td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>Foreign keys referencing this table</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tfk_name">FK Name</th>
+            <th class="rt_tpkcolumn_name">PK Column Name</th>
+            <th class="rt_tfktable_name">FK Table Name</th>
+            <th class="rt_tfkcolumn_name">FK Column Name</th>
+            <th class="rt_tkey_seq">Key Seq</th>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Accounts_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__account" href="../../odbc/record/account.html?mode=">Accounts</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscription_lines_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscription_lines" href="../../odbc/record/billing_subscription_lines.html?mode=">Billing_subscription_lines</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Billing_subscriptions_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__billing_subscriptions" href="../../odbc/record/billing_subscriptions.html?mode=">Billing_subscriptions</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Budget_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__budget" href="../../odbc/record/budget.html?mode=">Budget</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employee_time_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee_time" href="../../odbc/record/employee_time.html?mode=">Employee_time</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Employees_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__employee" href="../../odbc/record/employee.html?mode=">Employees</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Global_account_map_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__global_account_map" href="../../odbc/record/global_account_map.html?mode=">Global_account_map</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Item_account_map_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__item_account_map" href="../../odbc/record/item_account_map.html?mode=">Item_account_map</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Location_costing_grp_locations_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__location_costing_grp_locations" href="../../odbc/record/location_costing_grp_locations.html?mode=">Location_costing_grp_locations</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Locations_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__location" href="../../odbc/record/location.html?mode=">Locations</a></td>
+            <td class="rt_tfkcolumn_name">parent_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Opportunity_lines_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__opportunity_lines" href="../../odbc/record/opportunity_lines.html?mode=">Opportunity_lines</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Planned_standard_costs_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__planned_standard_costs" href="../../odbc/record/planned_standard_costs.html?mode=">Planned_standard_costs</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity" href="../../odbc/record/posting_account_activity.html?mode=">Posting_account_activity</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Posting_account_activity_pe_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__posting_account_activity_pe" href="../../odbc/record/posting_account_activity_pe.html?mode=">Posting_account_activity_pe</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subscription_plans_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subscriptionplan" href="../../odbc/record/subscriptionplan.html?mode=">Subscription_plans</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+        <tr>
+            <td class="rt_tfk_name">Subsidiary_location_map_locations_fk</td>
+            <td class="rt_tpkcolumn_name">location_id</td>
+            <td class="rt_tfktable_name"><a class="keepDomain" title="record__subsidiary_location_map" href="../../odbc/record/subsidiary_location_map.html?mode=">Subsidiary_location_map</a></td>
+            <td class="rt_tfkcolumn_name">location_id</td>
+            <td class="rt_tkey_seq">1</td>
+        </tr>
+    </table>
+
+    <H2>This table is included in the following domains</H2>
+    <table class="jtable">
+        <tr>
+            <th class="rt_tpkcolumn_name">Domains</th>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=expense_amortization">Expense_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=invoice_with_amortization">Invoice_with_amortization</a>
+            </td>
+        </tr>
+        <tr>
+            <td class="rt_domain">
+                <a href="?mode=domain&domain=multibooks">Multibooks</a>
+            </td>
+        </tr>
+    </table>
+
+
+    <H2>Domain diagrams</H2>
+        <div class="diagramholder">
+            Expense_amortization<br />
+            <a href="../diagrams/expense_amortization.png"><img class="diagram" alt="" src="../diagrams/expense_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Invoice_with_amortization<br />
+            <a href="../diagrams/invoice_with_amortization.png"><img class="diagram" alt="" src="../diagrams/invoice_with_amortization.png" height=330  /></a>
+        </div>
+        <div class="diagramholder">
+            Multibooks<br />
+            <a href="../diagrams/multibooks.png"><img class="diagram" alt="" src="../diagrams/multibooks.png" height=330  /></a>
+        </div>
+
+    <p>&nbsp;</p>
+    <div class="footer">Generated on 11-25-2024 for version 2024.2</div>
+</div>
+
+
+    <script>
+         $(function() {
+             wrapBodyDiv('odbc','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

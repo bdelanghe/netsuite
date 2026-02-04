@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('schema','urn:types.accounting.lists.webservices.netsuite.com__currencylocale','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('schema','urn:types.accounting.lists.webservices.netsuite.com__currencylocale','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function(){
+        $(".jtable th").each(function(){
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function(){
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+    <H1>CurrencyLocale</H1>
+    Namespace: urn:types.accounting.lists.webservices.netsuite.com<br/>
+    <table class="jtable">
+       <tr><th class="est_vvalue">Value</th></tr>
+        <tr><td class="est_vvalue">_afghanistanPashto</td></tr>
+        <tr><td class="est_vvalue">_afghanistanPersian</td></tr>
+        <tr><td class="est_vvalue">_alandIslandsSwedish</td></tr>
+        <tr><td class="est_vvalue">_albaniaAlbanian</td></tr>
+        <tr><td class="est_vvalue">_algeriaArabic</td></tr>
+        <tr><td class="est_vvalue">_angolaPortuguese</td></tr>
+        <tr><td class="est_vvalue">_anguillaEnglish</td></tr>
+        <tr><td class="est_vvalue">_antiguaAndBarbudaEnglish</td></tr>
+        <tr><td class="est_vvalue">_argentinaSpanish</td></tr>
+        <tr><td class="est_vvalue">_armeniaArmenian</td></tr>
+        <tr><td class="est_vvalue">_arubaEnglish</td></tr>
+        <tr><td class="est_vvalue">_arubaPortuguese</td></tr>
+        <tr><td class="est_vvalue">_australiaEnglish</td></tr>
+        <tr><td class="est_vvalue">_austriaGerman</td></tr>
+        <tr><td class="est_vvalue">_azerbaijanAzerbaijani</td></tr>
+        <tr><td class="est_vvalue">_bahamasEnglish</td></tr>
+        <tr><td class="est_vvalue">_bahrainArabic</td></tr>
+        <tr><td class="est_vvalue">_barbadosEnglish</td></tr>
+        <tr><td class="est_vvalue">_belarusByelorussian</td></tr>
+        <tr><td class="est_vvalue">_belgiumDutch</td></tr>
+        <tr><td class="est_vvalue">_belgiumFrench</td></tr>
+        <tr><td class="est_vvalue">_belizeEnglish</td></tr>
+        <tr><td class="est_vvalue">_bengali</td></tr>
+        <tr><td class="est_vvalue">_beninFrench</td></tr>
+        <tr><td class="est_vvalue">_bermudaEnglish</td></tr>
+        <tr><td class="est_vvalue">_bhutanDzongkha</td></tr>
+        <tr><td class="est_vvalue">_boliviaSpanish</td></tr>
+        <tr><td class="est_vvalue">_bonaireSaintEustatiusAndSabaDutch</td></tr>
+        <tr><td class="est_vvalue">_bosniaAndHerzegovinaBosnian</td></tr>
+        <tr><td class="est_vvalue">_botswanaEnglish</td></tr>
+        <tr><td class="est_vvalue">_brazilPortuguese</td></tr>
+        <tr><td class="est_vvalue">_bruneiMalay</td></tr>
+        <tr><td class="est_vvalue">_bulgariaBulgarian</td></tr>
+        <tr><td class="est_vvalue">_burkinaFasoFrench</td></tr>
+        <tr><td class="est_vvalue">_burundiFrench</td></tr>
+        <tr><td class="est_vvalue">_cambodiaKhmer</td></tr>
+        <tr><td class="est_vvalue">_cameroonFrench</td></tr>
+        <tr><td class="est_vvalue">_canadaEnglish</td></tr>
+        <tr><td class="est_vvalue">_canadaFrench</td></tr>
+        <tr><td class="est_vvalue">_canaryIslandsSpanish</td></tr>
+        <tr><td class="est_vvalue">_capeVerdePortuguese</td></tr>
+        <tr><td class="est_vvalue">_caymanIslandsEnglish</td></tr>
+        <tr><td class="est_vvalue">_centralAfricanRepublicFrench</td></tr>
+        <tr><td class="est_vvalue">_ceutaAndMelillaSpanish</td></tr>
+        <tr><td class="est_vvalue">_chadFrench</td></tr>
+        <tr><td class="est_vvalue">_chileSpanish</td></tr>
+        <tr><td class="est_vvalue">_chinaChinese</td></tr>
+        <tr><td class="est_vvalue">_colombiaSpanish</td></tr>
+        <tr><td class="est_vvalue">_comorosFrench</td></tr>
+        <tr><td class="est_vvalue">_congoDemocraticRepublicEnglish</td></tr>
+        <tr><td class="est_vvalue">_congoDemocraticRepublicFrench</td></tr>
+        <tr><td class="est_vvalue">_congoRepublicOfFrench</td></tr>
+        <tr><td class="est_vvalue">_costaRicaSpanish</td></tr>
+        <tr><td class="est_vvalue">_coteDivoireFrench</td></tr>
+        <tr><td class="est_vvalue">_croatiaCroatian</td></tr>
+        <tr><td class="est_vvalue">_cubaSpanish</td></tr>
+        <tr><td class="est_vvalue">_curacaoDutch</td></tr>
+        <tr><td class="est_vvalue">_cyprusEnglish</td></tr>
+        <tr><td class="est_vvalue">_cyprusEnglishEuro</td></tr>
+        <tr><td class="est_vvalue">_czechRepublicCzech</td></tr>
+        <tr><td class="est_vvalue">_denmarkDanish</td></tr>
+        <tr><td class="est_vvalue">_djiboutiArabic</td></tr>
+        <tr><td class="est_vvalue">_djiboutiFrench</td></tr>
+        <tr><td class="est_vvalue">_dominicaEnglish</td></tr>
+        <tr><td class="est_vvalue">_dominicanRepublicSpanish</td></tr>
+        <tr><td class="est_vvalue">_ecuadorSpanish</td></tr>
+        <tr><td class="est_vvalue">_egyptArabic</td></tr>
+        <tr><td class="est_vvalue">_elSalvadorSpanish</td></tr>
+        <tr><td class="est_vvalue">_equatorialGuineaSpanish</td></tr>
+        <tr><td class="est_vvalue">_eritreaAfar</td></tr>
+        <tr><td class="est_vvalue">_estoniaEstonian</td></tr>
+        <tr><td class="est_vvalue">_ethiopiaAmharic</td></tr>
+        <tr><td class="est_vvalue">_falklandIslandsEnglish</td></tr>
+        <tr><td class="est_vvalue">_fijiFijian</td></tr>
+        <tr><td class="est_vvalue">_finlandFinnish</td></tr>
+        <tr><td class="est_vvalue">_finlandFinnishEuro</td></tr>
+        <tr><td class="est_vvalue">_franceFrench</td></tr>
+        <tr><td class="est_vvalue">_franceFrenchEuro</td></tr>
+        <tr><td class="est_vvalue">_frenchPolynesiaFrench</td></tr>
+        <tr><td class="est_vvalue">_gabonFrench</td></tr>
+        <tr><td class="est_vvalue">_gambiaEnglish</td></tr>
+        <tr><td class="est_vvalue">_georgiaGeorgian</td></tr>
+        <tr><td class="est_vvalue">_germanyGerman</td></tr>
+        <tr><td class="est_vvalue">_germanyGermanEuro</td></tr>
+        <tr><td class="est_vvalue">_ghanaEnglish</td></tr>
+        <tr><td class="est_vvalue">_gibraltarEnglish</td></tr>
+        <tr><td class="est_vvalue">_goldOunce</td></tr>
+        <tr><td class="est_vvalue">_greeceGreek</td></tr>
+        <tr><td class="est_vvalue">_grenadaEnglish</td></tr>
+        <tr><td class="est_vvalue">_guatemalaSpanish</td></tr>
+        <tr><td class="est_vvalue">_guineaBissauPortuguese</td></tr>
+        <tr><td class="est_vvalue">_guineaFrench</td></tr>
+        <tr><td class="est_vvalue">_guyanaEnglish</td></tr>
+        <tr><td class="est_vvalue">_haitian</td></tr>
+        <tr><td class="est_vvalue">_hondurasSpanish</td></tr>
+        <tr><td class="est_vvalue">_hongKongChinese</td></tr>
+        <tr><td class="est_vvalue">_hungaryHungarian</td></tr>
+        <tr><td class="est_vvalue">_icelandIcelandic</td></tr>
+        <tr><td class="est_vvalue">_indiaEnglish</td></tr>
+        <tr><td class="est_vvalue">_indiaGujarati</td></tr>
+        <tr><td class="est_vvalue">_indiaHindi</td></tr>
+        <tr><td class="est_vvalue">_indiaKannada</td></tr>
+        <tr><td class="est_vvalue">_indiaMarathi</td></tr>
+        <tr><td class="est_vvalue">_indiaPanjabi</td></tr>
+        <tr><td class="est_vvalue">_indiaTamil</td></tr>
+        <tr><td class="est_vvalue">_indiaTelugu</td></tr>
+        <tr><td class="est_vvalue">_indonesiaIndonesian</td></tr>
+        <tr><td class="est_vvalue">_iranPersian</td></tr>
+        <tr><td class="est_vvalue">_iraqArabic</td></tr>
+        <tr><td class="est_vvalue">_irelandEnglish</td></tr>
+        <tr><td class="est_vvalue">_israelHebrew</td></tr>
+        <tr><td class="est_vvalue">_italyItalian</td></tr>
+        <tr><td class="est_vvalue">_italyItalianEuro</td></tr>
+        <tr><td class="est_vvalue">_jamaicaEnglish</td></tr>
+        <tr><td class="est_vvalue">_japanJapanese</td></tr>
+        <tr><td class="est_vvalue">_jordanArabic</td></tr>
+        <tr><td class="est_vvalue">_jordanEnglish</td></tr>
+        <tr><td class="est_vvalue">_kazakhstanRussian</td></tr>
+        <tr><td class="est_vvalue">_kenyaEnglish</td></tr>
+        <tr><td class="est_vvalue">_kuwaitArabic</td></tr>
+        <tr><td class="est_vvalue">_kuwaitEnglish</td></tr>
+        <tr><td class="est_vvalue">_kyrgyzstanRussian</td></tr>
+        <tr><td class="est_vvalue">_laosLao</td></tr>
+        <tr><td class="est_vvalue">_latviaLatvianLettish</td></tr>
+        <tr><td class="est_vvalue">_lebanonArabic</td></tr>
+        <tr><td class="est_vvalue">_lesothoEnglish</td></tr>
+        <tr><td class="est_vvalue">_liberiaEnglish</td></tr>
+        <tr><td class="est_vvalue">_libyaArabic</td></tr>
+        <tr><td class="est_vvalue">_lithuaniaLithuanian</td></tr>
+        <tr><td class="est_vvalue">_luxembourgFrench</td></tr>
+        <tr><td class="est_vvalue">_luxembourgGerman</td></tr>
+        <tr><td class="est_vvalue">_luxembourgLuxembourgish</td></tr>
+        <tr><td class="est_vvalue">_macauChinese</td></tr>
+        <tr><td class="est_vvalue">_macedoniaMacedonian</td></tr>
+        <tr><td class="est_vvalue">_malawiEnglish</td></tr>
+        <tr><td class="est_vvalue">_malaysiaMalay</td></tr>
+        <tr><td class="est_vvalue">_maldivesDhivehi</td></tr>
+        <tr><td class="est_vvalue">_maliFrench</td></tr>
+        <tr><td class="est_vvalue">_mauritiusEnglish</td></tr>
+        <tr><td class="est_vvalue">_mexicoSpanish</td></tr>
+        <tr><td class="est_vvalue">_moldovaRomanian</td></tr>
+        <tr><td class="est_vvalue">_moldovaRussian</td></tr>
+        <tr><td class="est_vvalue">_mongoliaMongolian</td></tr>
+        <tr><td class="est_vvalue">_moroccoArabic</td></tr>
+        <tr><td class="est_vvalue">_mozambiquePortuguese</td></tr>
+        <tr><td class="est_vvalue">_myanmarBurmese</td></tr>
+        <tr><td class="est_vvalue">_namibiaEnglish</td></tr>
+        <tr><td class="est_vvalue">_nepalNepali</td></tr>
+        <tr><td class="est_vvalue">_netherlandsAntillesDutch</td></tr>
+        <tr><td class="est_vvalue">_netherlandsDutch</td></tr>
+        <tr><td class="est_vvalue">_netherlandsDutchEuro</td></tr>
+        <tr><td class="est_vvalue">_newCaledoniaFrench</td></tr>
+        <tr><td class="est_vvalue">_newZealandEnglish</td></tr>
+        <tr><td class="est_vvalue">_nicaraguaSpanish</td></tr>
+        <tr><td class="est_vvalue">_nigerFrench</td></tr>
+        <tr><td class="est_vvalue">_nigeriaEnglish</td></tr>
+        <tr><td class="est_vvalue">_northKoreaKorean</td></tr>
+        <tr><td class="est_vvalue">_norwayNorwegian</td></tr>
+        <tr><td class="est_vvalue">_omanArabic</td></tr>
+        <tr><td class="est_vvalue">_pakistanUrdu</td></tr>
+        <tr><td class="est_vvalue">_palladiumOunce</td></tr>
+        <tr><td class="est_vvalue">_panamaSpanish</td></tr>
+        <tr><td class="est_vvalue">_papuaNewGuineaEnglish</td></tr>
+        <tr><td class="est_vvalue">_paraguaySpanish</td></tr>
+        <tr><td class="est_vvalue">_peruSpanish</td></tr>
+        <tr><td class="est_vvalue">_philippinesEnglish</td></tr>
+        <tr><td class="est_vvalue">_philippinesTagalog</td></tr>
+        <tr><td class="est_vvalue">_platinumOunce</td></tr>
+        <tr><td class="est_vvalue">_polandPolish</td></tr>
+        <tr><td class="est_vvalue">_portugalPortuguese</td></tr>
+        <tr><td class="est_vvalue">_portugalPortugueseEuro</td></tr>
+        <tr><td class="est_vvalue">_puertoRicoSpanish</td></tr>
+        <tr><td class="est_vvalue">_qatarArabic</td></tr>
+        <tr><td class="est_vvalue">_qatarEnglish</td></tr>
+        <tr><td class="est_vvalue">_romaniaRomanian</td></tr>
+        <tr><td class="est_vvalue">_russiaRussian</td></tr>
+        <tr><td class="est_vvalue">_rwandaFrench</td></tr>
+        <tr><td class="est_vvalue">_saintBarthelemyFrench</td></tr>
+        <tr><td class="est_vvalue">_saintHelenaEnglish</td></tr>
+        <tr><td class="est_vvalue">_saintKittsAndNevisEnglish</td></tr>
+        <tr><td class="est_vvalue">_saintLuciaEnglish</td></tr>
+        <tr><td class="est_vvalue">_saintMartinEnglish</td></tr>
+        <tr><td class="est_vvalue">_saintVincentAndTheGrenadinesEnglish</td></tr>
+        <tr><td class="est_vvalue">_samoaSamoan</td></tr>
+        <tr><td class="est_vvalue">_saoTomeAndPrincipePortuguese</td></tr>
+        <tr><td class="est_vvalue">_saudiArabiaArabic</td></tr>
+        <tr><td class="est_vvalue">_senegalFrench</td></tr>
+        <tr><td class="est_vvalue">_serbiaAndMontenegroSerbian</td></tr>
+        <tr><td class="est_vvalue">_serbiaSerbian</td></tr>
+        <tr><td class="est_vvalue">_serbiaSerboCroatian</td></tr>
+        <tr><td class="est_vvalue">_seychellesEnglish</td></tr>
+        <tr><td class="est_vvalue">_seychellesFrench</td></tr>
+        <tr><td class="est_vvalue">_sierraLeoneEnglish</td></tr>
+        <tr><td class="est_vvalue">_silverOunce</td></tr>
+        <tr><td class="est_vvalue">_singaporeEnglish</td></tr>
+        <tr><td class="est_vvalue">_sintMaartenDutch</td></tr>
+        <tr><td class="est_vvalue">_slovakiaSlovak</td></tr>
+        <tr><td class="est_vvalue">_slovakiaSlovakEuro</td></tr>
+        <tr><td class="est_vvalue">_sloveniaSlovenian</td></tr>
+        <tr><td class="est_vvalue">_sloveniaSlovenianEuro</td></tr>
+        <tr><td class="est_vvalue">_solomonIslandsEnglish</td></tr>
+        <tr><td class="est_vvalue">_somaliaSomali</td></tr>
+        <tr><td class="est_vvalue">_southAfricaAfrikaans</td></tr>
+        <tr><td class="est_vvalue">_southAfricaEnglish</td></tr>
+        <tr><td class="est_vvalue">_southKoreaKorean</td></tr>
+        <tr><td class="est_vvalue">_southSudanEnglish</td></tr>
+        <tr><td class="est_vvalue">_spainCatalan</td></tr>
+        <tr><td class="est_vvalue">_spainSpanish</td></tr>
+        <tr><td class="est_vvalue">_spainSpanishEuro</td></tr>
+        <tr><td class="est_vvalue">_sriLankaSinhalese</td></tr>
+        <tr><td class="est_vvalue">_sudanArabic</td></tr>
+        <tr><td class="est_vvalue">_surinameDutch</td></tr>
+        <tr><td class="est_vvalue">_swazilandSwati</td></tr>
+        <tr><td class="est_vvalue">_swedenSwedish</td></tr>
+        <tr><td class="est_vvalue">_switzerlandFrench</td></tr>
+        <tr><td class="est_vvalue">_switzerlandGerman</td></tr>
+        <tr><td class="est_vvalue">_switzerlandItalian</td></tr>
+        <tr><td class="est_vvalue">_syriaArabic</td></tr>
+        <tr><td class="est_vvalue">_taiwanChinese</td></tr>
+        <tr><td class="est_vvalue">_tajikistanTajik</td></tr>
+        <tr><td class="est_vvalue">_tanzaniaEnglish</td></tr>
+        <tr><td class="est_vvalue">_thailandThai</td></tr>
+        <tr><td class="est_vvalue">_togoFrench</td></tr>
+        <tr><td class="est_vvalue">_tongaTonga</td></tr>
+        <tr><td class="est_vvalue">_trinidadAndTobagoEnglish</td></tr>
+        <tr><td class="est_vvalue">_tunisiaArabic</td></tr>
+        <tr><td class="est_vvalue">_turkeyTurkish</td></tr>
+        <tr><td class="est_vvalue">_turkmenistanTurkmen</td></tr>
+        <tr><td class="est_vvalue">_turksAndCaicosIslandsEnglish</td></tr>
+        <tr><td class="est_vvalue">_ugandaEnglish</td></tr>
+        <tr><td class="est_vvalue">_ukraineUkrainian</td></tr>
+        <tr><td class="est_vvalue">_unitedArabEmiratesArabic</td></tr>
+        <tr><td class="est_vvalue">_unitedArabEmiratesEnglish</td></tr>
+        <tr><td class="est_vvalue">_unitedKingdomEnglish</td></tr>
+        <tr><td class="est_vvalue">_unitedStatesEnglish</td></tr>
+        <tr><td class="est_vvalue">_uruguaySpanish</td></tr>
+        <tr><td class="est_vvalue">_uzbekistanUzbek</td></tr>
+        <tr><td class="est_vvalue">_vanuatuEnglish</td></tr>
+        <tr><td class="est_vvalue">_vanuatuFrench</td></tr>
+        <tr><td class="est_vvalue">_venezuelaSpanish</td></tr>
+        <tr><td class="est_vvalue">_vietnamVietnamese</td></tr>
+        <tr><td class="est_vvalue">_wallisAndFutunaFrench</td></tr>
+        <tr><td class="est_vvalue">_yemenArabic</td></tr>
+        <tr><td class="est_vvalue">_zambiaEnglish</td></tr>
+    </table>
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('schema','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

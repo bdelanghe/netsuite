@@ -1,0 +1,1562 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<link href="../../jquery-ui.css" rel="stylesheet">
+<link href="../../schema-browser.css" rel="stylesheet">
+<script src="../../javascript/jquery-1.10.2.min.js"></script>
+<script src="../../javascript/jquery-ui.min.js"></script>
+<script src="../../menudefs.js"></script>
+<script src="../../javascript/menubuilder.js"></script>
+
+<script>
+    (function( $ ){
+        //plugin buttonset vertical
+        $.fn.buttonsetv = function() {
+            $(':radio, :checkbox, :button', this).wrap('<div style="margin: 1px"/>');
+            $(this).buttonset();
+            $('label:first', this).removeClass('ui-corner-left').addClass('ui-corner-top');
+            $('label:last', this).removeClass('ui-corner-right').addClass('ui-corner-bottom');
+            mw = 0; // max witdh
+            $('label', this).each(function(index){
+                w = $(this).width();
+                if (w > mw) mw = w;
+            })
+            $('label', this).each(function(index){
+                $(this).width(mw);
+            })
+        };
+    })( jQuery );
+
+    function getURLParameter(name) {
+        return decodeURIComponent((new RegExp('[?|&]' + name + '=' + '([^&;]+?)(&|#|;|$)').exec(location.search)||[,""])[1].replace(/\+/g, '%20'))||null;
+    }
+</script>
+
+<style>
+    .custom-combobox {
+        position: relative;
+        display: inline-block;
+    }
+    .custom-combobox-toggle {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        margin-left: -1px;
+        padding: 0;
+        /* support: IE7 */
+        *height: 1.7em;
+        *top: 0.1em;
+
+    }
+    .custom-combobox-input {
+        margin: 0;
+        padding: 0.3em;
+    }
+</style>
+
+
+<script>
+    (function( $ ) {
+        $.widget( "custom.combobox_with_optgroup", {
+            _create: function() {
+                this.wrapper = $( "<span>" )
+                        .addClass( "custom-combobox" )
+                        .insertAfter( this.element );
+                this.element.hide();
+                this._createAutocomplete();
+                this._createShowAllButton();
+            },
+            _createAutocomplete: function() {
+                var selected = this.element.find( ":selected" ),
+                        value = selected.val() ? selected.text() : "";
+                this.input = $( "<input>" )
+                        .appendTo( this.wrapper )
+                        .val( value )
+                        .attr( "title", "" )
+                        .addClass( "custom-combobox-input ui-widget ui-widget-content ui-state-default ui-corner-left" )
+                        .autocomplete({
+                                          delay: 0,
+                                          minLength: 0,
+                                          source: $.proxy( this, "_source" )
+                                      })
+                        .tooltip({
+                                     tooltipClass: "ui-state-highlight"
+                                 })
+                        ;
+                this._on( this.input, {
+                    autocompleteselect: function( event, ui ) {
+                        ui.item.option.selected = true;
+                        window.location.href=ui.item.href;
+//                        this._trigger( "select", event, {
+//                            item: ui.item.option
+//                        });
+                    },
+                    autocompletechange: "_removeIfInvalid"
+                });
+
+                this.input.data("uiAutocomplete")._renderMenu = function(ul, items) {
+                    var self = this,
+                    currentCategory = "";
+                    var itemCounter=100;
+                    $.each(items, function(index, item) {
+                        itemCounter=itemCounter+1;
+                        if (item.category != currentCategory) {
+                            if (item.category) {
+                                ul.append("<li class='custom-autocomplete-category'>" + item.category + "</li>");
+                            }
+                            currentCategory = item.category;
+                        }
+                        self._renderItem= function( ul, item ) {
+                            return $( "<li>").attr("class","item.class")
+                                    .append( $( "<a>" ).attr("href",item.href).text( item.label ) )
+                                    .appendTo( ul );
+                        };
+                        self._renderItemData(ul, item);
+                    });
+                };
+            },
+
+            _createShowAllButton: function() {
+                var input = this.input,
+                        wasOpen = false;
+                $( "<a>" )
+                        .attr( "tabIndex", -1 )
+                        .attr( "title", "Show All" )
+                        .tooltip()
+                        .appendTo( this.wrapper )
+                        .button({
+                                   /* icons: {
+                                        primary: "ui-icon-triangle-1-s"
+                                    },*/
+                                    text: false
+                                })
+                        .removeClass( "ui-corner-all" )
+                        .addClass( "custom-combobox-toggle ui-corner-right" )
+                        .mousedown(function() {
+                                       wasOpen = input.autocomplete( "widget" ).is( ":visible" );
+                                   })
+                        .click(function() {
+                                   input.focus();
+
+                                   if ( wasOpen ) {
+                                       return;
+                                   }
+
+                                   input.autocomplete( "search", "" );
+                               });
+            },
+            _source: function( request, response ) {
+                var matcher = new RegExp( $.ui.autocomplete.escapeRegex(request.term), "i" );
+                response( this.element.find( "option" ).map(function() {
+                    var text = $( this ).text();
+                    if ( this.value && ( !request.term || matcher.test(text) ) )
+                        return {
+                            label: text,
+                            value: text,
+                            option: this,
+                            "class": $(this).attr("class"),
+                            href: $(this).attr("href"),
+                            category: $(this).closest("optgroup").attr("label")
+                        };
+                }) );
+            },
+            _removeIfInvalid: function( event, ui ) {
+
+                if ( ui.item ) {
+                    return;
+                }
+
+                var value = this.input.val(),
+                        valueLowerCase = value.toLowerCase(),
+                        valid = false;
+                this.element.find( "option" ).each(function() {
+                    if ( $( this ).text().toLowerCase() === valueLowerCase ) {
+                        this.selected = valid = true;
+                        return false;
+                    }
+                });
+
+                if ( valid ) {
+                    return;
+                }
+
+                this.input
+                        .val( "" )
+                        .attr( "title", value + " not found" )
+                        .tooltip( "open" );
+                this.element.val( "" );
+                this._delay(function() {
+                    this.input.tooltip( "close" ).attr( "title", "" );
+                }, 2500 );
+                this.input.data( "ui-autocomplete" ).term = "";
+            },
+            _destroy: function() {
+                this.wrapper.remove();
+                this.element.show();
+            },
+            getInput: function(){
+                return this.input;
+            }
+        });
+    })( jQuery );
+
+    //fixing the issue with back button in Firefox
+    $(window).unload(function () { });
+
+</script>
+
+<title>common</title>
+</head>
+
+<body>
+
+     <div id='header'></div>
+     <script>
+         $(function() {
+             $('#header').html(createHeader('script','record__downloaditem','../..'));
+         });
+     </script>
+
+
+    <div id='leftpanel'></div>
+    <script>
+        $(function() {
+            $('#leftpanel').html(createLeftPanel('script','record__downloaditem','../..'));
+        });
+    </script>
+
+
+<script type="text/javascript">
+    $().ready(function () {
+        $(".jtable th").each(function () {
+
+            $(this).addClass("ui-state-default");
+
+        });
+        $(".jtable td").each(function () {
+
+            $(this).addClass("ui-widget-content");
+
+        });
+
+    });
+</script>
+
+
+<div id="contentPanel">
+
+        <H1>Download Item</H1>
+    <H3>Internal ID: downloaditem</H3>
+        <H3>Supports Custom Fields</H3>
+
+
+        <H2>Fields</H2>
+        <table class="jtable" id="fields">
+            <tr>
+                <th class="rt_fname">Internal ID</th>
+                <th class="rt_ftype">Type</th>
+                <th class="rt_fdle">nlapiSubmitField</th>
+                <th class="rt_flabel">Label</th>
+                <th class="rt_freq">Required</th>
+                <th class="rt_fhelp">Help</th></tr>
+                <tr id="field_availabletopartners">
+                <td class="rt_fname">availabletopartners</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Available to Adv. Partners</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make this item available to partners with the Advanced Partner Center role for viewing.
+
+These items are also available to partners with roles that are customized for the Advanced Partner Center and include view, create or edit access to item records.</td>
+            </tr>
+                <tr id="field_billingschedule">
+                <td class="rt_fname">billingschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Billing Schedule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose the billing schedule you want to associate with this item.
+
+When an item is associated with a billing schedule, the billing schedule appears by default when the item is added to an order.
+ 
+Note: Forms must be customized to show schedules on lines. Read Applying Billing Schedules. 
+
+Click New to enter a new billing schedule.</td>
+            </tr>
+                <tr id="field_class">
+                <td class="rt_fname">class</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Class</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a class to associate with this item.
+
+Click New to enter a new class record.
+
+Go to Setup &gt; Company &gt; Classes for details about existing class records.</td>
+            </tr>
+                <tr id="field_costestimate">
+                <td class="rt_fname">costestimate</td>
+                <td class="rt_ftype">currency</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Defined Cost</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an Item Defined Cost amount.</td>
+            </tr>
+                <tr id="field_costestimatetype">
+                <td class="rt_fname">costestimatetype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Cost Estimate Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The Cost Estimate Type determines what value NetSuite uses to calculate estimated Gross Profit.
+
+The estimated Gross Profit for Items on a transaction provides the data needed to calculate the total estimated Gross Profit on that transaction.
+
+The individual line items that you enter in a transaction determine the amounts that post when you process that transaction.
+
+The following Cost Estimate Types on Items are available:
+
+    * Item Defined Cost - a user-defined amount, entered into the Item Defined Cost field on the Item definition page.
+    * Average Cost - NetSuite calculates an average cost of the units purchased. 
+    * Last Purchase Price - This field displays the most recent purchase price of the item as determined by purchase order receipt transactions. 
+    * Purchase Price - Price entered that you pay for this item. If you do not enter a price, then the most recent purchase price from purchase orders provides the price for this item by default.
+    * Preferred Vendor Rate - This option is only used if the Multi-Vendor feature is enabled and multiple vendors supply the same item.
+          o First priority is to use the preferred vendor rate if defined on the Item record.
+          o Next priority would be to use the purchase price.
+          o Last priority would be the purchase order rate. (Initially this uses the preferred vendor rate cost, and then after a purchase order is entered, this type uses the most recent actual purchase order rate. Special orders and drop-shipped items use this cost information.)
+    * Derived from member items - Total costs of items currently included in a kit. This Cost Estimate Type only applies to kits and sums the estimated costs of each item in the kit, based on each of their individual Cost Estimate Types. Uses the latest definition of the kit, not its historical definition.</td>
+            </tr>
+                <tr id="field_createddate">
+                <td class="rt_fname">createddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Date Created</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_createrevenueplanson">
+                <td class="rt_fname">createrevenueplanson</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Create Revenue Plans On</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the event that triggers creation of revenue recognition plans. Match the event with the amount source of the item's revenue recognition rule.
+
+    * Revenue Arrangement Creation - Revenue plans can be created when the revenue arrangement is created. Use this option with rules that have Event-Amount as the Amount Source.
+    * Billing - Revenue plans can be created when the sales order is billed and from stand-alone cash sales, invoices, credit memos, and cash refunds. Use this option with rules that have Event-Percent based on amount as the Amount Source.
+    * Fulfillment - This option is available only when Advanced Shipping is enabled. Revenue plans can be created upon fulfillment. Use this option with rules that have Event-Percent based on quantity as the Amount Source.
+    * Project Progress - This option is available only when the Projects feature is enabled. Use this option with rules that have Event-Percent Complete as the Amount Source.</td>
+            </tr>
+                <tr id="field_customform">
+                <td class="rt_fname">customform</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Custom Form</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the form you want to use to enter this record.
+
+You can select the standard form, a custom form you have already created, or select New to create a custom form.</td>
+            </tr>
+                <tr id="field_daysbeforeexpiration">
+                <td class="rt_fname">daysbeforeexpiration</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Days Before Expiration</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you want this item to expire, enter the number of days it should remain active after purchase.
+
+If this item is downloadable and the same customer purchases this item more than once, the countdown to expiration restarts with each purchase.
+
+Note: If this item is a gift certificate and the buyer lives in California, Connecticut, Louisiana, Massachusetts, New Hampshire, Rhode Island or Washington, by law the gift certificate cannot expire.</td>
+            </tr>
+                <tr id="field_deferredrevenueaccount">
+                <td class="rt_fname">deferredrevenueaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Deferred Revenue Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the deferred revenue account to associate with this item. If you use revenue recognition or advanced revenue management, the revenue from the sale of this item is deferred.</td>
+            </tr>
+                <tr id="field_deferrevrec">
+                <td class="rt_fname">deferrevrec</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Hold Revenue Recognition</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to delay recognizing revenue from the sale of this item. When this box is check, revenue recognition schedules or revenue plans are created with the status On Hold.
+
+For more information, see the help topic Delaying Revenue Recognition for an Item.</td>
+            </tr>
+                <tr id="field_department">
+                <td class="rt_fname">department</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Department</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose a department to associate with this item.
+
+Click New to enter a new department record.
+
+Go to Setup &gt; Company &gt; Departments for details about existing department records.</td>
+            </tr>
+                <tr id="field_directrevenueposting">
+                <td class="rt_fname">directrevenueposting</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Direct Revenue Posting</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to disable advanced revenue management for this item. When checked, posting transactions that include this item post directly to the item revenue account. No revenue element or revenue arrangement is created. When you check this box, the Deferred Revenue Account on the Accounting subtab is disabled.
+
+When you create sales transactions that include items that have this box checked, all the items in the transaction must have the box checked. You cannot mix items that post directly to revenue with items that post to deferred revenue in the same transaction. This restriction also applies to kit items. All items in a kit must post either to revenue or to deferred revenue.
+
+You cannot check or clear the box after the item has been used in a transaction with advanced revenue management.
+
+By default, this box is not checked.</td>
+            </tr>
+                <tr id="field_displayname">
+                <td class="rt_fname">displayname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display Name/Code</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter an optional name of up to 250 characters for this item in addition to the Item Name. If you are integrating with a Yahoo! store, this field is imported from Yahoo!.
+
+The display name prints in the Item column of sales forms when Basic printing is used. If this item is a member of a kit, this name appears in the Item column when the Print Items box is checked.
+
+If you do not enter a display name, the item name appears on printed forms.</td>
+            </tr>
+                <tr id="field_dontshowprice">
+                <td class="rt_fname">dontshowprice</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Don't Show Price</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to hide the price of this item online.
+
+This is useful for items you want to advertise but don't want to sell or for items that you track inventory for and want to display but are offered in combination with other items.</td>
+            </tr>
+                <tr id="field_excludefromsitemap">
+                <td class="rt_fname">excludefromsitemap</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Exclude From Sitemap</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to exclude a tab, category or item page from the site map.</td>
+            </tr>
+                <tr id="field_externalid">
+                <td class="rt_fname">externalid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">ExternalId</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_featureddescription">
+                <td class="rt_fname">featureddescription</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Featured Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If this item is displayed on the home page of your Web site, enter a featured description for this item.
+
+This description appears below the item's store display name on the Home page of your store or site.
+
+You can enter up to 999 characters including basic HTML code.
+
+Enter and format text using the formatting options, or click the HTML Source Code link to enter HTML.</td>
+            </tr>
+                <tr id="field_immediatedownload">
+                <td class="rt_fname">immediatedownload</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Immediate Download</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if you want customers to be able to download the item immediately after checking out.
+
+Clear this box to make download available after the order is billed. Customers then receive email that the download is available through the My Account tab of your site.</td>
+            </tr>
+                <tr id="field_includechildren">
+                <td class="rt_fname">includechildren</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Include Children</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Include Children box to share the item with all the sub-subsidiaries associated with each subsidiary selected in the Subsidiary field.
+
+Note: When sharing items across subsidiaries, all of the options selected on the item record must be compatible across subsidiaries.
+ 
+For example, when entering an inventory item to be shared across subsidiaries, you should select Income and Asset accounts on the item record that are also shared across the same subsidiaries.</td>
+            </tr>
+                <tr id="field_incomeaccount">
+                <td class="rt_fname">incomeaccount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Income Account</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the income account to associate with this item. When no income account is selected, the item does not show in the Item dropdown list for sales transactions.</td>
+            </tr>
+                <tr id="field_internalid">
+                <td class="rt_fname">internalid</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Internal ID</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use this ID number to create smart tags for your item templates, site templates, and custom Web site that you host with NetSuite.</td>
+            </tr>
+                <tr id="field_isdonationitem">
+                <td class="rt_fname">isdonationitem</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Variable Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to set this item as variable-priced. This enables customers to enter their own prices for this item, such as for donations.</td>
+            </tr>
+                <tr id="field_isfulfillable">
+                <td class="rt_fname">isfulfillable</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Can be Fulfilled/Received</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check the Can be Fulfilled/Received box to enable this item to be received and fulfilled during order processing.
+
+Clear this box if this item does not require being received and fulfilled.
+
+Note: Once this item has been added to transactions, this setting cannot be changed.
+
+This field is used when the Advanced Billing and Advanced Shipping features are both enabled.</td>
+            </tr>
+                <tr id="field_isgcocompliant">
+                <td class="rt_fname">isgcocompliant</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Allow Google Checkout Purchase</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_isinactive">
+                <td class="rt_fname">isinactive</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Inactive</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">When you check this box, this item will no longer appear on a list unless you check the Show All box at the bottom of the list page.</td>
+            </tr>
+                <tr id="field_isonline">
+                <td class="rt_fname">isonline</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Display in Web Store</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to make this item available online in your Web site.
+
+You cannot sell this item online unless you check this box.
+
+If the item is of the Other Charge for Sale or Resale subtype, checking this box does not make it available in the web store catalog. However, it becomes available during web store checkout.</td>
+            </tr>
+                <tr id="field_issueproduct">
+                <td class="rt_fname">issueproduct</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Product Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the product this item is associated with.
+
+Product records are tracked with versions and builds for issue management.
+
+To create product records, go to Setup &gt; Issues &gt; Products &gt; New.</td>
+            </tr>
+                <tr id="field_itemid">
+                <td class="rt_fname">itemid</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Name/Number</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Enter up to 250 characters for the name of this item. This name appears in lists on transactions.
+
+If you have the option of entering a display name and do not, the item name prints in the Item column of sales forms when Basic printing is used.
+
+If you have the option to enter a vendor name and do not, the item name prints in the Item column of purchase forms. If you have entered a display name, it will print on purchases instead of the item name when Basic printing is used.</td>
+            </tr>
+                <tr id="field_itemoptions">
+                <td class="rt_fname">itemoptions</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Options</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_itemrevenuecategory">
+                <td class="rt_fname">itemrevenuecategory</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Revenue Category</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The item revenue category is a classification for items that have similar characteristics and revenue allocation requirements. It is used in the fair value price list.</td>
+            </tr>
+                <tr id="field_itemtype">
+                <td class="rt_fname">itemtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the type of item you want to print labels for.
+
+Select All to show all types of items.</td>
+            </tr>
+                <tr id="field_lastmodifieddate">
+                <td class="rt_fname">lastmodifieddate</td>
+                <td class="rt_ftype">datetime</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Last Modified</td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_location">
+                <td class="rt_fname">location</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">true</td>
+                <td class="rt_flabel">Location</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a location to associate with this item. To use a location, the Multi-Location Inventory feature must be enabled.
+
+If the Multi-Location Inventory feature is not enabled, selecting an item record location limits the items that certain roles can access. For example, Role A is set up to access only items associated with Location One. Therefore, employees who have Role A can access only items associated with Location One.
+
+Note: If the Multi-Location Inventory feature is not enabled, you cannot use this field to track inventory by locations. For example, you cannot track how many widgets you have in stock in Location One.
+
+If the Multi-Location Inventory feature is enabled, selecting an item record location classifies the item by that location to limit the items that certain roles can access.</td>
+            </tr>
+                <tr id="field_maxdonationamount">
+                <td class="rt_fname">maxdonationamount</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Maximum Variable Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you checked the Variable Amount box, enter the maximum amount that can be paid or donated for this item.</td>
+            </tr>
+                <tr id="field_metataghtml">
+                <td class="rt_fname">metataghtml</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Meta Tag HTML</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the Meta Tag HTML you want to appear in the &lt; head &gt; section of this item page.
+
+Meta tags enable your Web site to be found by search engines.</td>
+            </tr>
+                <tr id="field_mossapplies">
+                <td class="rt_fname">mossapplies</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">MOSS Applies</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if the One Stop Shop (OSS) VAT scheme applies to this service item. You should not check this box for goods. NetSuite automatically applies OSS VAT to goods. If this box is checked, the item cannot be added to an item group. If this item is already part of an item group, do not check the OSS Applies box.</td>
+            </tr>
+                <tr id="field_nopricemessage">
+                <td class="rt_fname">nopricemessage</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">No Price Message</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you opted to not show a price online, enter the message that should show instead of the price.
+
+For example, you might enter &quot;Call for Price.&quot;</td>
+            </tr>
+                <tr id="field_numofalloweddownloads">
+                <td class="rt_fname">numofalloweddownloads</td>
+                <td class="rt_ftype">integer</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Number Of Allowed Downloads</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the maximum number of times a customer who has purchased this item can download it from the Customer Center.
+
+If the same customer purchases this item more than once, the number of available downloads is multiplied by the number of times the item has been purchased.</td>
+            </tr>
+                <tr id="field_offersupport">
+                <td class="rt_fname">offersupport</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Offer Support</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to offer support for this particular item.
+
+By offering support for items, customers can select on case records which item they are having trouble with.</td>
+            </tr>
+                <tr id="field_outofstockbehavior">
+                <td class="rt_fname">outofstockbehavior</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Out Of Stock Behavior</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a custom out of stock behavior for this item. It overwrites the overall site’s out of stock behavior. Your choices are:
+
+    * Default - Uses the behavior selected in the Web Store Out of Stock Items field at Setup &gt; Web Site &gt; Setup Tasks &gt; Set Up Web Site &gt; Shopping.
+    * Disallow back orders but display out of stock messages
+    * Allow back orders but display out of stock messages
+    * Remove items when out of stock
+    * Allow back orders with no out of stock message</td>
+            </tr>
+                <tr id="field_outofstockmessage">
+                <td class="rt_fname">outofstockmessage</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Out Of Stock Message</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">You can enter a custom out of stock message for this item. The message here replaces the default out of stock message.</td>
+            </tr>
+                <tr id="field_overallquantitypricingtype">
+                <td class="rt_fname">overallquantitypricingtype</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Calculate Quantity Discounts</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose how to determine the quantity for the purpose of pricing:
+    * By Line Quantity - pricing is applied according to the quantity included in the line item.
+    * By Overall Item Quantity - pricing is applied for all line items for the same item on a transaction.
+    * By Overall Parent Quantity - pricing is applied for all items with the same parent item on the transaction. This can be useful for applying quantity pricing to matrix items.
+    * By Overall Schedule Quantity - pricing is applied to all items that use the same pricing schedule that are included in the transaction.</td>
+            </tr>
+                <tr id="field_pagetitle">
+                <td class="rt_fname">pagetitle</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Page Title</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the text you want to appear as the page's title for this item. This text appears in the browser tab. Use a descriptive title for the item page, this can help achieve better results with search engine ranking.</td>
+            </tr>
+                <tr id="field_parent">
+                <td class="rt_fname">parent</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subitem of</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you want this item to be a subitem, select the parent item here.</td>
+            </tr>
+                <tr id="field_pricinggroup">
+                <td class="rt_fname">pricinggroup</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Pricing Group</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the pricing group this item is a member of.
+
+Using pricing groups enables you to assign customer-specific price levels for a group of items.
+
+You can create new pricing groups at Setup &gt; Accounting &gt; Setup Tasks &gt; Accounting Lists &gt; New &gt; Pricing Group.</td>
+            </tr>
+                <tr id="field_quantitypricingschedule">
+                <td class="rt_fname">quantitypricingschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Quantity Pricing Schedule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the pricing schedule you want to use to set prices for this item.
+
+You can create new pricing schedules at Lists &gt; Accounting &gt; Quantity Pricing Schedules &gt; New.
+
+Selecting a pricing schedule sets the Use Marginal Rates and Calculate Quantity Discounts fields.</td>
+            </tr>
+                <tr id="field_relateditemsdescription">
+                <td class="rt_fname">relateditemsdescription</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Related Items Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a description for the related items you show with this item in your Web site.
+
+You can enter up to 999 characters of letters, numbers and basic HTML code.
+
+You can also clear the View as HTML box below to enter and format text using the formatting options above.  This eliminates the need for HTML code.</td>
+            </tr>
+                <tr id="field_revenueallocationgroup">
+                <td class="rt_fname">revenueallocationgroup</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Allocation Group</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a revenue allocation group to use in GroupSum functions in fair value formulas. The value you select here is the default. You can change it on the revenue element.</td>
+            </tr>
+                <tr id="field_revenuerecognitionrule">
+                <td class="rt_fname">revenuerecognitionrule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition Rule</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select the revenue rule to use by default for this item in a revenue arrangement.
+
+Be sure the rule you select has an Amount Source that is appropriate for the value you select in the Create Revenue Plans On field. For more information, see the field level help for Create Revenue Plans On.</td>
+            </tr>
+                <tr id="field_revrecforecastrule">
+                <td class="rt_fname">revrecforecastrule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle"></td>
+                <td class="rt_flabel">Rev Rec Forecast Rule</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select a revenue rule to use for forecast revenue recognition plans. The default is determined by the same accounting preference as the Revenue Recognition Rule.
+
+You may select the same rule or a different rule for actual and forecast rules. Percent complete rules are not available as forecast rules. For information about forecast revenue plans for project progress, see Working with Percent-Complete Revenue Recognition Plans.</td>
+            </tr>
+                <tr id="field_revrecschedule">
+                <td class="rt_fname">revrecschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Revenue Recognition Template</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select a default revenue recognition template to associate with this item on sales transactions.
+
+You must also select a Deferred Revenue Account in order to use revenue recognition.</td>
+            </tr>
+                <tr id="field_salesdescription">
+                <td class="rt_fname">salesdescription</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sales Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a sales description for this item.
+
+You can enter letters and numbers. There is a 999 character limit.
+
+The sales description displays on transactions such as sales orders, cash sales and invoices.
+
+If you use the Web Store feature, the sales description displays immediately under the item's store display name on item list pages in your store or site, if you have not entered a store description for an item. Enter the store description on the Store subtab of the item record.
+
+The sales description also displays by default when the item is in the Web store shopping cart.</td>
+            </tr>
+                <tr id="field_searchkeywords">
+                <td class="rt_fname">searchkeywords</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Search Keywords</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter alternative search keywords that customers might use to find this item using your Web store’s internal search.
+
+These can include synonyms, acronyms, alternate languages or misspellings.
+
+These keywords are seen as equally important as the item name when searches are conducted.</td>
+            </tr>
+                <tr id="field_showdefaultdonationamount">
+                <td class="rt_fname">showdefaultdonationamount</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Show Default Amount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to suggest the item's online price for the item.
+
+When customers navigate to a donation item, they first see the online price for the item and then can choose to enter any amount they like.</td>
+            </tr>
+                <tr id="field_sitemappriority">
+                <td class="rt_fname">sitemappriority</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Sitemap Priority</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Use the Sitemap Priority list to indicate the relative importance of your Web site URLs.
+
+You can select a priority ranging from 0.0 to 1.0 on item, category, and tab records.
+
+NetSuite assigns the default priority “Auto” to all new and existing tab, category and item records in your account. The priority is calculated based on the position of the item or category in the hierarchy of your Web site.
+
+For example, your Web site tabs automatically generate a default priority value of 1.0 because they are top level pages. A category published to a tab gets a priority of 0.5. An item published to a category on a tab gets a priority of 0.3.</td>
+            </tr>
+                <tr id="field_storedescription">
+                <td class="rt_fname">storedescription</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Web Store Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">The store description appears under the item's store display name on item list pages in your store or site.
+
+You can enter letters, numbers, and basic HTML code.
+
+Note: To make the store description display when an item is in the Web store shopping cart, go to Setup &gt; Web Site &gt; Set Up Web Site. Click the Cart subtab, and check the box next to Store Description.</td>
+            </tr>
+                <tr id="field_storedetaileddescription">
+                <td class="rt_fname">storedetaileddescription</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Detailed Description</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a detailed description for this item.
+
+When your customers click an item's store display name for more information, they see this description.
+
+You can enter letters, numbers or basic HTML code.
+
+If you are using Internet Explorer, you can also clear the View Source box below to enter and format text using the formatting options above.  This eliminates the need for HTML code.
+
+If you do not see the View Source box, make sure Rich Text Editing is enabled at Home &gt; Set Preferences &gt; Appearance.</td>
+            </tr>
+                <tr id="field_storedisplayimage">
+                <td class="rt_fname">storedisplayimage</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Display Image</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select an image from your file cabinet to display with this item in your Web site.
+
+Upload images at Lists &gt; Web Site &gt; Images.
+
+You can automatically resize images less than 5 megapixels in size at Setup &gt; Web Site &gt; Image Resizing.</td>
+            </tr>
+                <tr id="field_storedisplayname">
+                <td class="rt_fname">storedisplayname</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Web Store Display Name</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the name of this item as you want it displayed in your Web site. You can enter up to 250 characters.</td>
+            </tr>
+                <tr id="field_storedisplaythumbnail">
+                <td class="rt_fname">storedisplaythumbnail</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Display Thumbnail</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select an image from your file cabinet you want to use as the thumbnail image for this item.
+
+This image shows with this item before a customer clicks the item for more information.
+
+Upload images at Lists &gt; Web Site &gt; Images.
+
+You can automatically resize images less than 5 megapixels in size at Setup &gt; Web Site &gt; Image Resizing.</td>
+            </tr>
+                <tr id="field_storeitemtemplate">
+                <td class="rt_fname">storeitemtemplate</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Item Drilldown Template</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">If you have created an item template to display this item in your Web site, select the template here.
+
+Create item templates at Lists &gt; Item Templates.
+
+You can set an item template for all your items at Setup &gt; Site Templates &gt; Body.</td>
+            </tr>
+                <tr id="field_subsidiary">
+                <td class="rt_fname">subsidiary</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Subsidiary</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select one or multiple subsidiaries.
+To select multiple subsidiaries, press and hold the Ctrl key while selecting each subsidiary.
+A subsidiary must be associated with an item in order for the item to be added to a transaction related to that Subsidiary.
+
+For example, you can enter a sales order and select the Wolfe US subsidiary on the transaction. When you select an item to add to the sales order, only items associated with Wolfe US can be added to the sales order.</td>
+            </tr>
+                <tr id="field_subtype">
+                <td class="rt_fname">subtype</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel"></td>
+                <td class="rt_freq">false</td>                
+							<td class="rt_fhelp"></td>
+            </tr>
+                <tr id="field_taxschedule">
+                <td class="rt_fname">taxschedule</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Tax Schedule</td>
+                <td class="rt_freq">true</td>                
+<td class="rt_fhelp">Select the tax schedule you want to apply to this item.
+
+You can create new tax schedules at Setup &gt; Accounting &gt; Taxes &gt; Tax Schedules &gt; New.</td>
+            </tr>
+                <tr id="field_upccode">
+                <td class="rt_fname">upccode</td>
+                <td class="rt_ftype">text</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">UPC Code</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a maximum of 999 characters in this field to identify an internal name or number to store the item's UPC Code. You can use the text you enter here when adding the item to transactions, searching, or viewing reports.
+    * When you enter text in this field, the SKU/UPC field on item labels displays this UPC Code and prints in UPC bar code format.
+    * When this field is clear, the SKU/UPC field on item labels displays the Item Name/Number and prints in Code-128 bar code format.</td>
+            </tr>
+                <tr id="field_urlcomponent">
+                <td class="rt_fname">urlcomponent</td>
+                <td class="rt_ftype">textarea</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">URL Component</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter a short, descriptive name for this item to appear as part of its URL in the Web store.
+
+Setting a name to show in the URL can result in better ranking from search engines.
+
+If you leave this field blank, NetSuite terms and numbers are used as identifiers in the URL.
+
+Note: Descriptive URL components are case sensitive. Descriptive URLs must match the case used in the URL Component field of an item record to point to the correct page.</td>
+            </tr>
+                <tr id="field_usemarginalrates">
+                <td class="rt_fname">usemarginalrates</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Use Marginal Rates</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box if you want the quantity discounts in the schedule to be applied to each pricing bracket separately.
+
+For example, a schedule offers no discount for the first 100 items sold and a 5% discount if more than 100 are sold. If 150 items are sold, the first 100 are at normal price, and the other fifty items are sold at 5% discount.
+
+Leave this box clear if you want the discount to apply to all of the items sold.</td>
+            </tr>
+                <tr id="field_vsoedeferral">
+                <td class="rt_fname">vsoedeferral</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Deferral</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">In the Deferral field, choose how to handle deferment when this item is sold as part of a bundle:
+
+    * Defer Bundle Until Delivered – Until this item is marked delivered, item revenue recognition in the bundle is deferred.
+
+      A typical use for this option is to identify items whose revenue recognition depends on the delivery of the item in addition to the delivery of a separate service. For example, a specified upgrade would typically be marked Defer Bundle Until Delivered.
+
+    * Defer Until Item Delivered – Until this item is marked delivered, the item revenue recognition is deferred. This is the default field setting.
+
+Note: The deferral setting you choose for each item in a bundle works with the deferral settings for other items in the bundle.</td>
+            </tr>
+                <tr id="field_vsoedelivered">
+                <td class="rt_fname">vsoedelivered</td>
+                <td class="rt_ftype">checkbox</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Default as Delivered</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Check this box to automatically set this item to a Delivered status when this item is added to a transaction. Clear this box to leave the delivery status clear by default.</td>
+            </tr>
+                <tr id="field_vsoepermitdiscount">
+                <td class="rt_fname">vsoepermitdiscount</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Permit Discount</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Choose from the following options to determine how discounts are handled for this item.
+    * As Allowed - Allows a portion of an applicable discount to be applied against this item if its status is delivered when revenue allocation is performed.
+    * Never - Prevents a discount from being applied against this item when revenue allocation is performed.
+
+When you use advanced revenue management, items with VSOE values never permit discount if the residual method is used.</td>
+            </tr>
+                <tr id="field_vsoeprice">
+                <td class="rt_fname">vsoeprice</td>
+                <td class="rt_ftype">currency2</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">VSOE Price</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Enter the VSOE Price for this item if it is known.
+
+Note: If you need to use more than one VSOE price for an item, you can set the most common price here and then change the price on each order manually.</td>
+            </tr>
+                <tr id="field_vsoesopgroup">
+                <td class="rt_fname">vsoesopgroup</td>
+                <td class="rt_ftype">select</td>
+                <td class="rt_fdle">false</td>
+                <td class="rt_flabel">Allocation Type</td>
+                <td class="rt_freq">false</td>                
+<td class="rt_fhelp">Select an allocation type to associate with this item on sales transactions.
+
+    * Normal - Revenue allocation follows EITF 08-01 rules when you use VSOE and the fair value price list with advanced revenue management.
+    * Exclude - This item is excluded from revenue allocation. The item discounted sales amount is the revenue amount.
+    * Software - The item is software. When you use VSOE with the EITF SuiteApp, both EITF 08-01 and SOP 97-2 rules apply for revenue allocation. When you use advanced revenue management, revenue allocation follows the fair value price list. Then if the fair value prices for any of the items in the allocation are estimates rather than VSOE, the allocation is recalculated using the residual method.
+
+Note: Do not select the Software value unless you are using VSOE with the EITF SuiteApp or Advanced Revenue Management.</td>
+            </tr>
+        </table>
+
+        <H2>Sublists</H2>
+            <H4>
+            <span id="field_accountingbookdetail_">accountingbookdetail - Accounting Books</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_accountingbookdetail_accountingbook">
+                        <td class="rt_sname">accountingbook</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Accounting Book</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_amortizationtemplate">
+                        <td class="rt_sname">amortizationtemplate</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Amortization Template</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_createrevenueplanson">
+                        <td class="rt_sname">createrevenueplanson</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Create Revenue Plans On</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_revenuerecognitionrule">
+                        <td class="rt_sname">revenuerecognitionrule</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Revenue Recognition Rule</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_revrecforecastrule">
+                        <td class="rt_sname">revrecforecastrule</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Rev Rec Forecast Rule</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_revrecschedule">
+                        <td class="rt_sname">revrecschedule</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Revenue Recognition Template</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_sameasprimaryamortization">
+                        <td class="rt_sname">sameasprimaryamortization</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Same as Primary Book Amortization</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_accountingbookdetail_sameasprimaryrevrec">
+                        <td class="rt_sname">sameasprimaryrevrec</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Same as Primary Book Rev Rec</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_price1_">price1 - US Dollar</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_price1_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price1_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price1_discountdisplay">
+                        <td class="rt_sname">discountdisplay</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price1_pricelevel">
+                        <td class="rt_sname">pricelevel</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Price Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_price2_">price2 - British pound</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_price2_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price2_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price2_discountdisplay">
+                        <td class="rt_sname">discountdisplay</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price2_pricelevel">
+                        <td class="rt_sname">pricelevel</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Price Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_price3_">price3 - Canadian Dollar</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_price3_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price3_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price3_discountdisplay">
+                        <td class="rt_sname">discountdisplay</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price3_pricelevel">
+                        <td class="rt_sname">pricelevel</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Price Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_price4_">price4 - Euro</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_price4_currency">
+                        <td class="rt_sname">currency</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Currency</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price4_discount">
+                        <td class="rt_sname">discount</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price4_discountdisplay">
+                        <td class="rt_sname">discountdisplay</td>
+                        <td class="rt_stype">percent</td>
+                        <td class="rt_slabel">Default Discount %</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_price4_pricelevel">
+                        <td class="rt_sname">pricelevel</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Price Level</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_sitecategory_">sitecategory - Web Site List</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_sitecategory_category">
+                        <td class="rt_sname">category</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Site Category</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_sitecategory_categorydescription">
+                        <td class="rt_sname">categorydescription</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_sitecategory_isdefault">
+                        <td class="rt_sname">isdefault</td>
+                        <td class="rt_stype">checkbox</td>
+                        <td class="rt_slabel">Preferred Category</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_sitecategory_website">
+                        <td class="rt_sname">website</td>
+                        <td class="rt_stype">select</td>
+                        <td class="rt_slabel">Site</td>
+                        <td class="rt_sreq">true</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+            <H4>
+            <span id="field_translations_">translations - Item Translation</span></H4>
+                <table class="jtable">
+                    <tr>
+                        <th class="rt_sname">Internal ID</th>
+                        <th class="rt_stype">Type</th>
+                        <th class="rt_slabel">Label</th>
+                        <th class="rt_sreq">Required</th>
+                        <th class="rt_shelp">Help</th>
+                    </tr>
+                        <tr id="field_translations_displayname">
+                        <td class="rt_sname">displayname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Display Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_featureddescription">
+                        <td class="rt_sname">featureddescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Featured Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_language">
+                        <td class="rt_sname">language</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Language</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_locale">
+                        <td class="rt_sname">locale</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel"></td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_nopricemessage">
+                        <td class="rt_sname">nopricemessage</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">No Price Message</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_outofstockmessage">
+                        <td class="rt_sname">outofstockmessage</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Out Of Stock Message</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_pagetitle">
+                        <td class="rt_sname">pagetitle</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Page Title</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_salesdescription">
+                        <td class="rt_sname">salesdescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Sales Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedescription">
+                        <td class="rt_sname">storedescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Store Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedetaileddescription">
+                        <td class="rt_sname">storedetaileddescription</td>
+                        <td class="rt_stype">textarea</td>
+                        <td class="rt_slabel">Detailed Description</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                        <tr id="field_translations_storedisplayname">
+                        <td class="rt_sname">storedisplayname</td>
+                        <td class="rt_stype">text</td>
+                        <td class="rt_slabel">Store Display Name</td>
+                        <td class="rt_sreq">false</td>
+                        <td class="rt_shelp">
+
+                        </td>
+                    </tr>
+                </table>
+
+        <H2>Tabs</H2>
+        <table class="jtable" id="tabs">
+            <tr>
+                <th class="rt_tname">Name</th>
+                <th class="rt_tlabel">Label</th>
+            </tr>
+                <tr id="tab_basic">
+                <td class="rt_tname">basic</td>
+                <td class="rt_tlabel">Basic</td>
+            </tr>
+                <tr id="tab_custom">
+                <td class="rt_tname">custom</td>
+                <td class="rt_tlabel">Custom</td>
+            </tr>
+                <tr id="tab_history">
+                <td class="rt_tname">history</td>
+                <td class="rt_tlabel">History</td>
+            </tr>
+                <tr id="tab_matrix">
+                <td class="rt_tname">matrix</td>
+                <td class="rt_tlabel">Matrix</td>
+            </tr>
+                <tr id="tab_pricing">
+                <td class="rt_tname">pricing</td>
+                <td class="rt_tlabel">Pricing</td>
+            </tr>
+                <tr id="tab_projects">
+                <td class="rt_tname">projects</td>
+                <td class="rt_tlabel">Projects</td>
+            </tr>
+                <tr id="tab_relitems">
+                <td class="rt_tname">relitems</td>
+                <td class="rt_tlabel">Related Items</td>
+            </tr>
+                <tr id="tab_specials">
+                <td class="rt_tname">specials</td>
+                <td class="rt_tlabel">Specials</td>
+            </tr>
+                <tr id="tab_store">
+                <td class="rt_tname">store</td>
+                <td class="rt_tlabel">Store</td>
+            </tr>
+                <tr id="tab_translation">
+                <td class="rt_tname">translation</td>
+                <td class="rt_tlabel">Translation</td>
+            </tr>
+                <tr id="tab_vsoepricing">
+                <td class="rt_tname">vsoepricing</td>
+                <td class="rt_tlabel">Rev Rec / Amort</td>
+            </tr>
+                <tr id="tab_workflow">
+                <td class="rt_tname">workflow</td>
+                <td class="rt_tlabel">Workflow</td>
+            </tr>
+        </table>
+
+        <H2>Search Data</H2>
+        <H3><a href="item.html">Item</a></H3>
+
+    <p>&nbsp;</p>
+</div>
+    <script>
+         $(function() {
+             wrapBodyDiv('script','contentPanel','../..');
+         });
+    </script>
+
+</body>
+</html>

@@ -6,6 +6,9 @@ gem 'simplecov', :require => false
 gem 'pry-nav'
 gem 'pry-rescue'
 
+# Rack 3 removed Rack::Utils::HeaderHash, which httpi (via savon) still uses.
+gem 'rack', '< 3'
+
 
 if ENV.fetch('BUNDLE_TZINFO', 'false') == 'true'
   # optional dependency for more accurate timezone conversion
