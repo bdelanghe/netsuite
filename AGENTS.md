@@ -87,6 +87,36 @@ bd automatically syncs with git:
 
 For more details, see README.md and docs/QUICKSTART.md.
 
+### Operational Rules for AI Agents
+
+- ✅ Do NOT use `bd edit` (interactive editor). Use `bd update` flags instead.
+- ✅ After making any bd changes, run `bd sync` to flush JSONL and git.
+- ✅ For manual bd testing, use an isolated DB: `BEADS_DB=/tmp/test.db`.
+- ✅ When committing work for an issue, include the issue ID in the commit message, e.g. `Fix flaky spec (bd-123)`.
+
+### Troubleshooting and Debugging
+
+- ✅ Enable debug logs with env vars when diagnosing issues:
+- `BD_DEBUG` (general), `BD_DEBUG_RPC` (daemon RPC), `BD_DEBUG_SYNC` (sync/import), `BD_DEBUG_FRESHNESS` (db file replacement, daemon logs).
+- ✅ Capture debug output to a file when needed: `BD_DEBUG=1 bd sync 2> debug.log`.
+- ✅ Daemon logs live in `.beads/daemon.log` (use `tail -f .beads/daemon.log`).
+- ✅ In sandboxed environments, use `bd --sandbox` to avoid daemon/staleness issues; run `bd sync` after leaving sandbox.
+
+### Architecture (Quick Understanding)
+
+- ✅ Three-layer model: CLI → local SQLite (`.beads/beads.db`) → git-tracked JSONL (`.beads/issues.jsonl`) → remote git.
+- ✅ SQLite is fast local cache; JSONL is the source of truth shared via git.
+- ✅ Daemon batches writes (default 5s debounce) and manages auto-export/import.
+- ✅ Hash-based IDs prevent collisions across branches and agents.
+- ✅ Protected-branch workflow uses `sync.branch` (this repo sets `beads-sync`) to keep metadata off `main`.
+
+### Configuration Notes
+
+- ✅ Tool-level config (Viper) uses flags/env/`.beads/config.yaml` for CLI behavior; project-level config uses `bd config` keys stored in the DB.
+- ✅ Prefer `bd config set|get|list` over manual YAML edits for project settings.
+- ✅ `sync.branch` controls protected-branch workflow; `flush-debounce` controls auto-export batching.
+- ✅ Actor resolution order: `--actor` → `BD_ACTOR` → `BEADS_ACTOR` → `git config user.name` → `$USER`.
+
 <!-- END BEADS INTEGRATION -->
 
 
