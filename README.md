@@ -47,6 +47,8 @@ bundle
 bundle exec rspec
 ```
 
+Integration tests (live NetSuite calls) are opt-in. To run them, set `NETSUITE_INTEGRATION=true` and ensure valid NetSuite credentials/config are available.
+
 # Installation
 
 Add this line to your application's Gemfile:

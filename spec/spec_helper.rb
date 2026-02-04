@@ -20,4 +20,7 @@ Dir['spec/support/**/*.rb'].each { |f| require f }
 RSpec.configure do |config|
   config.mock_framework = :rspec
   config.color = true
+
+  # Keep integration tests opt-in to avoid live NetSuite calls by default.
+  config.filter_run_excluding integration: true unless ENV['NETSUITE_INTEGRATION'] == 'true'
 end
