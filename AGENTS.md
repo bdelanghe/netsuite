@@ -124,6 +124,10 @@ For more details, see README.md and docs/QUICKSTART.md.
 - ✅ Dependencies: `bd dep add <child> <parent> --type discovered-from`, or `bd create ... --deps discovered-from:<parent> --json`.
 - ✅ Global flags (prefix before command): `--json`, `--no-daemon`, `--no-auto-flush`, `--no-auto-import`, `--sandbox`, `--allow-stale`.
 
+### Git Workflow Reference
+
+- ✅ See `workflow.md` for git integration, worktrees, merge driver, hooks, and protected-branch workflow.
+
 <!-- END BEADS INTEGRATION -->
 
 
