@@ -50,6 +50,8 @@ describe NetSuite::Actions::Login do
       token_secret '123'
 
       api_version '2017_2'
+      # Keep tests offline by using the local WSDL fixture.
+      wsdl File.expand_path('../../support/2015.wsdl', __dir__)
     end
 
     message = {"platformMsgs:passport"=>{"platformCore:email"=>"email", "platformCore:password"=>"password", "platformCore:account"=>"1234", "platformCore:role"=>234}}
