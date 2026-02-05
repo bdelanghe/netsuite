@@ -5,7 +5,8 @@ RSpec.configure do |config|
       email    'me@example.com'
       password 'myPassword'
       account  1234
-      wsdl     File.expand_path('../2015.wsdl', __FILE__)
+      # Keep tests offline by using the local WSDL fixture.
+      wsdl     File.expand_path('2015.wsdl', __dir__)
     end
   end
 end
