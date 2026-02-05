@@ -5,6 +5,24 @@
 > [!WARNING]  
 > I ([@ilovetaly](https://github.com/iloveitaly) am not actively using this gem for any projects (I'm using [this python package](https://github.com/jacobsvante/netsuite) instead) and do not have time for further maintenance. I'll need monthly sponsors, paid consulting around this gem, or if anyone else wants to help with maintenance, please drop me a note. Apologies!
 
+# Important: SOAP Web Services Deprecation
+
+Oracle NetSuite has scheduled the gradual removal of SOAP web services from the product as part of ongoing efforts to provide modern integration channels.
+
+The 2025.2 SOAP endpoint is the last planned SOAP endpoint and any later SOAP endpoints would be released only as necessary to meet business, technical, or other significant requirements.
+
+The support period of older endpoints is also affected and with the 2027.1 release, only the 2025.2 endpoint will be supported. With the 2028.2 release, SOAP will no longer be available in NetSuite and existing SOAP integrations with NetSuite will stop working.
+
+For more details, see the Removal of SOAP Web Services and the SOAP Removal Plans FAQ. For a list of the currently supported endpoints, see Support for Existing WSDL Versions.
+
+SuiteTalk REST web services is the technology intended to replace SOAP. All newly built integrations should use REST web services with OAuth 2.0 for authentication.
+
+For any custom integration applications that you have developed using SOAP, you should start planning the migration of your solution to REST as soon as possible. For a detailed guide for the migration, see SOAP Web Services To Rest Web Services Upgrade Guide.
+
+If you use a partner SOAP application to integrate with NetSuite, consult with your partner to provide you with a REST-based application instead.
+
+If you use an Oracle NetSuite integration application, a REST-based application will be provided by Oracle NetSuite.
+
 # NetSuite SuiteTalk API Ruby Gem
 
 * This gem will act as a wrapper around the NetSuite SuiteTalk Web Services API.
@@ -28,6 +46,8 @@ cd netsuite
 bundle
 bundle exec rspec
 ```
+
+Integration tests (live NetSuite calls) are opt-in. To run them, set `NETSUITE_INTEGRATION=true` and ensure valid NetSuite credentials/config are available.
 
 # Installation
 
