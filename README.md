@@ -57,24 +57,12 @@ See [docs/configuration.md](docs/configuration.md) for all options (WSDL, sandbo
 
 ## Async bulk operations
 
-Submit a job, poll for status, fetch results by page.
-
-```ruby
-records = 100.times.map { |i| NetSuite::Records::Customer.new(entity_id: "Bulk-#{i}") }
-result  = NetSuite::Records::Customer.async_add_list(records)
-job_id  = result[:job_id]
-
-status = NetSuite::Actions::CheckAsyncStatus.call([job_id])
-sleep 2 until %w[finished failed].include?(status.body[:status])
-
-response = NetSuite::Actions::GetAsyncResult.call([job_id, 1])
-```
-
-Available: `AsyncAddList` (400), `AsyncUpdateList` (200), `AsyncUpsertList` (200), `AsyncDeleteList` (400), `AsyncGetList` (2000), `AsyncSearch`, `AsyncInitializeList`. Numbers are max records per job.
+For large operations, submit a job and poll for results rather than waiting on a single long-running request. See [docs/async.md](docs/async.md).
 
 ## Documentation
 
 - [Configuration](docs/configuration.md) — WSDL, auth, sandbox, multi-tenancy
+- [Async bulk operations](docs/async.md) — submit/poll/fetch pattern, available operations
 - [Usage](docs/usage.md) — CRUD, search, custom records, null fields, files
 - [Contributing](docs/contributing.md) — Testing, development setup
 
