@@ -3,6 +3,7 @@ name: Publish Gem
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -28,7 +29,9 @@ jobs:
           mkdir -p $HOME/.gem
           touch $HOME/.gem/credentials
           chmod 0600 $HOME/.gem/credentials
-          printf -- "---\n:github: Bearer ${GH_TOKEN}\n" >> $HOME/.gem/credentials
+          printf -- "---
+:github: Bearer ${GH_TOKEN}
+" >> $HOME/.gem/credentials
           gem push --key github --host https://rubygems.pkg.github.com/${OWNER} *.gem
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
