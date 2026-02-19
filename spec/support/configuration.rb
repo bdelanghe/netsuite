@@ -1,3 +1,5 @@
+NETSUITE_WSDL_FIXTURE = File.expand_path('fixtures/soap/v2021_1_0/wsdl/netsuite.wsdl', __dir__).freeze
+
 RSpec.configure do |config|
   config.before do
     NetSuite.configure do
@@ -5,8 +7,7 @@ RSpec.configure do |config|
       email    'me@example.com'
       password 'myPassword'
       account  1234
-      # Keep tests offline by using the local WSDL fixture.
-      wsdl     File.expand_path('2015.wsdl', __dir__)
+      wsdl     NETSUITE_WSDL_FIXTURE
     end
   end
 end

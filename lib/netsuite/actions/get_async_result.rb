@@ -5,22 +5,18 @@ module NetSuite
       include Support::Requests
       include AsyncResponse
 
-      def initialize(job_id, options = {})
+      def initialize(job_id, page_index)
         @job_id = job_id
-        @options = options
+        @page_index = page_index
       end
 
       private
 
       def request_body
-        body = {
-          'platformMsgs:jobId' => @job_id
+        {
+          'platformMsgs:jobId'    => @job_id,
+          'platformMsgs:pageIndex' => @page_index
         }
-
-        page_index = @options[:page_index] || @options[:pageIndex]
-        body['platformMsgs:pageIndex'] = page_index if page_index
-
-        body
       end
 
       def async_response_key
