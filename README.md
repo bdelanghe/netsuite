@@ -1,6 +1,6 @@
 [![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
 [![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
-![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bdelanghe/<GIST_ID>/raw/coverage.json)
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bdelanghe/4149021c7a5259e5d3299d00287fd1cc/raw/coverage.json)
 
 # NetSuite SuiteTalk API Ruby Gem (netsuite-async-list)
 
