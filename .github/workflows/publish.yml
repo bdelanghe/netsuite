@@ -11,6 +11,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v4
@@ -24,14 +26,17 @@ jobs:
       - name: Build gem
         run: gem build netsuite.gemspec
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: '*.gem'
+
       - name: Publish to GitHub Packages
         run: |
           mkdir -p $HOME/.gem
           touch $HOME/.gem/credentials
           chmod 0600 $HOME/.gem/credentials
-          printf -- "---
-:github: Bearer ${GH_TOKEN}
-" >> $HOME/.gem/credentials
+          printf -- "---\n:github: Bearer ${GH_TOKEN}\n" >> $HOME/.gem/credentials
           gem push --key github --host https://rubygems.pkg.github.com/${OWNER} *.gem
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
