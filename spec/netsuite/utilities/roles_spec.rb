@@ -23,7 +23,7 @@ describe NetSuite::Rest::Utilities::Roles do
       allow( NetSuite::Rest::Utilities::Request ).to receive(:get).and_return(
         ["500", {oh: :no!}]
       )
-      expect( subject ).to_not receive(:format_reponse)
+      expect( subject ).to_not receive(:format_response)
       expect( subject.get(email: 'jimbob@netzero.com', password: 'pickles') ).to eq({oh: :no!})
     end
   end

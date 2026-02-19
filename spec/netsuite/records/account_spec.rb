@@ -20,20 +20,8 @@ describe NetSuite::Records::Account do
     end
   end
 
-  describe '#subsidiary_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RecordRefList object'
-  end
 
-  describe '#translations_list' do
-    it 'can be set from attributes'
-    it 'can be set from an AccountTranslationList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

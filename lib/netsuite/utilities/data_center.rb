@@ -29,13 +29,9 @@ module NetSuite
           end
 
           def make_data_center_call(netsuite_account)
-            NetSuite::Configuration.connection({}, {
-              email: '',
-              password: '',
-              account: ''
-            }).call(:get_data_center_urls, message: {
+            NetSuite::Client.call(:get_data_center_urls, message: {
               'platformMsgs:account' => netsuite_account
-            })
+            }, credentials: { email: '', password: '', account: '' })
             # allow errors to bubble up, log if patterns emerge
           end
 

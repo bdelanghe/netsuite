@@ -1,20 +1,19 @@
 source 'https://rubygems.org'
 gemspec
 
-gem 'simplecov', :require => false
+ruby '>= 3.1.0'
 
-gem 'pry-nav'
-gem 'pry-rescue'
+gem 'rubyzip'
 
+# rack < 3 is intentional: httpi (savon's HTTP layer) is not yet Rack 3 compatible.
+# Track: https://github.com/bdelanghe/netsuite/issues/2
+gem 'rack', '< 3'
 
-if ENV.fetch('BUNDLE_TZINFO', 'false') == 'true'
-  # optional dependency for more accurate timezone conversion
-  gem 'tzinfo', '>= 1.2.5'
-end
+gem 'mail', '~> 2.9'
+gem 'tzinfo', '>= 1.2.5'
 
-if RUBY_VERSION >= '3.1.0'
-  # Savon v2.13 adds a dependency on mail, which has an implicit dependency on
-  # net-smtp. Ruby 3.1 removed net-smtp as a default gem. mail v2.8.0.rc1 is the
-  # first to make that dependency explicit to support Ruby 3.1.
-  gem 'mail', '>= 2.8.0.rc1'
+group :development, :test do
+  gem 'simplecov', require: false
+  gem 'pry-nav'
+  gem 'pry-rescue'
 end

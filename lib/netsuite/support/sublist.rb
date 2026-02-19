@@ -12,7 +12,7 @@ module NetSuite
       class << self
 
         def sublist(key, klass)
-          field key
+          fields << key.to_sym
 
           # TODO setting class methods might be better? How to reach into the subclass?
 

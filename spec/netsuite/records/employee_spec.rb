@@ -27,10 +27,6 @@ describe NetSuite::Records::Employee do
     end
   end
 
-  describe '#roles_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RoleList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

@@ -13,7 +13,7 @@ module NetSuite
 
       def request_body
         # list of all netsuite types; useful for debugging
-        # https://webservices.netsuite.com/xsd/platform/v2014_1_0/coreTypes.xsd
+        # https://webservices.netsuite.com/xsd/platform/v2025_2_0/coreTypes.xsd
 
         list = @options.is_a?(Hash) ? @options[:list] : @options
 

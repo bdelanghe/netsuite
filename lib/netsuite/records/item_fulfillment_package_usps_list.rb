@@ -5,7 +5,7 @@ module NetSuite
       include Support::Records
       include Namespaces::TranSales
 
-      fields :package_usps
+      fields << :package_usps
 
       def initialize(attributes = {})
         initialize_from_attributes_hash(attributes)

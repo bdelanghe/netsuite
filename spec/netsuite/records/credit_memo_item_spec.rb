@@ -23,19 +23,7 @@ describe NetSuite::Records::CreditMemoItem do
     end
   end
 
-  describe '#options' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
-  describe '#inventory_detail' do
-    it 'can be set from attributes'
-    it 'can be set from an InventoryDetail object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
 end

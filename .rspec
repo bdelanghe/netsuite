@@ -1,2 +1,6 @@
 --color
 --order rand
+--fail-fast
+--profile 10
+--warnings
+--format documentation

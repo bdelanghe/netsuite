@@ -68,10 +68,10 @@ describe NetSuite::Records::Vendor do
 
       it 'raises a RecordNotFound exception' do
         expect(NetSuite::Actions::Get).to receive(:call).with([NetSuite::Records::Vendor, { :external_id => 1 }], {}).and_return(response)
-        expect(lambda {
+        expect {
           NetSuite::Records::Vendor.get(:external_id => 1)
-        }).to raise_error(NetSuite::RecordNotFound,
-                             /NetSuite::Records::Vendor with OPTIONS=(.*) could not be found/)
+        }.to raise_error(NetSuite::RecordNotFound,
+                         /NetSuite::Records::Vendor with OPTIONS=(.*) could not be found/)
       end
     end
   end

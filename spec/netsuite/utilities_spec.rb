@@ -5,7 +5,6 @@ describe NetSuite::Utilities do
     it '#normalize_time_to_netsuite_date' do
       ['Etc/UTC', 'America/Los_Angeles', 'America/Denver'].each do |zone|
         ENV['TZ'] = zone
-        puts "In zone: #{zone}"
 
         stamp = DateTime.parse('Wed, 27 Jul 2016 00:00:00 -0000')
         formatted_date = NetSuite::Utilities.normalize_time_to_netsuite_date(stamp.to_time.to_i)
@@ -31,6 +30,38 @@ describe NetSuite::Utilities do
   end
 
   it "#netsuite_data_center_urls" do
+    # Avoid live NetSuite calls in tests by stubbing the SOAP client response.
+    fake_client = double('Savon client')
+    allow(fake_client).to receive(:call) do |action, message:|
+      account = message['platformMsgs:account']
+      data_center_urls = case account
+                         when 'TSTDRV1576318'
+                           {
+                             webservices_domain: 'https://tstdrv1576318.suitetalk.api.netsuite.com',
+                             system_domain: 'https://tstdrv1576318.app.netsuite.com'
+                           }
+                         when '4810331'
+                           {
+                             webservices_domain: 'https://4810331.suitetalk.api.netsuite.com',
+                             system_domain: 'https://4810331.app.netsuite.com'
+                           }
+                         else
+                           { webservices_domain: nil, system_domain: nil }
+                         end
+
+      double(
+        success?: true,
+        body: {
+          get_data_center_urls_response: {
+            get_data_center_urls_result: {
+              data_center_urls: data_center_urls
+            }
+          }
+        }
+      )
+    end
+    allow(NetSuite::Configuration).to receive(:connection).and_return(fake_client)
+
     domains = NetSuite::Utilities.netsuite_data_center_urls('TSTDRV1576318')
     expect(domains[:webservices_domain]).to eq('https://tstdrv1576318.suitetalk.api.netsuite.com')
     expect(domains[:system_domain]).to eq('https://tstdrv1576318.app.netsuite.com')
@@ -47,7 +78,7 @@ describe NetSuite::Utilities do
 
     NetSuite.configure do
       reset!
-      api_version '2015_1'
+      api_version '2025_2'
     end
 
     domains = NetSuite::Utilities.netsuite_data_center_urls('TSTDRV1576318')

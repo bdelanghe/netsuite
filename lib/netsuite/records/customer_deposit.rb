@@ -24,8 +24,7 @@ module NetSuite
       record_refs :customer, :sales_order, :account, :department,
         :payment_method, :payment_option, :custom_form, :currency,
         :posting_period, :subsidiary, :location, :klass
-        # only available in an advanced search result
-        :deposit_transaction
+      # :deposit_transaction only available in an advanced search result
 
       attr_reader :internal_id
       attr_accessor :external_id

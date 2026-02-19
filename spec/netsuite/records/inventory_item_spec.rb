@@ -320,25 +320,9 @@ describe NetSuite::Records::InventoryItem do
     end
   end
 
-  describe '#pricing_matrix' do
-    it 'can be set from attributes'
-    it 'can be set from a PricingMatrix object'
-  end
 
-  describe '#product_feed_list' do
-    it 'can be set from attributes'
-    it 'can be set from a ProductFeedList object'
-  end
 
-  describe '#subsidiary_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RecordRefList object'
-  end
 
-  describe '#item_options_list' do
-    it 'can be set from attributes'
-    it 'can be set from a ItemOptionsList object'
-  end
 
   describe '#item_vendor_list' do
     it 'can be set from attributes' do
@@ -346,7 +330,7 @@ describe NetSuite::Records::InventoryItem do
         :item_vendor => {
           :vendor=>{
             :name=>"Spring Water",
-            :"@xmlns:platform_core"=>"urn:core_2016_1.platform.webservices.netsuite.com",
+            :"@xmlns:platform_core"=>"urn:core_2025_2.platform.webservices.netsuite.com",
             :@internal_id=>"20"
           },
          :purchase_price=>"16.14",
@@ -366,20 +350,8 @@ describe NetSuite::Records::InventoryItem do
     end
   end
 
-  describe '#site_category_list' do
-    it 'can be set from attributes'
-    it 'can be set from a SiteCategoryList object'
-  end
 
-  describe '#translations_list' do
-    it 'can be set from attributes'
-    it 'can be set from a TranslationList object'
-  end
 
-  describe '#bin_number_list' do
-    it 'can be set from attributes'
-    it 'can be set from an InventoryItemBinNumberList object'
-  end
 
   describe '#locations_list' do
     let(:response) {
@@ -391,7 +363,6 @@ describe NetSuite::Records::InventoryItem do
       )
     }
 
-    it 'can be set from attributes'
     it 'can be set from an InventoryItemLocationsList object' do
       expect(NetSuite::Actions::Get).to receive(:call)
         .with([NetSuite::Records::InventoryItem, :internal_id => 20], {})
@@ -402,20 +373,8 @@ describe NetSuite::Records::InventoryItem do
     end
   end
 
-  describe '#matrix_option_list' do
-    it 'can be set from attributes'
-    it 'can be set from a MatrixOptionList object'
-  end
 
-  describe '#presentation_item_list' do
-    it 'can be set from attributes'
-    it 'can be set from a PresentationItemList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

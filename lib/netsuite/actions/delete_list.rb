@@ -53,7 +53,7 @@ module NetSuite
       end
 
       def success?
-        @success ||= response_errors.blank?
+        @success ||= response_errors.nil? || response_errors.empty?
       end
 
       def response_errors
@@ -99,7 +99,7 @@ module NetSuite
 
         module ClassMethods
           def delete_list(options = { }, credentials={})
-            response = NetSuite::Actions::DeleteList.call([self, options], credentials)
+            NetSuite::Actions::DeleteList.call([self, options], credentials)
           end
         end
       end

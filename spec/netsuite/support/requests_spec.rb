@@ -1,11 +1,16 @@
 require 'spec_helper'
 
 describe NetSuite::Support::Requests do
-  let(:instance) do
-    obj = Object.new
-    obj.extend(NetSuite::Support::Requests)
-    obj
+  # Minimal class that implements the interface so partial-double stubs are valid.
+  let(:requestable_class) do
+    Class.new do
+      include NetSuite::Support::Requests
+      def request(*) end
+      def success?; true; end
+      def response_body; {}; end
+    end
   end
+  let(:instance) { requestable_class.new }
 
   describe '#call' do
     before do
