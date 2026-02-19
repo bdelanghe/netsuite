@@ -4,8 +4,6 @@ module NetSuite
     class Upsert < AbstractAction
       include Support::Requests
 
-      attr_reader :response_hash
-
       def initialize(object = nil)
         @object = object
       end

@@ -269,7 +269,7 @@ describe NetSuite::Records::CustomFieldList do
 
     # https://github.com/NetSweet/netsuite/issues/182
     it 'handles custom fields without an internalId or scriptId' do
-      custom_list = NetSuite::Records::CustomFieldList.new({custom_field: { '@xsi:type' => 'platformCore:StringCustomFieldRef' }})
+      NetSuite::Records::CustomFieldList.new({custom_field: { '@xsi:type' => 'platformCore:StringCustomFieldRef' }})
     end
   end
 

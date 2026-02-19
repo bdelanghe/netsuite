@@ -3,7 +3,6 @@
 .bundle
 .config
 .beads
-schema_browser/
 .yardoc
 Gemfile.lock
 InstalledFiles

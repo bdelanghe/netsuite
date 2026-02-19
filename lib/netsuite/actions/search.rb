@@ -242,10 +242,10 @@ module NetSuite
       end
 
       module Support
+        attr_accessor :search_joins
+
         def self.included(base)
           base.extend(ClassMethods)
-
-          attr_accessor :search_joins
         end
 
         module ClassMethods

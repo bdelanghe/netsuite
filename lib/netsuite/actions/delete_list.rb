@@ -99,7 +99,7 @@ module NetSuite
 
         module ClassMethods
           def delete_list(options = { }, credentials={})
-            response = NetSuite::Actions::DeleteList.call([self, options], credentials)
+            NetSuite::Actions::DeleteList.call([self, options], credentials)
           end
         end
       end

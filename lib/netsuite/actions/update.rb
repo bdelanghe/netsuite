@@ -4,8 +4,6 @@ module NetSuite
     class Update < AbstractAction
       include Support::Requests
 
-      attr_reader :response_hash
-
       def initialize(klass, attributes)
         @klass      = klass
         @attributes = attributes
