@@ -2,6 +2,9 @@ name: Ruby
 
 on: [push, pull_request]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,13 +33,23 @@ jobs:
           fi
       - name: Upload coverage badge
         if: steps.coverage.outputs.line && matrix.ruby-version == 3.2 && github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: schneegans/dynamic-badges-action@v1.7.0
-        with:
-          auth: ${{ secrets.GIST_TOKEN }}
-          gistID: 4149021c7a5259e5d3299d00287fd1cc
-          filename: coverage.json
-          label: coverage
-          message: ${{ steps.coverage.outputs.line }}%
-          valColorRange: ${{ steps.coverage.outputs.line }}
-          minColorRange: 50
-          maxColorRange: 90
+        run: |
+          LINE=${{ steps.coverage.outputs.line }}
+          if [ $(echo "$LINE >= 90" | bc) -eq 1 ]; then COLOR="brightgreen"
+          elif [ $(echo "$LINE >= 80" | bc) -eq 1 ]; then COLOR="green"
+          elif [ $(echo "$LINE >= 70" | bc) -eq 1 ]; then COLOR="yellowgreen"
+          elif [ $(echo "$LINE >= 60" | bc) -eq 1 ]; then COLOR="yellow"
+          elif [ $(echo "$LINE >= 50" | bc) -eq 1 ]; then COLOR="orange"
+          else COLOR="red"; fi
+
+          mkdir -p /tmp/badges
+          echo "{\"schemaVersion\":1,\"label\":\"coverage\",\"message\":\"${LINE}%\",\"color\":\"${COLOR}\"}" > /tmp/badges/coverage.json
+
+          cd /tmp/badges
+          git init
+          git checkout --orphan badges
+          git add coverage.json
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Update coverage badge: ${LINE}%"
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          git push --force origin badges
