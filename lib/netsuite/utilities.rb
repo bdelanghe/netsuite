@@ -254,7 +254,7 @@ module NetSuite
         end
 
         # sniff for an email-like input; useful for employee/customer searches
-        if !field_name && /@.*\./ =~ name
+        if !field_name && /@[^@]+\./ =~ name
           field_name = 'email'
         end
 
