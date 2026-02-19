@@ -1,6 +1,8 @@
 [![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
 [![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
 ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/bdelanghe/netsuite/badges/coverage.json)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Ruby Version](https://img.shields.io/badge/ruby-%3E%3D%203.1-red)](https://github.com/bdelanghe/netsuite/blob/main/netsuite.gemspec)
 
 # netsuite
 
