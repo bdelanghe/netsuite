@@ -38,9 +38,15 @@ end
 Dir['spec/support/**/*.rb'].each { |f| require f }
 
 RSpec.configure do |config|
-  config.mock_framework = :rspec
+  config.mock_with :rspec do |m|
+    m.verify_partial_doubles = true
+  end
   config.color = true
+  config.example_status_persistence_file_path = "tmp/rspec_examples.txt"
+  config.filter_run_when_matching :focus
 
   # Keep integration tests opt-in to avoid live NetSuite calls by default.
   config.filter_run_excluding integration: true unless ENV['NETSUITE_INTEGRATION'] == 'true'
+
+  config.before(integration: true) { WebMock.allow_net_connect! }
 end
