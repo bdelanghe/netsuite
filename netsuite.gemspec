@@ -19,7 +19,7 @@ Gem::Specification.new do |gem|
   gem.metadata['changelog_uri'] = 'https://github.com/bdelanghe/netsuite/blob/main/HISTORY.md'
   gem.metadata['mailing_list_uri'] = 'https://github.com/bdelanghe/netsuite/issues'
   gem.metadata['rubygems_mfa_required'] = 'true'
-  gem.metadata['github_repo'] = 'ssh://github.com/bdelanghe/netsuite'
+  gem.metadata['github_repo'] = 'https://github.com/bdelanghe/netsuite'
 
   gem.add_dependency 'savon', '>= 2.3.0', '!= 2.13.0'
   gem.add_dependency 'rack', '< 4'
