@@ -20,8 +20,19 @@ New integrations should use [SuiteTalk REST Web Services](https://docs.oracle.co
 
 ## Install
 
+Hosted on GitHub Packages, not RubyGems.org.
+
 ```ruby
-gem 'netsuite'
+# Gemfile
+source "https://rubygems.pkg.github.com/bdelanghe" do
+  gem "netsuite", "2025.2.1"
+end
+```
+
+Or from the command line:
+
+```shell
+gem install netsuite --version "2025.2.1" --source "https://rubygems.pkg.github.com/bdelanghe"
 ```
 
 Requires Ruby 3.1+.
