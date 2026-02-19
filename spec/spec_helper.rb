@@ -31,11 +31,20 @@ if ENV['CIRCLE_ARTIFACTS']
   dir = File.join("../../../..", ENV['CIRCLE_ARTIFACTS'], "coverage")
   SimpleCov.coverage_dir(dir)
   SimpleCov.start
+elsif ENV['COVERAGE']
+  require 'simplecov'
+  SimpleCov.start do
+    add_filter '/spec/'
+    add_filter '/vendor/'
+  end
 end
 
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
 Dir['spec/support/**/*.rb'].each { |f| require f }
+
+require "webmock/rspec"
+WebMock.disable_net_connect!(allow_localhost: true)
 
 RSpec.configure do |config|
   config.mock_with :rspec do |m|
@@ -44,9 +53,4 @@ RSpec.configure do |config|
   config.color = true
   config.example_status_persistence_file_path = "tmp/rspec_examples.txt"
   config.filter_run_when_matching :focus
-
-  # Keep integration tests opt-in to avoid live NetSuite calls by default.
-  config.filter_run_excluding integration: true unless ENV['NETSUITE_INTEGRATION'] == 'true'
-
-  config.before(integration: true) { WebMock.allow_net_connect! }
 end

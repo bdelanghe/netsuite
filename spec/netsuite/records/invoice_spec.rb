@@ -200,7 +200,7 @@ describe NetSuite::Records::Invoice do
   describe '#transaction_bill_address' do
     it 'has a transaction_bill_address field that builds a BillAddress object from attributes' do
       invoice.transaction_bill_address = {
-        :"@xmlns:platform_common" => 'urn:common_2011_2.platform.webservices.netsuite.com',
+        :"@xmlns:platform_common" => 'urn:common_2025_2.platform.webservices.netsuite.com',
         :bill_addr1               => '123 Happy Lane',
         :bill_city                => 'Los Angeles',
         :bill_country             => '_unitedStates',
@@ -221,7 +221,7 @@ describe NetSuite::Records::Invoice do
   describe '#transaction_ship_address' do
     it 'has a transaction_ship_address field that builds a ShipAddress object from attributes' do
       invoice.transaction_ship_address = {
-        :"@xmlns:platform_common" => 'urn:common_2011_2.platform.webservices.netsuite.com',
+        :"@xmlns:platform_common" => 'urn:common_2025_2.platform.webservices.netsuite.com',
         :ship_addr1               => '123 Happy Lane',
         :ship_city                => 'Los Angeles',
         :ship_country             => '_unitedStates',
@@ -253,7 +253,7 @@ describe NetSuite::Records::Invoice do
         :zip => "94131",
         :addr_text => "William Sanders<br>William Sanders<br>test1<br>test2<br>San Francisco CA 94131",
         :override => false,
-        :"@xmlns:platform_common" => "urn:common_2016_1.platform.webservices.netsuite.com"
+        :"@xmlns:platform_common" => "urn:common_2025_2.platform.webservices.netsuite.com"
       }
 
       invoice.shipping_address = attributes
@@ -281,7 +281,7 @@ describe NetSuite::Records::Invoice do
         :zip => "94131",
         :addr_text => "William Sanders<br>William Sanders<br>test1<br>test2<br>San Francisco CA 94131",
         :override => false,
-        :"@xmlns:platform_common" => "urn:common_2016_1.platform.webservices.netsuite.com"
+        :"@xmlns:platform_common" => "urn:common_2025_2.platform.webservices.netsuite.com"
       }
 
       invoice.billing_address = attributes
@@ -332,7 +332,7 @@ describe NetSuite::Records::Invoice do
               :search_row => {
                 :basic => {
                   :alt_name => {:search_value=>'A Awesome Name'},
-                  :"@xmlns:platform_common"=>'urn:common_2012_1.platform.webservices.netsuite.com'},
+                  :"@xmlns:platform_common"=>'urn:common_2025_2.platform.webservices.netsuite.com'},
                   :"@xsi:type" => 'listRel:ItemSearchRow'
                 }
               }

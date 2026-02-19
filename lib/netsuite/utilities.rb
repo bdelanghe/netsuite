@@ -57,27 +57,19 @@ module NetSuite
     end
 
     def netsuite_server_time(credentials={})
-      server_time_response = NetSuite::Utilities.backoff { NetSuite::Configuration.connection({}, credentials).call(:get_server_time) }
+      server_time_response = NetSuite::Utilities.backoff { NetSuite::Client.call(:get_server_time, message: {}, credentials: credentials) }
       server_time_response.body[:get_server_time_response][:get_server_time_result][:server_time]
     end
 
     def netsuite_data_center_urls(account_id, credentials={})
-      data_center_call_response = NetSuite::Configuration.connection({
-        # NOTE force a production WSDL so the sandbox settings are ignored
-        #      as of 1/20/18 NS will start using the account ID to determine
-        #      if a account is sandbox (123_SB1) as opposed to using a sandbox domain
-
-        wsdl: 'https://webservices.netsuite.com/wsdl/v2017_2_0/netsuite.wsdl',
-
-        # NOTE don't inherit default namespace settings, it includes the API version
-        namespaces: {
-          'xmlns:platformCore' => "urn:core_2017_2.platform.webservices.netsuite.com"
-        },
-
-        soap_header: {}
-      }, credentials).call(:get_data_center_urls, message: {
+      data_center_call_response = NetSuite::Client.call(:get_data_center_urls, message: {
         'platformMsgs:account' => account_id
-      })
+      }, request_options: {
+        # NOTE force a production WSDL so the sandbox settings are ignored
+        wsdl: 'https://webservices.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl',
+        namespaces: { 'xmlns:platformCore' => "urn:core_2025_2.platform.webservices.netsuite.com" },
+        soap_header: {}
+      }, credentials: credentials)
 
       if data_center_call_response.success?
         data_center_call_response.body[:get_data_center_urls_response][:get_data_center_urls_result][:data_center_urls]

@@ -27,6 +27,13 @@ NETSUITE_INTEGRATION=true bundle exec rspec
 bundle exec rake build
 ```
 
+### Replaying a failed run
+When CI (or a local run) fails, the RSpec seed is in the output (e.g. "Randomized with seed 12345"). Re-run with that seed to reproduce the same order:
+```bash
+bundle exec rspec --seed 12345
+```
+Use `bundle exec rspec --only-failures` to re-run only the examples that failed last time (requires `tmp/rspec_examples.txt` from a previous run).
+
 There is no linter configured (no `.rubocop.yml`).
 
 ## Architecture
@@ -74,7 +81,17 @@ To verify: search the codebase for `api_version` / `wsdl`, or inspect the `POST 
 ### Configuration
 `NetSuite::Configuration` is `extend self` (module singleton). Multi-tenancy is supported via `Thread.current` namespacing.
 
+### Transport vs structure (Faraday migration)
+
+**Faraday** and **Nokogiri** are orthogonal: Faraday = *how bytes move* (HTTP client); Nokogiri = *how documents are understood* (XML parse/query). Savon bundled both plus SOAP semantics, which hid control and coupled Rack. Replacing Savon means keeping that boundary clear:
+
+- **Faraday**: open connection, POST body, return status + raw body. It does not care whether the body is XML or JSON.
+- **Nokogiri**: parse `resp.body` (from Faraday, disk, or anywhere), XPath/CSS, serialize. It does not care where the document came from.
+
+Flow: `resp = connection.post(...); doc = Nokogiri::XML(resp.body); parse(doc)`. No magic, no Rack, no SOAP abstraction leak. When adding a Faraday backend to `NetSuite::Client`, use Faraday for transport and Nokogiri only for request/response XML (build envelope, parse body into the same `#success?` / `#body` shape callers expect).
+
 ### Key Locations
+- `lib/netsuite/client.rb` — single SOAP call boundary; today Savon, later swappable to Faraday + Nokogiri
 - `lib/netsuite/actions/` — all SOAP operation classes (sync + async)
 - `lib/netsuite/records/` — 200+ NetSuite record classes
 - `lib/netsuite/support/` — shared mixins (`Fields`, `Actions`, `Records`, `Requests`, etc.)

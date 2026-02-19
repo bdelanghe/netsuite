@@ -56,6 +56,7 @@ module NetSuite
         criteria_structure = {}
         columns_structure = columns
         saved_search_id = criteria.delete(:saved)
+        criteria.delete(:preferences) # consumed later by soap_header_extra_info
 
         # TODO this whole thing needs to be refactored so we can apply some of the same logic to the
         #      column creation xml
@@ -227,7 +228,7 @@ module NetSuite
 
       def soap_header_extra_info
         # https://system.netsuite.com/help/helpcenter/en_US/Output/Help/SuiteCloudCustomizationScriptingWebServices/SuiteTalkWebServices/SettingSearchPreferences.html
-        # https://webservices.netsuite.com/xsd/platform/v2012_2_0/messages.xsd
+        # https://webservices.netsuite.com/xsd/platform/v2025_2_0/messages.xsd
 
         (@options.delete(:preferences) || {})
           .inject({'platformMsgs:SearchPreferences' => {}}) do |h, (k, v)|

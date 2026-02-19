@@ -10,6 +10,7 @@ require 'netsuite/rest/utilities/roles'
 require 'netsuite/rest/utilities/request'
 
 module NetSuite
+  autoload :Client,        'netsuite/client'
   autoload :Configuration, 'netsuite/configuration'
   autoload :Response,      'netsuite/response'
 

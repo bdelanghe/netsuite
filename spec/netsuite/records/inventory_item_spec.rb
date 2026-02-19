@@ -330,7 +330,7 @@ describe NetSuite::Records::InventoryItem do
         :item_vendor => {
           :vendor=>{
             :name=>"Spring Water",
-            :"@xmlns:platform_core"=>"urn:core_2016_1.platform.webservices.netsuite.com",
+            :"@xmlns:platform_core"=>"urn:core_2025_2.platform.webservices.netsuite.com",
             :@internal_id=>"20"
           },
          :purchase_price=>"16.14",

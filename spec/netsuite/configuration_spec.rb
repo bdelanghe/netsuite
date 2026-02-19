@@ -195,11 +195,11 @@ describe NetSuite::Configuration do
   describe '#wsdl' do
     context 'when the wsdl has been set' do
       before do
-        config.wsdl = 'https://system.sandbox.netsuite.com/wsdl/v2011_2_0/netsuite.wsdl'
+        config.wsdl = 'https://system.sandbox.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl'
       end
 
       it 'returns a path to the WSDL to use for the API' do
-        expect(config.wsdl).to eql('https://system.sandbox.netsuite.com/wsdl/v2011_2_0/netsuite.wsdl')
+        expect(config.wsdl).to eql('https://system.sandbox.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl')
       end
     end
 

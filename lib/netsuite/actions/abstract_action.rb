@@ -2,7 +2,7 @@ module NetSuite
   module Actions
     class AbstractAction
       def request(credentials={})
-        NetSuite::Configuration.connection(request_options, credentials, soap_header_extra_info).call(action_name, message: request_body)
+        NetSuite::Client.call(action_name, message: request_body, request_options: request_options, credentials: credentials, soap_header_extra_info: soap_header_extra_info)
       end
 
       protected

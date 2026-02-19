@@ -17,12 +17,11 @@ module NetSuite
       field :quantity_available
 
       def self.get_item_availability(ref_list, credentials={})
-        connection = NetSuite::Configuration.connection({}, credentials)
-        response = connection.call :get_item_availability, message: {
+        response = NetSuite::Client.call(:get_item_availability, message: {
           "platformMsgs:itemAvailabilityFilter" => {
             "platformCore:item" => ref_list.to_record
           }
-        }
+        }, credentials: credentials)
         return false unless response.success?
 
         result = response.body[:get_item_availability_response][:get_item_availability_result]
