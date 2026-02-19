@@ -20,7 +20,7 @@ describe NetSuite::Actions::AsyncInitializeList do
           }
         }
       ]
-    }).returns(File.read('spec/support/fixtures/async_initialize_list/async_initialize_list_pending.xml'))
+    }).returns(fixture('async_initialize_list/async_initialize_list_pending.xml'))
   end
 
   it 'makes a valid request to the NetSuite API' do

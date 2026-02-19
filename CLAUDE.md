@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-A Ruby gem wrapping the Oracle NetSuite SuiteTalk **SOAP Web Services API** via the Savon client. The `async-list` branch adds asynchronous bulk SOAP operations. **Note:** NetSuite is deprecating SOAP (final endpoint 2025.2, removed 2028.2). This gem is in maintenance mode.
+A Ruby gem for `netsuite-async-list`, wrapping the Oracle NetSuite SuiteTalk **SOAP Web Services API** via the Savon client. The `async-list` branch adds asynchronous bulk SOAP operations. **Note:** NetSuite is deprecating SOAP (final endpoint 2025.2, removed 2028.2). This gem is in maintenance mode.
 
 ## Commands
 
@@ -48,6 +48,28 @@ Record classes compose behavior via `include`:
 - `Support::Records` — `to_record` serialization (snake_case attrs → camelCase SOAP XML)
 - `Support::Actions` — `actions(:get, :add, :async_add_list, ...)` DSL
 - `Namespaces::*` — SOAP namespace module per record type (e.g. `ListRel`, `TranSales`)
+
+### SOAP Endpoint
+This gem targets **SOAP v2025.2** — the final supported NetSuite endpoint (removed in 2028.2).
+
+There is no "current SOAP endpoint" stored in NetSuite. The endpoint you use is fully defined by **account ID + domain shard + SOAP version pinned in your code**. NetSuite doesn't choose this for you.
+
+Endpoint formula: `https://<account_id>.<domain>/services/NetSuitePort_<version>`
+
+Two config values pin the version:
+- **`api_version '2025_2'`** — controls SOAP namespace URIs in request envelopes (enforced; no other value accepted)
+- **`wsdl`** — WSDL Savon uses; local fixtures at `spec/support/fixtures/soap/v2025_2_0/`
+
+Production setup:
+```ruby
+NetSuite.configure do
+  account     ENV['NETSUITE_ACCOUNT']
+  api_version '2025_2'
+  wsdl        "https://#{ENV['NETSUITE_ACCOUNT']}.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl"
+end
+```
+
+To verify: search the codebase for `api_version` / `wsdl`, or inspect the `POST /services/NetSuitePort_2025_2` in Savon request logs. If the hostname contains `sb1`/`sb2`, you're on a sandbox shard.
 
 ### Configuration
 `NetSuite::Configuration` is `extend self` (module singleton). Multi-tenancy is supported via `Thread.current` namespacing.

@@ -5,7 +5,6 @@ describe NetSuite::Utilities do
     it '#normalize_time_to_netsuite_date' do
       ['Etc/UTC', 'America/Los_Angeles', 'America/Denver'].each do |zone|
         ENV['TZ'] = zone
-        puts "In zone: #{zone}"
 
         stamp = DateTime.parse('Wed, 27 Jul 2016 00:00:00 -0000')
         formatted_date = NetSuite::Utilities.normalize_time_to_netsuite_date(stamp.to_time.to_i)
@@ -79,7 +78,7 @@ describe NetSuite::Utilities do
 
     NetSuite.configure do
       reset!
-      api_version '2015_1'
+      api_version '2025_2'
     end
 
     domains = NetSuite::Utilities.netsuite_data_center_urls('TSTDRV1576318')

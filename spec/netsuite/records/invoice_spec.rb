@@ -375,7 +375,15 @@ describe NetSuite::Records::Invoice do
     end
 
     context 'when the response is unsuccessful' do
-      skip
+      let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
+
+      it 'raises a InitializationError exception' do
+        expect(NetSuite::Actions::Initialize).to receive(:call).with([NetSuite::Records::Invoice, customer], {}).and_return(response)
+        expect {
+          NetSuite::Records::Invoice.initialize(customer)
+        }.to raise_error(NetSuite::InitializationError,
+                         /NetSuite::Records::Invoice.initialize with .+ failed./)
+      end
     end
   end
 

@@ -20,20 +20,8 @@ describe NetSuite::Records::Location do
     end
   end
 
-  describe '#class_translation_list' do
-    it 'can be set from attributes'
-    it 'can be set from a ClassTranslationList object'
-  end
 
-  describe '#subsidiary_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RecordRefList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

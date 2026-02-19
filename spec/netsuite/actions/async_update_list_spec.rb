@@ -4,6 +4,15 @@ describe NetSuite::Actions::AsyncUpdateList do
   before { savon.mock! }
   after { savon.unmock! }
 
+  context 'when record count exceeds the limit' do
+    it 'raises ArgumentError for more than 200 records' do
+      records = Array.new(201) { NetSuite::Records::InventoryItem.new }
+      expect { NetSuite::Actions::AsyncUpdateList.call(records) }.to raise_error(
+        ArgumentError, /asyncUpdateList supports a maximum of 200 records/
+      )
+    end
+  end
+
   context 'Items' do
     let(:items) do
       [
@@ -19,7 +28,7 @@ describe NetSuite::Actions::AsyncUpdateList do
             '@xsi:type' => 'listAcct:InventoryItem',
             '@internalId' => '624113'
           }]
-        }).returns(File.read('spec/support/fixtures/async_update_list/async_update_list_pending.xml'))
+        }).returns(fixture('async_update_list/async_update_list_pending.xml'))
     end
 
     it 'makes a valid request to the NetSuite API' do

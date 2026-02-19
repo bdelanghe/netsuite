@@ -44,15 +44,7 @@ describe NetSuite::Records::CustomerPayment do
     end
   end
 
-  describe '#apply_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomerPaymentApplyList object'
-  end
 
-  describe '#deposit_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomerPaymentDepositList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do
@@ -89,7 +81,15 @@ describe NetSuite::Records::CustomerPayment do
     end
 
     context 'when the response is unsuccessful' do
-      skip
+      let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
+
+      it 'raises a InitializationError exception' do
+        expect(NetSuite::Actions::Initialize).to receive(:call).with([NetSuite::Records::CustomerPayment, invoice], {}).and_return(response)
+        expect {
+          NetSuite::Records::CustomerPayment.initialize(invoice)
+        }.to raise_error(NetSuite::InitializationError,
+                         /NetSuite::Records::CustomerPayment.initialize with .+ failed./)
+      end
     end
   end
 

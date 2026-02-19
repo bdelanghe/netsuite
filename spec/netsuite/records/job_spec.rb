@@ -78,30 +78,10 @@ describe NetSuite::Records::Job do
     end
   end
 
-  describe '#job_resources_list' do
-    it 'can be set from attributes'
-    it 'can be set from a JobResourcesList object'
-  end
 
-  describe '#addressbook_list' do
-    it 'can be set from attributes'
-    it 'can be set from a JobAddressbookList object'
-  end
 
-  describe '#milestones_list' do
-    it 'can be set from attributes'
-    it 'can be set from a JobMilestonesList object'
-  end
 
-  describe '#credit_cards_list' do
-    it 'can be set from attributes'
-    it 'can be set from a JobCreditCardsList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do
@@ -200,9 +180,6 @@ describe NetSuite::Records::Job do
     end
   end
 
-  describe '.search' do
-    it 'searches'
-  end
 
   describe '#to_record' do
     let(:job) { NetSuite::Records::Job.new(:entity_id => 'TEST JOB', :account_number => 7) }

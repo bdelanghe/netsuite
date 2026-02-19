@@ -23,60 +23,16 @@ describe NetSuite::Records::CustomRecordType do
     end
   end
 
-  describe '#field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeFieldList object'
-  end
 
-  describe '#tabs_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeTabsList object'
-  end
 
-  describe '#sublists_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeSublistsList object'
-  end
 
-  describe '#forms_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeFormsList object'
-  end
 
-  describe '#online_forms_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeOnlineFormsList object'
-  end
 
-  describe '#permissions_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypePermissionsList object'
-  end
 
-  describe '#links_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeLinksList object'
-  end
 
-  describe '#managers_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeManagersList object'
-  end
 
-  describe '#children_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeChildrenList object'
-  end
 
-  describe '#parents_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeParentsList object'
-  end
 
-  describe '#translations_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomRecordTypeTranslationsList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

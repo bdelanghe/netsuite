@@ -116,7 +116,15 @@ describe NetSuite::Records::CustomerRefund do
     end
 
     context 'when the response is unsuccessful' do
-      skip
+      let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
+
+      it 'raises a InitializationError exception' do
+        expect(NetSuite::Actions::Initialize).to receive(:call).with([NetSuite::Records::CustomerRefund, memo], {}).and_return(response)
+        expect {
+          NetSuite::Records::CustomerRefund.initialize(memo)
+        }.to raise_error(NetSuite::InitializationError,
+                         /NetSuite::Records::CustomerRefund.initialize with .+ failed./)
+      end
     end
   end
 

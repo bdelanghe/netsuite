@@ -4,6 +4,15 @@ describe NetSuite::Actions::AsyncAddList do
   before { savon.mock! }
   after { savon.unmock! }
 
+  context 'when record count exceeds the limit' do
+    it 'raises ArgumentError for more than 400 records' do
+      records = Array.new(401) { NetSuite::Records::Customer.new }
+      expect { NetSuite::Actions::AsyncAddList.call(records) }.to raise_error(
+        ArgumentError, /asyncAddList supports a maximum of 400 records/
+      )
+    end
+  end
+
   context 'Customers' do
     let(:customers) do
       [
@@ -20,7 +29,7 @@ describe NetSuite::Actions::AsyncAddList do
             '@xsi:type' => 'listRel:Customer',
             '@externalId' => 'ext2'
           }]
-        }).returns(File.read('spec/support/fixtures/async_add_list/async_add_list_pending.xml'))
+        }).returns(fixture('async_add_list/async_add_list_pending.xml'))
     end
 
     it 'makes a valid request to the NetSuite API' do

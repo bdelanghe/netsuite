@@ -11,50 +11,115 @@ RSpec::Core::RakeTask.new do |t|
 end
 
 namespace :fixtures do
+  # Sources:
+  #   https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_3892701016.html
+  #   https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_N3413913.html
+  # SOAP is deprecated — 2025.2 is the last planned endpoint (removed in 2028.2).
   WSDL_VERSIONS = {
-    'v2021_1_0' => 'https://webservices.netsuite.com/wsdl/v2021_1_0/netsuite.wsdl'
+    # Final endpoint — all integrations should target this
+    'v2025_2_0' => { status: :final },
+    # Supported
+    'v2025_1_0' => { status: :supported },
+    'v2024_2_0' => { status: :supported },
+    'v2024_1_0' => { status: :supported },
+    'v2023_2_0' => { status: :supported },
+    'v2023_1_0' => { status: :supported },
+    'v2022_2_0' => { status: :supported },
+    # Unsupported but still available
+    'v2022_1_0' => { status: :unsupported },
+    'v2021_2_0' => { status: :unsupported },
+    'v2021_1_0' => { status: :unsupported },
+    'v2020_2_0' => { status: :unsupported },
+    'v2020_1_0' => { status: :unsupported },
+    'v2019_2_0' => { status: :unsupported },
+    'v2019_1_0' => { status: :unsupported },
+    'v2018_2_0' => { status: :unsupported }
   }.freeze
 
-  desc 'Download WSDL fixtures and all referenced XSD schemas for spec use'
+  BASE_URL      = 'https://webservices.netsuite.com'.freeze
+  DOWNLOAD_BASE = 'https://content.netsuite.com/download'.freeze
+
+  def wsdl_url(version)
+    "#{BASE_URL}/wsdl/#{version}/netsuite.wsdl"
+  end
+
+  def zip_url(version)
+    "#{DOWNLOAD_BASE}/WSDL_#{version}.zip"
+  end
+
+  desc 'Download WSDL fixtures and all referenced XSD schemas for spec use. ' \
+       'Set VERSION=v2025_2_0 to fetch a single version. ' \
+       'Set WSDL_SOURCE=<dir> to copy from a local directory instead of downloading.'
   task :wsdl do
     require 'open-uri'
     require 'fileutils'
     require 'rexml/document'
+    require 'tmpdir'
     require 'uri'
+    require 'zip'
 
     fixtures_root = File.join('spec', 'support', 'fixtures')
+    local_source  = ENV['WSDL_SOURCE']
 
-    WSDL_VERSIONS.each do |version, wsdl_url|
+    versions = if ENV['VERSION']
+      WSDL_VERSIONS.slice(ENV['VERSION']).tap do |v|
+        abort "Unknown VERSION '#{ENV['VERSION']}'. Available: #{WSDL_VERSIONS.keys.join(', ')}" if v.empty?
+      end
+    else
+      WSDL_VERSIONS
+    end
+
+    versions.each_key do |version|
       soap_root = File.join(fixtures_root, 'soap', version)
-      wsdl_dest = File.join(soap_root, 'wsdl', 'netsuite.wsdl')
-      FileUtils.mkdir_p(File.dirname(wsdl_dest))
 
-      puts "Downloading #{wsdl_url} -> #{wsdl_dest}"
-      wsdl_content = URI.open(wsdl_url, &:read)
-      File.write(wsdl_dest, wsdl_content)
-      puts "Saved #{wsdl_dest}"
-
-      # Parse schemaLocation attributes from <xsd:import> elements
-      doc = REXML::Document.new(wsdl_content)
-      base_uri = URI.parse(wsdl_url)
-
-      REXML::XPath.match(doc, '//*[@schemaLocation]').each do |node|
-        schema_location = node.attributes['schemaLocation']
-        next unless schema_location
-
-        xsd_url = base_uri.merge(schema_location).to_s
-
-        # Server path: /xsd/<category>/<version>/<file>
-        # Local path:  soap/<version>/xsd/<category>/<file>
-        _, _xsd, category, _ver, file = URI.parse(xsd_url).path.split('/')
-        xsd_dest = File.join(soap_root, 'xsd', category, file)
-        FileUtils.mkdir_p(File.dirname(xsd_dest))
-
-        puts "Downloading #{xsd_url} -> #{xsd_dest}"
-        URI.open(xsd_url) { |f| File.write(xsd_dest, f.read) }
-        puts "Saved #{xsd_dest}"
+      if local_source
+        install_from_dir(local_source, soap_root)
+      else
+        install_from_zip(zip_url(version), soap_root)
       end
     end
+  end
+
+  # Install from the official NetSuite zip (https://content.netsuite.com/download/WSDL_<version>.zip).
+  # The zip contains a flat directory of files with dotted naming: <category>.<file>.xsd
+  def install_from_zip(url, soap_root)
+    Dir.mktmpdir do |tmp|
+      zip_path = File.join(tmp, 'wsdl.zip')
+      puts "Downloading #{url}"
+      URI.open(url) { |f| File.binwrite(zip_path, f.read) }
+
+      puts "Extracting to #{soap_root}"
+      Zip::File.open(zip_path) do |zip|
+        zip.each do |entry|
+          next if entry.directory?
+          install_entry(entry.name, entry.get_input_stream.read, soap_root)
+        end
+      end
+    end
+  end
+
+  # Copy from a pre-extracted local directory (flat dotted naming convention).
+  def install_from_dir(source_dir, soap_root)
+    Dir[File.join(source_dir, '*')].each do |src|
+      install_entry(File.basename(src), File.binread(src), soap_root)
+    end
+  end
+
+  # Route a single flat filename to its structured destination.
+  # netsuite.wsdl             -> wsdl/netsuite.wsdl
+  # platform.core.xsd         -> xsd/platform/core.xsd
+  # transactions.sales.xsd    -> xsd/transactions/sales.xsd
+  def install_entry(filename, content, soap_root)
+    dest = if filename == 'netsuite.wsdl'
+      File.join(soap_root, 'wsdl', 'netsuite.wsdl')
+    else
+      category, rest = filename.split('.', 2)
+      File.join(soap_root, 'xsd', category, rest)
+    end
+
+    FileUtils.mkdir_p(File.dirname(dest))
+    File.binwrite(dest, content)
+    puts "  #{filename} -> #{dest}"
   end
 end
 

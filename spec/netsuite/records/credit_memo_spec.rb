@@ -82,30 +82,10 @@ describe NetSuite::Records::CreditMemo do
     end
   end
 
-  describe '#transaction_bill_address' do
-    it 'can be set from attributes'
-    it 'can be set from a BillAddress object'
-  end
 
-  describe '#revenue_status' do
-    it 'can be set from attributes'
-    it 'can be set from a RevenueStatus object'
-  end
 
-  describe '#sales_team_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CreditMemoSalesTeamList object'
-  end
 
-  describe '#partners_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CreditMemoPartnersList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do
@@ -142,7 +122,15 @@ describe NetSuite::Records::CreditMemo do
     end
 
     context 'when the response is unsuccessful' do
-      skip
+      let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
+
+      it 'raises a InitializationError exception' do
+        expect(NetSuite::Actions::Initialize).to receive(:call).with([NetSuite::Records::CreditMemo, customer], {}).and_return(response)
+        expect {
+          NetSuite::Records::CreditMemo.initialize(customer)
+        }.to raise_error(NetSuite::InitializationError,
+                         /NetSuite::Records::CreditMemo.initialize with .+ failed./)
+      end
     end
   end
 

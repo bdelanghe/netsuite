@@ -4,6 +4,15 @@ describe NetSuite::Actions::AsyncUpsertList do
   before { savon.mock! }
   after { savon.unmock! }
 
+  context 'when record count exceeds the limit' do
+    it 'raises ArgumentError for more than 200 records' do
+      records = Array.new(201) { NetSuite::Records::Customer.new }
+      expect { NetSuite::Actions::AsyncUpsertList.call(records) }.to raise_error(
+        ArgumentError, /asyncUpsertList supports a maximum of 200 records/
+      )
+    end
+  end
+
   context 'Customers' do
     context 'one customer' do
       let(:customers) do
@@ -21,7 +30,7 @@ describe NetSuite::Actions::AsyncUpsertList do
               '@xsi:type' => 'listRel:Customer',
               '@externalId' => 'ext2'
             }]
-          }).returns(File.read('spec/support/fixtures/async_upsert_list/async_upsert_list_one_customer.xml'))
+          }).returns(fixture('async_upsert_list/async_upsert_list_one_customer.xml'))
       end
 
       it 'makes a valid request to the NetSuite API' do
@@ -60,7 +69,7 @@ describe NetSuite::Actions::AsyncUpsertList do
                 '@externalId' => 'ext2'
               }
             ]
-          }).returns(File.read('spec/support/fixtures/async_upsert_list/async_upsert_list_customers.xml'))
+          }).returns(fixture('async_upsert_list/async_upsert_list_customers.xml'))
       end
 
       it 'makes a valid request to the NetSuite API' do
@@ -100,7 +109,7 @@ describe NetSuite::Actions::AsyncUpsertList do
             '@externalId' => 'ext2-bad'
           }
           ]
-        }).returns(File.read('spec/support/fixtures/async_upsert_list/async_upsert_list_with_errors.xml'))
+        }).returns(fixture('async_upsert_list/async_upsert_list_with_errors.xml'))
     end
 
     it 'constructs error objects' do

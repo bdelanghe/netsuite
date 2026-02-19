@@ -3,11 +3,11 @@ require File.expand_path('../lib/netsuite/version', __FILE__)
 
 Gem::Specification.new do |gem|
   gem.licenses      = ['MIT']
-  gem.authors       = ['Ryan Moran', 'Michael Bianco', 'Chris Gunther']
-  gem.email         = ['ryan.moran@gmail.com', 'mike@mikebian.co', 'chris@room118solutions.com']
-  gem.description   = %q{NetSuite SuiteTalk API Wrapper}
-  gem.summary       = %q{NetSuite SuiteTalk API (SOAP) Wrapper}
-  gem.homepage      = 'https://github.com/NetSweet/netsuite'
+  gem.authors       = ['Robert DeLanghe']
+  gem.email         = ['dev@robertdelanghe.com']
+  gem.description   = %q{Ruby wrapper for the NetSuite SuiteTalk SOAP Web Services API (v2025.2). Targets the final supported SOAP endpoint (removed 2028.2). Includes async bulk operations (asyncAddList, asyncUpdateList, asyncUpsertList, asyncDeleteList, asyncGetList).}
+  gem.summary       = %q{NetSuite SuiteTalk SOAP v2025.2 wrapper with async list operations}
+  gem.homepage      = 'https://github.com/bdelanghe/netsuite'
 
   gem.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   gem.files         = `git ls-files`.split("\n")
@@ -15,13 +15,12 @@ Gem::Specification.new do |gem|
   gem.name          = 'netsuite'
   gem.require_paths = ['lib']
   gem.version       = NetSuite::VERSION
-  gem.required_ruby_version = '>= 2.1'
-  gem.metadata['changelog_uri'] = 'https://github.com/netsweet/netsuite/blob/master/HISTORY.md'
-  gem.metadata['mailing_list_uri'] = 'http://opensuite-slackin.herokuapp.com'
+  gem.required_ruby_version = '>= 3.1'
+  gem.metadata['changelog_uri'] = 'https://github.com/bdelanghe/netsuite/blob/main/HISTORY.md'
+  gem.metadata['mailing_list_uri'] = 'https://github.com/bdelanghe/netsuite/issues'
   gem.metadata['rubygems_mfa_required'] = 'true'
 
   gem.add_dependency 'savon', '>= 2.3.0', '!= 2.13.0'
 
   gem.add_development_dependency 'rspec', '~> 3.13.0'
-  gem.add_development_dependency 'rake', '~> 12.3.3'
 end

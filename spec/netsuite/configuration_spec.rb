@@ -5,6 +5,7 @@ describe NetSuite::Configuration do
 
   before do
     config.reset!
+    config.api_version = '2025_2'
   end
 
   describe '#reset!' do
@@ -155,7 +156,6 @@ describe NetSuite::Configuration do
       config.endpoint    EXAMPLE_ENDPOINT
       config.account     1023
       config.wsdl        "my_wsdl"
-      config.api_version "2012_2"
     end
 
     it 'returns a Savon::Client object that allows requests to the service' do
@@ -205,25 +205,23 @@ describe NetSuite::Configuration do
 
     context 'when the wsdl has not been set' do
       it 'returns a path to the WSDL to use for the API' do
-        expect(config.wsdl).to eq("https://webservices.netsuite.com/wsdl/v2016_2_0/netsuite.wsdl")
+        expect(config.wsdl).to eq("https://webservices.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl")
       end
     end
 
-    context 'when the wsdl has not been set, but the API has been set' do
-      it 'should correctly return the full HTTP sandbox URL' do
-        config.api_version '2013_1'
+    context 'when the wsdl has not been set, but sandbox is false' do
+      it 'should correctly return the full HTTP URL' do
         config.sandbox false
-        expect(config.wsdl).to eql('https://webservices.netsuite.com/wsdl/v2013_1_0/netsuite.wsdl')
+        expect(config.wsdl).to eql('https://webservices.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl')
       end
     end
 
-    context 'when the API and wsdl domain have been set' do
+    context 'when the wsdl domain has been set' do
       it 'should correctly modify the full wsdl path' do
         config.sandbox = false
-        config.api_version '2014_1'
         config.wsdl_domain = 'system.na1.netsuite.com'
 
-        expect(config.wsdl).to eql('https://system.na1.netsuite.com/wsdl/v2014_1_0/netsuite.wsdl')
+        expect(config.wsdl).to eql('https://system.na1.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl')
       end
     end
 
@@ -455,32 +453,46 @@ describe NetSuite::Configuration do
 
   describe '#api_version' do
     context 'when no api_version is defined' do
-      it 'defaults to 2016_2' do
-        expect(config.api_version).to eq('2016_2')
+      before { config.reset! }
+
+      it 'raises a ConfigurationError' do
+        expect { config.api_version }.to raise_error(NetSuite::ConfigurationError, /api_version is not set/)
+      end
+    end
+
+    context 'when api_version is set' do
+      it 'returns the configured version' do
+        expect(config.api_version).to eq('2025_2')
       end
     end
   end
 
   describe '#api_version=' do
-    context 'when api version is defined' do
-      it 'sets the api_version of the application' do
+    context 'when api version is valid' do
+      it 'sets the api_version and regenerates the wsdl url' do
         # retrieve wsdl to ensure setting the api works when the wsdl is cached
         config.wsdl
-        config.api_version = '1980_1'
+        config.api_version = '2025_2'
 
-        expect(config.api_version).to eq('1980_1')
-        expect(config.wsdl).to include('1980_1')
+        expect(config.api_version).to eq('2025_2')
+        expect(config.wsdl).to include('2025_2')
+      end
+    end
+
+    context 'when api version is invalid' do
+      it 'raises a ConfigurationError' do
+        expect { config.api_version = '1980_1' }.to raise_error(
+          NetSuite::ConfigurationError, /api_version must be/
+        )
       end
     end
   end
 
   describe "#credentials" do
     context "when none are defined" do
-      skip "should properly create the auth credentials"
     end
 
     context "when they are defined" do
-      skip "should properly replace the default auth credentials"
     end
   end
 

@@ -5,7 +5,12 @@ module NetSuite
       include Support::Requests
       include AsyncResponse
 
+      MAX_RECORDS = 400
+
       def initialize(*objects)
+        if objects.size > MAX_RECORDS
+          raise ArgumentError, "asyncAddList supports a maximum of #{MAX_RECORDS} records per request (#{objects.size} given)"
+        end
         @objects = objects
       end
 

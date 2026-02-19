@@ -30,7 +30,7 @@ describe NetSuite::Actions::GetAsyncResult do
       savon.expects(:get_async_result).with(:message => {
         'platformMsgs:jobId'     => job_id,
         'platformMsgs:pageIndex' => page_index
-      }).returns(File.read('spec/support/fixtures/get_async_result/get_async_result_upsert_list_finished.xml'))
+      }).returns(fixture('get_async_result/get_async_result_upsert_list_finished.xml'))
     end
 
     include_examples 'a valid GetAsyncResult response'
@@ -56,7 +56,7 @@ describe NetSuite::Actions::GetAsyncResult do
       savon.expects(:get_async_result).with(:message => {
         'platformMsgs:jobId'     => job_id,
         'platformMsgs:pageIndex' => page_index
-      }).returns(File.read('spec/support/fixtures/get_async_result/get_async_result_write_list_multiple.xml'))
+      }).returns(fixture('get_async_result/get_async_result_write_list_multiple.xml'))
     end
 
     include_examples 'a valid GetAsyncResult response'

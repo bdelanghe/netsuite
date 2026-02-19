@@ -10,7 +10,7 @@ describe NetSuite::Actions::CheckAsyncStatus do
     savon.expects(:check_async_status).with(:message =>
       {
         'platformMsgs:jobId' => job_id
-      }).returns(File.read('spec/support/fixtures/check_async_status/check_async_status_pending.xml'))
+      }).returns(fixture('check_async_status/check_async_status_pending.xml'))
   end
 
   it 'makes a valid request to the NetSuite API' do

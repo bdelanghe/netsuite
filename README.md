@@ -1,11 +1,7 @@
-[![Ruby](https://github.com/NetSweet/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/NetSweet/netsuite/actions/workflows/main.yml)
+[![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
 [![Slack Status](https://netsuite-slackin.fly.dev/badge.svg)](https://netsuite-slackin.fly.dev)
-[![Gem Version](https://badge.fury.io/rb/netsuite.svg)](http://badge.fury.io/rb/netsuite)
+[![Gem Version](https://badge.fury.io/rb/netsuite-async-list.svg)](http://badge.fury.io/rb/netsuite-async-list)
 
-> [!WARNING]  
-> I ([@ilovetaly](https://github.com/iloveitaly) am not actively using this gem for any projects (I'm using [this python package](https://github.com/jacobsvante/netsuite) instead) and do not have time for further maintenance. I'll need monthly sponsors, paid consulting around this gem, or if anyone else wants to help with maintenance, please drop me a note. Apologies!
-
-# Important: SOAP Web Services Deprecation
 
 Oracle NetSuite has scheduled the gradual removal of SOAP web services from the product as part of ongoing efforts to provide modern integration channels.
 
@@ -27,7 +23,7 @@ If you use an Oracle NetSuite integration application, a REST-based application 
 
 * This gem will act as a wrapper around the NetSuite SuiteTalk Web Services API.
 * The gem does not cover the entire API, only the subset contributors have used so far. Please submit a PR for any functionality that's missing!
-* NetSuite is a complex system. There's a lot to learn and sparse resources available to learn from. Here's a list of [NetSuite Development Resources](https://github.com/NetSweet/netsuite/wiki/NetSuite-Development-Resources).
+* NetSuite is a complex system. There's a lot to learn and sparse resources available to learn from. Here's a list of [NetSuite Development Resources](https://github.com/bdelanghe/netsuite/wiki/NetSuite-Development-Resources).
 
 # Help & Support
 
@@ -40,7 +36,7 @@ There are some additional helpful resources for NetSuite development [listed her
 Before contributing a patch make sure all existing tests pass.
 
 ```shell
-git clone git://github.com/NetSweet/netsuite.git
+git clone git://github.com/bdelanghe/netsuite.git
 cd netsuite
 
 bundle
@@ -54,12 +50,12 @@ Integration tests (live NetSuite calls) are opt-in. To run them, set `NETSUITE_I
 Add this line to your application's Gemfile:
 
 ```
-gem 'netsuite'
+gem 'netsuite-async-list'
 ```
 
 If you'd like more accurate time conversion support, include the `tzinfo` gem.
 
-This gem is built for Ruby 2.6.x+, but should work on older versions down to 1.9. There's a [1-8-stable](https://github.com/NetSweet/netsuite/tree/1-8-stable) branch for Ruby 1.8.x support.
+This gem is built for Ruby 2.6.x+, but should work on older versions down to 1.9. There's a [1-8-stable](https://github.com/bdelanghe/netsuite/tree/1-8-stable) branch for Ruby 1.8.x support.
 
 ## Configuration
 
@@ -70,7 +66,7 @@ How you connect to NetSuite has changed a lot over the years and differs between
 * Older API versions (~2015) allowed authentication via username and password
 * Newer API versions (> 2016) still allowed for username and password authentication, but required an application ID
 * "OAuth", which requires four separate keys to be manually generated, was supported sometime after 2015
-* API versions greater than 2018_2 require `endpoint` to be set directly ([more info](https://github.com/NetSweet/netsuite/pull/473))
+* API versions greater than 2018_2 require `endpoint` to be set directly ([more info](https://github.com/bdelanghe/netsuite/pull/473))
 
 Here's an example connection configuration. You don't want to actually use username + password config; Token Based Authentication is detailed [in a separate section](#token-based-authentication):
 
@@ -95,7 +91,7 @@ NetSuite.configure do
 
   # the endpoint indicated in the > 2018_2 wsdl is invalid
   # you must set the endpoint directly
-  # https://github.com/NetSweet/netsuite/pull/473
+  # https://github.com/bdelanghe/netsuite/pull/473
   endpoint "https://#{wsdl_domain}/services/NetSuitePort_#{api_version}"
 end
 ```
@@ -177,7 +173,7 @@ NetSuite.configure do
 
   # the endpoint indicated in the > 2018_2 WSDL is invalid
   # you must set the endpoint directly
-  # https://github.com/NetSweet/netsuite/pull/473
+  # https://github.com/bdelanghe/netsuite/pull/473
   endpoint "https://#{wsdl_domain}/services/NetSuitePort_#{api_version}"
 end
 ```

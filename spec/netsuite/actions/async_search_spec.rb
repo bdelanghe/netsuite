@@ -11,7 +11,7 @@ describe NetSuite::Actions::AsyncSearch do
         '@savedSearchId' => 500,
         :content!        => { "listRel:criteria" => {} }
       },
-    }).returns(File.read('spec/support/fixtures/async_search/async_search_pending.xml'))
+    }).returns(fixture('async_search/async_search_pending.xml'))
   end
 
   it 'makes a valid request to the NetSuite API' do

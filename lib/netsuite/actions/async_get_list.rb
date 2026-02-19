@@ -6,6 +6,16 @@ module NetSuite
 
       private
 
+      MAX_RECORDS = 2000
+
+      def initialize(klass, options = {})
+        list = options.is_a?(Hash) ? (options[:list] || []) : Array(options)
+        if list.size > MAX_RECORDS
+          raise ArgumentError, "asyncGetList supports a maximum of #{MAX_RECORDS} records per request (#{list.size} given)"
+        end
+        super
+      end
+
       def async_response_key
         :async_get_list_response
       end

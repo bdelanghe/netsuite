@@ -3,10 +3,6 @@ require 'spec_helper'
 describe NetSuite::Records::CustomerAddressbook do
   # address schema changed in 2014.2. We support < 2014.2 schema, but we don't test support
 
-  before do
-    NetSuite::Configuration.api_version = '2014_2'
-  end
-
   let(:attributes) do
     {
       :addressbook => {
