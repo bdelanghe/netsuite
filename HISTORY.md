@@ -1,10 +1,7 @@
 ## Unreleased
 
-### Added
-
 ### Fixed
-
-### Breaking Changes
+* Search action no longer leaks `:preferences` key into criteria iteration when both `saved:` and `preferences:` options are passed together
 
 ## v2025.2.0
 
