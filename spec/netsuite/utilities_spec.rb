@@ -1,4 +1,5 @@
 require 'spec_helper'
+require 'tzinfo'
 
 describe NetSuite::Utilities do
   describe 'time utilities' do
@@ -12,19 +13,11 @@ describe NetSuite::Utilities do
 
         no_dst_stamp = DateTime.parse('Sun, November 6 2017 00:00:00 -0000')
         formatted_date = NetSuite::Utilities.normalize_time_to_netsuite_date(no_dst_stamp.to_time.to_i)
-        if Gem.loaded_specs.has_key?('tzinfo')
-          expect(formatted_date).to eq('2017-11-06T00:00:00-08:00')
-        else
-          expect(formatted_date).to eq('2017-11-06T00:00:00-07:00')
-        end
+        expect(formatted_date).to eq('2017-11-06T00:00:00-08:00')
 
         no_dst_stamp_with_time = DateTime.parse('Sun, November 6 2017 12:11:10 -0000')
         formatted_date = NetSuite::Utilities.normalize_time_to_netsuite_date(no_dst_stamp_with_time.to_time.to_i)
-        if Gem.loaded_specs.has_key?('tzinfo')
-          expect(formatted_date).to eq('2017-11-06T00:00:00-08:00')
-        else
-          expect(formatted_date).to eq('2017-11-06T00:00:00-07:00')
-        end
+        expect(formatted_date).to eq('2017-11-06T00:00:00-08:00')
       end
     end
   end
