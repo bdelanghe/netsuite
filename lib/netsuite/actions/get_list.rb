@@ -17,7 +17,7 @@ module NetSuite
 
         list = @options.is_a?(Hash) ? @options[:list] : @options
 
-        formatted_list = if @options[:type_id]
+        formatted_list = if @options.is_a?(Hash) && @options[:type_id]
           type = @options[:type_id]
           record_type = 'platformCore:CustomRecordRef'
 
@@ -66,7 +66,7 @@ module NetSuite
 
       def success?
         # each returned record has its own status; 
-        if @options[:allow_incomplete] 
+        if @options.is_a?(Hash) && @options[:allow_incomplete]
           @success ||= !response_body.detect { |r| r[:status][:@is_success] == 'true' }.nil?
         else
           @success ||= response_body.detect { |r| r[:status][:@is_success] != 'true' }.nil?

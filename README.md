@@ -1,6 +1,5 @@
 [![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
-[![Slack Status](https://netsuite-slackin.fly.dev/badge.svg)](https://netsuite-slackin.fly.dev)
-[![Gem Version](https://badge.fury.io/rb/netsuite-async-list.svg)](http://badge.fury.io/rb/netsuite-async-list)
+[![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
 
 
 Oracle NetSuite has scheduled the gradual removal of SOAP web services from the product as part of ongoing efforts to provide modern integration channels.
@@ -26,8 +25,6 @@ If you use an Oracle NetSuite integration application, a REST-based application 
 * NetSuite is a complex system. There's a lot to learn and sparse resources available to learn from. Here's a list of [NetSuite Development Resources](https://github.com/bdelanghe/netsuite/wiki/NetSuite-Development-Resources).
 
 # Help & Support
-
-Join the [Slack channel](https://netsuite-slackin.fly.dev) for help with NetSuite issues. Please do not post usage questions as issues in GitHub.
 
 There are some additional helpful resources for NetSuite development [listed here](https://dashboard.suitesync.io/docs/resources#netsuite).
 

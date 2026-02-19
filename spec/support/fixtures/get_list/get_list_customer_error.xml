@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Header>
+    <platformMsgs:documentInfo xmlns:platformMsgs="urn:messages_2017_1.platform.webservices.netsuite.com">
+      <platformMsgs:nsId>WEBSERVICES_1234_GET_LIST_ERROR</platformMsgs:nsId>
+    </platformMsgs:documentInfo>
+  </soapenv:Header>
+  <soapenv:Body>
+    <getListResponse xmlns="urn:messages_2017_1.platform.webservices.netsuite.com">
+      <readResponseList>
+        <readResponse>
+          <platformCore:status isSuccess="false" xmlns:platformCore="urn:core_2017_1.platform.webservices.netsuite.com">
+            <platformCore:statusDetail type="ERROR">
+              <platformCore:code>RCRD_DSNT_EXIST</platformCore:code>
+              <platformCore:message>That record does not exist.</platformCore:message>
+            </platformCore:statusDetail>
+          </platformCore:status>
+        </readResponse>
+      </readResponseList>
+    </getListResponse>
+  </soapenv:Body>
+</soapenv:Envelope>
