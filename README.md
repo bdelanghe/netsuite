@@ -1,22 +1,6 @@
 [![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
 [![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
-
-
-Oracle NetSuite has scheduled the gradual removal of SOAP web services from the product as part of ongoing efforts to provide modern integration channels.
-
-The 2025.2 SOAP endpoint is the last planned SOAP endpoint and any later SOAP endpoints would be released only as necessary to meet business, technical, or other significant requirements.
-
-The support period of older endpoints is also affected and with the 2027.1 release, only the 2025.2 endpoint will be supported. With the 2028.2 release, SOAP will no longer be available in NetSuite and existing SOAP integrations with NetSuite will stop working.
-
-For more details, see the Removal of SOAP Web Services and the SOAP Removal Plans FAQ. For a list of the currently supported endpoints, see Support for Existing WSDL Versions.
-
-SuiteTalk REST web services is the technology intended to replace SOAP. All newly built integrations should use REST web services with OAuth 2.0 for authentication.
-
-For any custom integration applications that you have developed using SOAP, you should start planning the migration of your solution to REST as soon as possible. For a detailed guide for the migration, see SOAP Web Services To Rest Web Services Upgrade Guide.
-
-If you use a partner SOAP application to integrate with NetSuite, consult with your partner to provide you with a REST-based application instead.
-
-If you use an Oracle NetSuite integration application, a REST-based application will be provided by Oracle NetSuite.
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/bdelanghe/<GIST_ID>/raw/coverage.json)
 
 # NetSuite SuiteTalk API Ruby Gem (netsuite-async-list)
 
@@ -24,9 +8,25 @@ If you use an Oracle NetSuite integration application, a REST-based application 
 * The gem does not cover the entire API, only the subset contributors have used so far. Please submit a PR for any functionality that's missing!
 * NetSuite is a complex system. There's a lot to learn and sparse resources available to learn from. Here's a list of [NetSuite Development Resources](https://github.com/bdelanghe/netsuite/wiki/NetSuite-Development-Resources).
 
-# Help & Support
+## Project status (this fork)
 
-There are some additional helpful resources for NetSuite development [listed here](https://dashboard.suitesync.io/docs/resources#netsuite).
+This is a maintained fork of [NetSweet/netsuite](https://github.com/NetSweet/netsuite), focused on **SOAP 2025.2** and **async bulk operations**. It serves as a bridge for existing SOAP integrations during Oracle's deprecation timeline. This gem is not intended for new projects. There are no plans to contribute changes upstream.
+
+### SOAP deprecation timeline
+
+| Release | What happens |
+|---------|-------------|
+| **2025.2** | Last planned SOAP endpoint |
+| **2027.1** | Only the 2025.2 endpoint will be supported |
+| **2028.2** | SOAP removed from NetSuite entirely |
+
+## REST migration guidance
+
+All new integrations should use [SuiteTalk REST Web Services](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_1540391670.html) with OAuth 2.0 for authentication. If you have existing SOAP integrations, start planning your migration to REST as soon as possible.
+
+## Credits
+
+This gem is based on [NetSweet/netsuite](https://github.com/NetSweet/netsuite). Thanks to all the original contributors.
 
 # Testing
 

@@ -18,3 +18,25 @@ jobs:
         run: bundle install
       - name: Run tests
         run: bundle exec rspec
+        env:
+          COVERAGE: ${{ matrix.ruby-version == 3.2 && 'true' || '' }}
+      - name: Read coverage
+        if: matrix.ruby-version == 3.2 && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: coverage
+        run: |
+          if [ -f coverage/.last_run.json ]; then
+            LINE=$(jq '.result.line' coverage/.last_run.json)
+            echo "line=$LINE" >> $GITHUB_OUTPUT
+          fi
+      - name: Upload coverage badge
+        if: steps.coverage.outputs.line && matrix.ruby-version == 3.2 && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: schneegans/dynamic-badges-action@v1.7.0
+        with:
+          auth: ${{ secrets.GIST_TOKEN }}
+          gistID: <GIST_ID>
+          filename: coverage.json
+          label: coverage
+          message: ${{ steps.coverage.outputs.line }}%
+          valColorRange: ${{ steps.coverage.outputs.line }}
+          minColorRange: 50
+          maxColorRange: 90

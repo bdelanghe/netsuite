@@ -25,13 +25,7 @@ end
 
 Bundler.require
 
-# https://circleci.com/docs/code-coverage
-if ENV['CIRCLE_ARTIFACTS']
-  require 'simplecov'
-  dir = File.join("../../../..", ENV['CIRCLE_ARTIFACTS'], "coverage")
-  SimpleCov.coverage_dir(dir)
-  SimpleCov.start
-elsif ENV['COVERAGE']
+if ENV['CI'] || ENV['COVERAGE']
   require 'simplecov'
   SimpleCov.start do
     add_filter '/spec/'
