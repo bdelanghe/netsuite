@@ -1,13 +1,38 @@
 ## Unreleased
 
 ### Added
+
+### Fixed
+
+### Breaking Changes
+
+## v2025.2.0
+
+### Added
+* Asynchronous bulk SOAP operations: submit → poll → fetch pattern via `CheckAsyncStatus` and `GetAsyncResult`
+* `AsyncAddList` action (up to 400 records per job); record classes can declare `actions :async_add_list`
+* `AsyncUpdateList` (up to 200 records), `AsyncUpsertList` (up to 200), `AsyncDeleteList` (up to 400), `AsyncGetList` (up to 2000)
+* `AsyncSearch` and `AsyncInitializeList` actions
+* `AsyncResponse` mixin for async action response parsing (`asyncStatusResult` / `asyncResult` envelope shape)
+* README section "Async bulk operations" with submit/poll/fetch example and per-operation limits
+* SOAP 2025.2 WSDL/XSD fixtures under `spec/support/fixtures/soap/v2025_2_0/` for Savon specs
+
+### Fixed
+* README: correct `multi_tentant!` → `multi_tenant!` in Multi-Tenancy example
+
+### Breaking Changes
+* **API version**: Only `api_version '2025_2'` is supported (NetSuite SOAP 2025.2 is the final endpoint; SOAP removed 2028.2). Other versions raise `ConfigurationError`.
+* **Ruby**: Requires Ruby 3.1.0 or later (Gemfile `ruby '>= 3.1.0'`).
+* **Removed**: `NetSuite::Actions::Login` and `login` action (no longer used by the client).
+
+## v0.9.4
+
+### Added
 * Add `get_deleted` action to `CustomerCategory` (#595)
 * Add `get_deleted` action to `Customer` (#605)
 
 ### Fixed
 * Revert recent proxy changes which breaks proxy usage by @andrewdicken-stripe in https://github.com/NetSweet/netsuite/pull/579
-
-### Breaking Changes
 
 ## v0.9.3
 

@@ -19,9 +19,9 @@ If you use a partner SOAP application to integrate with NetSuite, consult with y
 
 If you use an Oracle NetSuite integration application, a REST-based application will be provided by Oracle NetSuite.
 
-# NetSuite SuiteTalk API Ruby Gem
+# NetSuite SuiteTalk API Ruby Gem (netsuite-async-list)
 
-* This gem will act as a wrapper around the NetSuite SuiteTalk Web Services API.
+* This gem wraps the NetSuite SuiteTalk SOAP Web Services API and adds **asynchronous bulk operations** (async add/update/upsert/delete/get list, async search, check status, get result).
 * The gem does not cover the entire API, only the subset contributors have used so far. Please submit a PR for any functionality that's missing!
 * NetSuite is a complex system. There's a lot to learn and sparse resources available to learn from. Here's a list of [NetSuite Development Resources](https://github.com/bdelanghe/netsuite/wiki/NetSuite-Development-Resources).
 
@@ -55,7 +55,7 @@ gem 'netsuite-async-list'
 
 If you'd like more accurate time conversion support, include the `tzinfo` gem.
 
-This gem is built for Ruby 2.6.x+, but should work on older versions down to 1.9. There's a [1-8-stable](https://github.com/bdelanghe/netsuite/tree/1-8-stable) branch for Ruby 1.8.x support.
+This gem requires Ruby 3.1.0 or later.
 
 ## Configuration
 
@@ -75,8 +75,8 @@ NetSuite.configure do
   reset!
 
   # production & sandbox account numbers will differ
-  account  'TSTDRV1576318'
-  api_version '2018_2'
+  account     'TSTDRV1576318'
+  api_version '2025_2'
 
   # password-based login information
   # in most cases you should use Token Based Authentication instead
@@ -84,15 +84,8 @@ NetSuite.configure do
   password 'password'
   role 10
 
-  # recent API versions require an account-specific endpoint to be set
-  # use `NetSuite::Utilities.data_center_url('TSTDRV1576318')` to retrieve WSDL URL
-  # you'll want to do this in a background process and strip the protocol out of the return string
-  wsdl_domain 'tstdrv1576318.suitetalk.api.netsuite.com'
-
-  # the endpoint indicated in the > 2018_2 wsdl is invalid
-  # you must set the endpoint directly
-  # https://github.com/bdelanghe/netsuite/pull/473
-  endpoint "https://#{wsdl_domain}/services/NetSuitePort_#{api_version}"
+  # This gem targets SOAP 2025.2 only (final supported endpoint; SOAP removed in 2028.2).
+  # WSDL defaults to https://webservices.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl (or sandbox); set wsdl or wsdl_domain if needed.
 end
 ```
 
@@ -104,17 +97,17 @@ Here's the various options that are are available for configuration:
 NetSuite.configure do
   reset!
 
-  api_version	'2018_2'
+  api_version '2025_2'
 
   # optionally specify full WSDL URL (to switch to sandbox, for example)
-  wsdl          "https://webservices.sandbox.netsuite.com/wsdl/v#{api_version}_0/netsuite.wsdl"
+  wsdl "https://webservices.sandbox.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl"
 
   # if your datacenter is being switched, you'll have to manually set your WSDL location
-  wsdl          "https://webservices.na2.netsuite.com/wsdl/v#{api_version}_0/netsuite.wsdl"
+  wsdl "https://webservices.na2.netsuite.com/wsdl/v2025_2_0/netsuite.wsdl"
 
   # or specify the wsdl_domain if you want to specify the datacenter and let the configuration
-  # construct the full wsdl location - e.g. "https://#{wsdl_domain}/wsdl/v#{api_version}_0/netsuite.wsdl"
-  wsdl_domain   "webservices.na2.netsuite.com"
+  # construct the full wsdl location - e.g. "https://#{wsdl_domain}/wsdl/v2025_2_0/netsuite.wsdl"
+  wsdl_domain "webservices.na2.netsuite.com"
 
   # often the NetSuite servers will hang which would cause a timeout exception to be raised
   # if you don't mind waiting (e.g. processing NS via a background worker), increasing the timeout should fix the issue
@@ -168,13 +161,8 @@ NetSuite.configure do
   token_id         ENV['NETSUITE_TOKEN_ID']
   token_secret     ENV['NETSUITE_TOKEN_SECRET']
 
-  # oauth does not work with API versions less than 2015_2
-  api_version      '2016_2'
-
-  # the endpoint indicated in the > 2018_2 WSDL is invalid
-  # you must set the endpoint directly
-  # https://github.com/bdelanghe/netsuite/pull/473
-  endpoint "https://#{wsdl_domain}/services/NetSuitePort_#{api_version}"
+  api_version '2025_2'
+  # WSDL defaults to production or sandbox URL for v2025_2_0; override wsdl or wsdl_domain if needed.
 end
 ```
 
@@ -186,7 +174,7 @@ From your main thread, you'd want to enable multi-tenancy:
 
 ```ruby
 NetSuite.configure do
-  multi_tentant!
+  multi_tenant!
 end
 ```
 
@@ -264,6 +252,43 @@ options = NetSuite::Records::BaseRefList.get_select_value(
 )
 options.base_refs.map(&:name)
 ```
+
+## Async bulk operations
+
+This gem adds asynchronous bulk SOAP operations: submit a job, poll for status, then fetch results. Use them for large add/update/upsert/delete/get list or search operations to avoid long-running requests.
+
+**Pattern:** submit → poll until finished → fetch result (by page).
+
+```ruby
+# 1. Submit: async add up to 400 records (Customer supports async_add_list via actions(:add, :async_add_list, ...))
+records = 100.times.map { |i| NetSuite::Records::Customer.new(entity_id: "Bulk-#{i}", company_name: "Bulk Co #{i}") }
+result = NetSuite::Records::Customer.async_add_list(records)
+job_id = result[:job_id]   # e.g. "JOB-123"
+# result[:status] => 'pending'
+
+# 2. Poll: check status until job is finished
+status = NetSuite::Actions::CheckAsyncStatus.call([job_id])
+until status.body[:status] == 'finished' || status.body[:status] == 'failed'
+  sleep 2
+  status = NetSuite::Actions::CheckAsyncStatus.call([job_id])
+end
+
+# 3. Fetch: get result pages (page_index is 1-based)
+response = NetSuite::Actions::GetAsyncResult.call([job_id, 1])
+# response.body[:write_response_list] (add/update/upsert) or other keys per operation
+```
+
+Other async operations follow the same submit/poll/fetch pattern:
+
+- **AsyncAddList** — up to 400 records per job (record classes with `actions :async_add_list`)
+- **AsyncUpdateList** — up to 200 records
+- **AsyncUpsertList** — up to 200 records
+- **AsyncDeleteList** — up to 400 records
+- **AsyncGetList** — up to 2000 records
+- **AsyncSearch** — async search (submit search, poll, fetch result)
+- **AsyncInitializeList** — async initialize list
+
+Use `CheckAsyncStatus.call([job_id])` and `GetAsyncResult.call([job_id, page_index])` (page_index 1-based) for any of these jobs.
 
 ## Uploading/Attaching Files
 

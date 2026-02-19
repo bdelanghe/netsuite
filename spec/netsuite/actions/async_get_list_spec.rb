@@ -49,4 +49,30 @@ describe NetSuite::Actions::AsyncGetList do
       expect(response.body[:job_id]).to eq('ASYNCWEBSERVICES_563214_053120061943428686160042948_4bee0685')
     end
   end
+
+  describe 'Support::ClassMethods' do
+    let(:klass) do
+      Class.new do
+        include NetSuite::Actions::AsyncGetList::Support
+      end
+    end
+
+    describe '#async_get_list' do
+      context 'when the response is successful' do
+        it 'returns the response body' do
+          fake_response = double('response', success?: true, body: { job_id: 'JOB-1' })
+          allow(NetSuite::Actions::AsyncGetList).to receive(:call).and_return(fake_response)
+          expect(klass.async_get_list(list: ['1', '2'])).to eq({ job_id: 'JOB-1' })
+        end
+      end
+
+      context 'when the response is unsuccessful' do
+        it 'returns false' do
+          allow(NetSuite::Actions::AsyncGetList).to receive(:call)
+            .and_return(double('response', success?: false))
+          expect(klass.async_get_list(list: ['1'])).to be false
+        end
+      end
+    end
+  end
 end

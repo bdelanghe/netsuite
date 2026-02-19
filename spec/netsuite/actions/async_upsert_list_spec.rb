@@ -85,6 +85,41 @@ describe NetSuite::Actions::AsyncUpsertList do
     end
   end
 
+  describe 'Support::ClassMethods' do
+    let(:klass) do
+      Class.new do
+        include NetSuite::Actions::AsyncUpsertList::Support
+        def initialize(attrs = {}); end
+      end
+    end
+
+    describe '#async_upsert_list' do
+      let(:record) { klass.new }
+
+      context 'when the response is successful' do
+        let(:fake_response) { double('response', success?: true, body: { job_id: 'JOB-1' }) }
+
+        before { allow(NetSuite::Actions::AsyncUpsertList).to receive(:call).and_return(fake_response) }
+
+        it 'returns the response body for pre-built instances' do
+          expect(klass.async_upsert_list([record])).to eq({ job_id: 'JOB-1' })
+        end
+
+        it 'wraps raw attributes as instances using .new' do
+          expect(klass.async_upsert_list([{ entity_id: 'Test' }])).to eq({ job_id: 'JOB-1' })
+        end
+      end
+
+      context 'when the response is unsuccessful' do
+        it 'returns false' do
+          allow(NetSuite::Actions::AsyncUpsertList).to receive(:call)
+            .and_return(double('response', success?: false))
+          expect(klass.async_upsert_list([record])).to be false
+        end
+      end
+    end
+  end
+
   context 'with errors' do
     let(:customers) do
       [

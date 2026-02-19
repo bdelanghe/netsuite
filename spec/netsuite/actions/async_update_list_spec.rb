@@ -42,4 +42,39 @@ describe NetSuite::Actions::AsyncUpdateList do
       expect(response.body[:job_id]).to eq('ASYNCWEBSERVICES_563214_053120061943428686160042948_4bee0685')
     end
   end
+
+  describe 'Support::ClassMethods' do
+    let(:klass) do
+      Class.new do
+        include NetSuite::Actions::AsyncUpdateList::Support
+        def initialize(attrs = {}); end
+      end
+    end
+
+    describe '#async_update_list' do
+      let(:record) { klass.new }
+
+      context 'when the response is successful' do
+        let(:fake_response) { double('response', success?: true, body: { job_id: 'JOB-1' }) }
+
+        before { allow(NetSuite::Actions::AsyncUpdateList).to receive(:call).and_return(fake_response) }
+
+        it 'returns the response body for pre-built instances' do
+          expect(klass.async_update_list([record])).to eq({ job_id: 'JOB-1' })
+        end
+
+        it 'wraps raw attributes as instances using .new' do
+          expect(klass.async_update_list([{ item_id: 'Test' }])).to eq({ job_id: 'JOB-1' })
+        end
+      end
+
+      context 'when the response is unsuccessful' do
+        it 'returns false' do
+          allow(NetSuite::Actions::AsyncUpdateList).to receive(:call)
+            .and_return(double('response', success?: false))
+          expect(klass.async_update_list([record])).to be false
+        end
+      end
+    end
+  end
 end
