@@ -535,7 +535,7 @@ describe NetSuite::Configuration do
       config.log = file_path
       config.logger.info "foo"
 
-      log_contents = open(file_path).read
+      log_contents = File.read(file_path)
       expect(log_contents).to include("foo")
     end
 
