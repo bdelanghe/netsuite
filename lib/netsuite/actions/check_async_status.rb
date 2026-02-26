@@ -20,7 +20,7 @@ module NetSuite
       end
 
       def response_hash
-        @response_hash ||= @response.body[:check_async_status_response][:async_status_result]
+        @response_hash ||= @response.body[:check_async_status_response]&.fetch(:async_status_result, nil)
       end
 
       # Body exposes the full asyncStatusResult: job_id, status, percent_complete, est_remaining_duration

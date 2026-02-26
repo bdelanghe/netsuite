@@ -22,7 +22,7 @@ module NetSuite
       end
 
       def response_hash
-        @response_hash ||= @response.body[:get_async_result_response][:async_result]
+        @response_hash ||= @response.body[:get_async_result_response]&.fetch(:async_result, nil)
       end
 
       # Body is the full asyncResult: status, totalRecords, writeResponseList (or searchResult, etc.)
@@ -31,7 +31,7 @@ module NetSuite
       end
 
       def success?
-        @success ||= response_hash[:status][:@is_success] == 'true'
+        @success ||= response_hash&.dig(:status, :@is_success) == 'true'
       end
 
       def action_name

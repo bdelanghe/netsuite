@@ -28,7 +28,7 @@ module NetSuite
       end
 
       def response_hash
-        @response_hash ||= @response.body[:async_add_list_response][:async_status_result]
+        @response_hash ||= @response.body[:async_add_list_response]&.fetch(:async_status_result, nil)
       end
 
       def response_body
@@ -38,7 +38,7 @@ module NetSuite
       # The submit itself succeeds when NetSuite accepts the job (status is pending or processing).
       # A status of 'failed' means the submission was rejected.
       def success?
-        @success ||= %w[pending processing finishedWithErrors complete].include?(response_hash[:status])
+        @success ||= %w[pending processing finishedWithErrors complete].include?(response_hash&.fetch(:status, nil))
       end
 
       def request_options
