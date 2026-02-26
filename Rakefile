@@ -11,72 +11,33 @@ RSpec::Core::RakeTask.new do |t|
 end
 
 namespace :fixtures do
-  # Sources:
-  #   https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_3892701016.html
-  #   https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_N3413913.html
-  # SOAP is deprecated — 2025.2 is the last planned endpoint (removed in 2028.2).
-  WSDL_VERSIONS = {
-    # Final endpoint — all integrations should target this
-    'v2025_2_0' => { status: :final },
-    # Supported
-    'v2025_1_0' => { status: :supported },
-    'v2024_2_0' => { status: :supported },
-    'v2024_1_0' => { status: :supported },
-    'v2023_2_0' => { status: :supported },
-    'v2023_1_0' => { status: :supported },
-    'v2022_2_0' => { status: :supported },
-    # Unsupported but still available
-    'v2022_1_0' => { status: :unsupported },
-    'v2021_2_0' => { status: :unsupported },
-    'v2021_1_0' => { status: :unsupported },
-    'v2020_2_0' => { status: :unsupported },
-    'v2020_1_0' => { status: :unsupported },
-    'v2019_2_0' => { status: :unsupported },
-    'v2019_1_0' => { status: :unsupported },
-    'v2018_2_0' => { status: :unsupported }
-  }.freeze
+  # SOAP is deprecated — 2025.2 is the final endpoint (removed in 2028.2).
+  # https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/section_3892701016.html
+  WSDL_VERSION = 'v2025_2_0'.freeze
 
   BASE_URL      = 'https://webservices.netsuite.com'.freeze
   DOWNLOAD_BASE = 'https://content.netsuite.com/download'.freeze
-
-  def wsdl_url(version)
-    "#{BASE_URL}/wsdl/#{version}/netsuite.wsdl"
-  end
 
   def zip_url(version)
     "#{DOWNLOAD_BASE}/WSDL_#{version}.zip"
   end
 
-  desc 'Download WSDL fixtures and all referenced XSD schemas for spec use. ' \
-       'Set VERSION=v2025_2_0 to fetch a single version. ' \
-       'Set WSDL_SOURCE=<dir> to copy from a local directory instead of downloading.'
+  desc 'Download WSDL fixtures for spec use (v2025_2_0 only). Set WSDL_SOURCE=<dir> to copy from local.'
   task :wsdl do
     require 'open-uri'
     require 'fileutils'
-    require 'rexml/document'
     require 'tmpdir'
     require 'uri'
     require 'zip'
 
     fixtures_root = File.join('spec', 'support', 'fixtures')
+    soap_root     = File.join(fixtures_root, 'soap', WSDL_VERSION)
     local_source  = ENV['WSDL_SOURCE']
 
-    versions = if ENV['VERSION']
-      WSDL_VERSIONS.slice(ENV['VERSION']).tap do |v|
-        abort "Unknown VERSION '#{ENV['VERSION']}'. Available: #{WSDL_VERSIONS.keys.join(', ')}" if v.empty?
-      end
+    if local_source
+      install_from_dir(local_source, soap_root)
     else
-      WSDL_VERSIONS
-    end
-
-    versions.each_key do |version|
-      soap_root = File.join(fixtures_root, 'soap', version)
-
-      if local_source
-        install_from_dir(local_source, soap_root)
-      else
-        install_from_zip(zip_url(version), soap_root)
-      end
+      install_from_zip(zip_url(WSDL_VERSION), soap_root)
     end
   end
 

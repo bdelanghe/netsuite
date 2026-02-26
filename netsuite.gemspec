@@ -21,7 +21,9 @@ Gem::Specification.new do |gem|
   gem.metadata['rubygems_mfa_required'] = 'true'
   gem.metadata['github_repo'] = 'ssh://github.com/bdelanghe/netsuite'
 
+  gem.add_dependency 'rack', '< 4'           # httpi (Savon stack) not yet Rack 4–compatible
   gem.add_dependency 'savon', '>= 2.3.0', '!= 2.13.0'
+  gem.add_dependency 'tzinfo', '>= 1.2.5'   # lib/netsuite/utilities.rb time normalization
 
   gem.add_development_dependency 'rspec', '~> 3.13.0'
   gem.add_development_dependency 'webmock', '~> 3.19'
