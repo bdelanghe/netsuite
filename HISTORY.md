@@ -1,7 +1,16 @@
 ## Unreleased
 
+## v2025.2.2
+
+### Added
+* `GetAll` action spec with fixtures (`Currency` success/error + class method coverage)
+
 ### Fixed
 * Search action no longer leaks `:preferences` key into criteria iteration when both `saved:` and `preferences:` options are passed together
+* Move `refresh_spec.rb` to `spec/netsuite/support/` (matches `Support::Records` mixin where `#refresh` lives)
+
+### Breaking Changes
+* **Ruby**: Requires Ruby 3.4.x (`~> 3.4`). CI matrix updated to Ruby 3.4 only.
 
 ## v2025.2.0
 
