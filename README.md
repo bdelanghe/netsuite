@@ -2,7 +2,7 @@
 [![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
 ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/bdelanghe/netsuite/badges/coverage.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Ruby Version](https://img.shields.io/badge/ruby-%3E%3D%203.1-red)](https://github.com/bdelanghe/netsuite/blob/main/netsuite.gemspec)
+[![Ruby Version](https://img.shields.io/badge/ruby-~%3E%203.4-red)](https://github.com/bdelanghe/netsuite/blob/main/netsuite.gemspec)
 
 # netsuite
 
@@ -27,17 +27,17 @@ Hosted on GitHub Packages, not RubyGems.org.
 ```ruby
 # Gemfile
 source "https://rubygems.pkg.github.com/bdelanghe" do
-  gem "netsuite", "2025.2.1"
+  gem "netsuite", "2025.2.2"
 end
 ```
 
 Or from the command line:
 
 ```shell
-gem install netsuite --version "2025.2.1" --source "https://rubygems.pkg.github.com/bdelanghe"
+gem install netsuite --version "2025.2.2" --source "https://rubygems.pkg.github.com/bdelanghe"
 ```
 
-Requires Ruby 3.1+.
+Requires Ruby 3.4.
 
 ## Quick start
 
