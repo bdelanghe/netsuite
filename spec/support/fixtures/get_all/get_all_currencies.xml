@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Body>
+    <getAllResponse xmlns="urn:messages_2025_2.platform.webservices.netsuite.com">
+      <getAllResult>
+        <platformCore:status isSuccess="true" xmlns:platformCore="urn:core_2025_2.platform.webservices.netsuite.com"/>
+        <platformCore:recordList xmlns:platformCore="urn:core_2025_2.platform.webservices.netsuite.com">
+          <platformCore:record internalId="1" xsi:type="listAcct:Currency" xmlns:listAcct="urn:accounting_2025_2.lists.webservices.netsuite.com">
+            <listAcct:name>US Dollar</listAcct:name>
+            <listAcct:symbol>USD</listAcct:symbol>
+            <listAcct:isBaseCurrency>true</listAcct:isBaseCurrency>
+            <listAcct:isInactive>false</listAcct:isInactive>
+          </platformCore:record>
+          <platformCore:record internalId="2" xsi:type="listAcct:Currency" xmlns:listAcct="urn:accounting_2025_2.lists.webservices.netsuite.com">
+            <listAcct:name>Euro</listAcct:name>
+            <listAcct:symbol>EUR</listAcct:symbol>
+            <listAcct:isBaseCurrency>false</listAcct:isBaseCurrency>
+            <listAcct:isInactive>false</listAcct:isInactive>
+          </platformCore:record>
+        </platformCore:recordList>
+      </getAllResult>
+    </getAllResponse>
+  </soapenv:Body>
+</soapenv:Envelope>
