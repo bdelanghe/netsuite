@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Body>
+    <getAllResponse xmlns="urn:messages_2011_2.platform.webservices.netsuite.com">
+      <getAllResult>
+        <platformCore:status isSuccess="true" xmlns:platformCore="urn:core_2011_2.platform.webservices.netsuite.com"/>
+        <platformCore:recordList xmlns:platformCore="urn:core_2011_2.platform.webservices.netsuite.com">
+          <platformCore:record internalId="1" xsi:type="listAcct:SalesTaxItem">
+            <listAcct:itemId xmlns:listAcct="urn:accounting_2011_2.lists.webservices.netsuite.com">CA State Tax</listAcct:itemId>
+            <listAcct:rate xmlns:listAcct="urn:accounting_2011_2.lists.webservices.netsuite.com">8.25</listAcct:rate>
+          </platformCore:record>
+          <platformCore:record internalId="2" xsi:type="listAcct:SalesTaxItem">
+            <listAcct:itemId xmlns:listAcct="urn:accounting_2011_2.lists.webservices.netsuite.com">NY State Tax</listAcct:itemId>
+            <listAcct:rate xmlns:listAcct="urn:accounting_2011_2.lists.webservices.netsuite.com">4.0</listAcct:rate>
+          </platformCore:record>
+        </platformCore:recordList>
+      </getAllResult>
+    </getAllResponse>
+  </soapenv:Body>
+</soapenv:Envelope>

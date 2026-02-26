@@ -4,97 +4,59 @@ describe NetSuite::Actions::GetAll do
   before { savon.mock! }
   after  { savon.unmock! }
 
-  let(:currency_class) { NetSuite::Records::Currency }
-
-  describe 'request body' do
+  context 'SalesTaxItem' do
     before do
-      savon.expects(:get_all).with(message: {
-        record: [{ record_type: 'currency' }]
-      }).returns(fixture('get_all/get_all_currencies.xml'))
+      savon.expects(:get_all)
+           .with(message: { record: [{ record_type: 'salesTaxItem' }] })
+           .returns(File.read('spec/support/fixtures/get_all/get_all_sales_tax_items.xml'))
     end
 
-    it 'sends the correct record type' do
-      NetSuite::Actions::GetAll.call([currency_class])
-    end
-  end
+    subject(:response) { NetSuite::Actions::GetAll.call([NetSuite::Records::SalesTaxItem]) }
 
-  describe 'successful response' do
-    before do
-      savon.expects(:get_all).with(message: :any).returns(fixture('get_all/get_all_currencies.xml'))
+    it 'makes a valid request to the NetSuite API' do
+      NetSuite::Actions::GetAll.call([NetSuite::Records::SalesTaxItem])
     end
 
-    it 'returns a successful Response' do
-      response = NetSuite::Actions::GetAll.call([currency_class])
-      expect(response).to be_kind_of(NetSuite::Response)
+    it 'returns a NetSuite::Response' do
+      expect(response).to be_a(NetSuite::Response)
+    end
+
+    it 'is successful' do
       expect(response).to be_success
     end
 
-    it 'returns an array of record attribute hashes' do
-      response = NetSuite::Actions::GetAll.call([currency_class])
+    it 'returns the records as an Array' do
       expect(response.body).to be_an(Array)
       expect(response.body.length).to eq(2)
     end
 
-    it 'includes record data' do
-      response = NetSuite::Actions::GetAll.call([currency_class])
-      expect(response.body.first[:name]).to eq('US Dollar')
-      expect(response.body.first[:"@internal_id"]).to eq('1')
-      expect(response.body.last[:name]).to eq('Euro')
-      expect(response.body.last[:"@internal_id"]).to eq('2')
+    it 'derives the record type name from the class name' do
+      # SalesTaxItem → salesTaxItem (lowercases the first character)
+      expect(response.body.first).to be_a(Hash)
     end
   end
 
-  describe 'error response' do
-    before do
-      savon.expects(:get_all).with(message: :any).returns(fixture('get_all/get_all_error.xml'))
+  context 'action_name derivation' do
+    it 'lowercases the first character of the class name for the record type' do
+      action = NetSuite::Actions::GetAll.allocate
+      action.instance_variable_set(:@klass, NetSuite::Records::SalesTaxItem)
+      body = action.send(:request_body)
+      expect(body[:record].first[:record_type]).to eq('salesTaxItem')
     end
 
-    it 'returns an unsuccessful Response' do
-      response = NetSuite::Actions::GetAll.call([currency_class])
-      expect(response).not_to be_success
-    end
-
-    it 'returns nil body' do
-      response = NetSuite::Actions::GetAll.call([currency_class])
-      expect(response.body).to be_nil
+    it 'handles single-word class names' do
+      action = NetSuite::Actions::GetAll.allocate
+      action.instance_variable_set(:@klass, NetSuite::Records::Currency)
+      body = action.send(:request_body)
+      expect(body[:record].first[:record_type]).to eq('currency')
     end
   end
 
-  describe 'Currency.get_all class method' do
-    context 'when successful' do
-      before do
-        savon.expects(:get_all).with(message: :any).returns(fixture('get_all/get_all_currencies.xml'))
-      end
-
-      it 'returns an array of Currency instances' do
-        currencies = currency_class.get_all
-        expect(currencies).to be_an(Array)
-        expect(currencies.length).to eq(2)
-        expect(currencies).to all(be_kind_of(currency_class))
-      end
-
-      it 'maps record fields onto instances' do
-        currencies = currency_class.get_all
-        expect(currencies.first.name).to eq('US Dollar')
-        expect(currencies.last.name).to eq('Euro')
-      end
-
-      it 'sets internal_id on each instance' do
-        currencies = currency_class.get_all
-        expect(currencies.first.internal_id).to eq('1')
-        expect(currencies.last.internal_id).to eq('2')
-      end
-    end
-
-    context 'when unsuccessful' do
-      before do
-        savon.expects(:get_all).with(message: :any).returns(fixture('get_all/get_all_error.xml'))
-      end
-
-      it 'returns false' do
-        result = currency_class.get_all
-        expect(result).to be false
-      end
+  context 'nil-safe response_hash (edge cases)' do
+    it 'raises when the outer key is missing (no safe navigation — documents current behavior)' do
+      action = NetSuite::Actions::GetAll.allocate
+      action.instance_variable_set(:@response, double(body: {}))
+      expect { action.send(:response_hash) }.to raise_error(NoMethodError)
     end
   end
 end

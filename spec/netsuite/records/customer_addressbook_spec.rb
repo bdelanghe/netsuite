@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 describe NetSuite::Records::CustomerAddressbook do
-  # address schema changed in 2014.2. We support < 2014.2 schema, but we don't test support
+  # address schema changed in 2014.2; both branches are covered below.
 
   let(:attributes) do
     {
@@ -99,6 +99,56 @@ describe NetSuite::Records::CustomerAddressbook do
   describe '#record_type' do
     it 'returns a string of the record SOAP type' do
       expect(list.record_type).to eql('listRel:CustomerAddressbook')
+    end
+  end
+
+  describe '#initialize_from_record (API < 2014_2)' do
+    before { NetSuite::Configuration.api_version = '2014_1' }
+
+    let(:legacy_attrs) do
+      {
+        default_shipping: true,
+        default_billing:  false,
+        is_residential:   true,
+        label:            'Home',
+        attention:        'Jane Smith',
+        addressee:        'Smith Corp',
+        phone:            '800-555-0100',
+        addr1:            '10 Oak Ave',
+        addr2:            'Apt 2',
+        addr3:            '',
+        city:             'Portland',
+        zip:              '97201',
+        override:         false,
+        state:            'OR',
+        internal_id:      '88'
+      }
+    end
+
+    let(:source) { described_class.new(legacy_attrs) }
+    let(:copy)   { described_class.new(source) }
+
+    it 'copies scalar address fields from the source record' do
+      expect(copy.addr1).to eq('10 Oak Ave')
+      expect(copy.addr2).to eq('Apt 2')
+      expect(copy.city).to eq('Portland')
+      expect(copy.zip).to eq('97201')
+      expect(copy.state).to eq('OR')
+      expect(copy.phone).to eq('800-555-0100')
+    end
+
+    it 'copies identity/label fields' do
+      expect(copy.attention).to eq('Jane Smith')
+      expect(copy.addressee).to eq('Smith Corp')
+      expect(copy.label).to eq('Home')
+      expect(copy.internal_id).to eq('88')
+    end
+
+    it 'copies boolean flags' do
+      expect(copy.default_shipping).to be true
+      expect(copy.default_billing).to be false
+      expect(copy.is_residential).to be true
+      expect(copy.override).to be false
     end
   end
 

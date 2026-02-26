@@ -3,71 +3,50 @@ module NetSuite
   module Actions
     class AsyncAddList < AbstractAction
       include Support::Requests
-      include AsyncResponse
-
-      MAX_RECORDS = 400
 
       def initialize(*objects)
-        if objects.size > MAX_RECORDS
-          raise ArgumentError, "asyncAddList supports a maximum of #{MAX_RECORDS} records per request (#{objects.size} given)"
-        end
         @objects = objects
       end
 
       private
 
+      # <soap:Body>
+      #   <asyncAddList>
+      #     <record xsi:type="listRel:Customer" externalId="ext1">
+      #       <listRel:entityId>Shutter Fly</listRel:entityId>
+      #       <listRel:companyName>Shutter Fly, Inc</listRel:companyName>
+      #     </record>
+      #   </asyncAddList>
+      # </soap:Body>
       def request_body
         attrs = @objects.map do |o|
-          hash = o.to_record.merge({
-            '@xsi:type' => o.record_type
-          })
-
-          if o.respond_to?(:internal_id) && o.internal_id
-            hash['@internalId'] = o.internal_id
-          end
-
-          if o.respond_to?(:external_id) && o.external_id
-            hash['@externalId'] = o.external_id
-          end
-
+          hash = o.to_record.merge({ '@xsi:type' => o.record_type })
+          hash['@externalId'] = o.external_id if o.respond_to?(:external_id) && o.external_id
           hash
         end
-
         { 'record' => attrs }
       end
 
-      def async_response_key
-        :async_add_list_response
+      def response_hash
+        @response_hash ||= @response.body[:async_add_list_response]&.fetch(:async_status_result, nil)
+      end
+
+      def response_body
+        @response_body ||= response_hash
+      end
+
+      # The submit itself succeeds when NetSuite accepts the job (status is pending or processing).
+      # A status of 'failed' means the submission was rejected.
+      def success?
+        @success ||= %w[pending processing finishedWithErrors complete].include?(response_hash&.fetch(:status, nil))
+      end
+
+      def request_options
+        { element_form_default: :unqualified }
       end
 
       def action_name
         :async_add_list
-      end
-
-      module Support
-        def self.included(base)
-          base.extend(ClassMethods)
-        end
-
-        module ClassMethods
-          def async_add_list(records, credentials = {})
-            netsuite_records = records.map do |r|
-              if r.kind_of?(self)
-                r
-              else
-                self.new(r)
-              end
-            end
-
-            response = NetSuite::Actions::AsyncAddList.call(netsuite_records, credentials)
-
-            if response.success?
-              response.body
-            else
-              false
-            end
-          end
-        end
       end
     end
   end

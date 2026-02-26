@@ -1,51 +1,98 @@
 require 'spec_helper'
 
-# End-to-end test of the async submit → poll → fetch lifecycle.
-# Uses Savon SpecHelper (same pattern as other action specs) and the existing
-# fixture files so no new XML is needed.
-describe 'Async Lifecycle: submit → poll → fetch' do
+# End-to-end contract test for the two-phase async lifecycle:
+#   AsyncAddList.call  →  CheckAsyncStatus.call (pending)
+#                      →  CheckAsyncStatus.call (complete)
+#                      →  GetAsyncResult.call
+#
+# Key invariants verified:
+#   1. job_id is a String threaded from submit response into every subsequent call
+#   2. Status transitions from 'pending' to 'complete' across polls
+#   3. Final result contains the expected write_response structure
+describe 'async submit → poll → fetch lifecycle' do
   before { savon.mock! }
   after  { savon.unmock! }
 
-  let(:job_id) { 'ASYNCWEBSERVICES_563214_053120061943428686160042948_4bee0685' }
-  let(:customer) { NetSuite::Records::Customer.new(external_id: 'ext2', entity_id: 'Target', company_name: 'Target') }
+  let(:customers) do
+    [
+      NetSuite::Records::Customer.new(external_id: 'ext1', entity_id: 'Shutter Fly', company_name: 'Shutter Fly, Inc.'),
+      NetSuite::Records::Customer.new(external_id: 'ext2', entity_id: 'Target',      company_name: 'Target')
+    ]
+  end
 
-  it 'threads job_id through AsyncAddList → CheckAsyncStatus → GetAsyncResult' do
-    # Phase 1: Submit
-    savon.expects(:async_add_list).with(:message => {
-      'record' => [{
-        'listRel:entityId'    => 'Target',
-        'listRel:companyName' => 'Target',
-        '@xsi:type'           => 'listRel:Customer',
-        '@externalId'         => 'ext2'
-      }]
-    }).returns(fixture('async_add_list/async_add_list_pending.xml'))
+  it 'threads job_id through the full lifecycle and reflects status transitions' do
+    # ── Phase 1: Submit ────────────────────────────────────────────────────────
+    savon.expects(:async_add_list)
+         .with(message: {
+           'record' => [
+             {
+               'listRel:entityId'    => 'Shutter Fly',
+               'listRel:companyName' => 'Shutter Fly, Inc.',
+               '@xsi:type'          => 'listRel:Customer',
+               '@externalId'        => 'ext1'
+             },
+             {
+               'listRel:entityId'    => 'Target',
+               'listRel:companyName' => 'Target',
+               '@xsi:type'          => 'listRel:Customer',
+               '@externalId'        => 'ext2'
+             }
+           ]
+         })
+         .returns(File.read('spec/support/fixtures/async_add_list/async_add_list_customers.xml'))
 
-    submit_response = NetSuite::Actions::AsyncAddList.call([customer])
+    submit_response = NetSuite::Actions::AsyncAddList.call(customers)
+
+    expect(submit_response).to be_a(NetSuite::Response)
     expect(submit_response).to be_success
-    submitted_job_id = submit_response.body[:job_id]
-    expect(submitted_job_id).to be_a(String).and eq(job_id)
 
-    # Phase 2: Poll
-    savon.expects(:check_async_status).with(:message => {
-      'platformMsgs:jobId' => submitted_job_id
-    }).returns(fixture('check_async_status/check_async_status_pending.xml'))
+    job_id = submit_response.body[:job_id]
+    expect(job_id).to be_a(String)
+    expect(job_id).to eq('WEBSERVICES_3392464_ASYNC_JOB_001')
 
-    poll_response = NetSuite::Actions::CheckAsyncStatus.call([submitted_job_id])
-    expect(poll_response).to be_success
-    expect(poll_response.body[:job_id]).to be_a(String).and eq(submitted_job_id)
-    expect(poll_response.body[:status]).to be_a(String).and eq('pending')
+    # ── Phase 2: Poll — pending ───────────────────────────────────────────────
+    savon.expects(:check_async_status)
+         .with(message: { 'jobId' => job_id })
+         .returns(File.read('spec/support/fixtures/check_async_status/check_async_status_pending.xml'))
 
-    # Phase 3: Fetch result (using the finished fixture)
-    savon.expects(:get_async_result).with(:message => {
-      'platformMsgs:jobId'     => submitted_job_id,
-      'platformMsgs:pageIndex' => 1
-    }).returns(fixture('get_async_result/get_async_result_finished.xml'))
+    pending_response = NetSuite::Actions::CheckAsyncStatus.call([job_id])
 
-    fetch_response = NetSuite::Actions::GetAsyncResult.call([submitted_job_id, 1])
-    expect(fetch_response).to be_success
-    expect(fetch_response.body[:job_id]).to be_a(String).and eq(submitted_job_id)
-    expect(fetch_response.body[:status]).to be_a(String).and eq('finished')
-    expect(fetch_response.body[:write_response_list]).to be_a(Hash)
+    expect(pending_response).to be_a(NetSuite::Response)
+    expect(pending_response).to be_success
+    expect(pending_response.body[:job_id]).to be_a(String).and eq(job_id)
+    expect(pending_response.body[:status]).to be_a(String).and eq('pending')
+    expect(pending_response.body[:percent_complete]).to be_a(String).and eq('0')
+
+    # ── Phase 3: Poll — complete ──────────────────────────────────────────────
+    savon.expects(:check_async_status)
+         .with(message: { 'jobId' => job_id })
+         .returns(File.read('spec/support/fixtures/check_async_status/check_async_status_complete.xml'))
+
+    complete_response = NetSuite::Actions::CheckAsyncStatus.call([job_id])
+
+    expect(complete_response.body[:status]).to be_a(String).and eq('complete')
+    expect(complete_response.body[:percent_complete]).to be_a(String).and eq('100')
+
+    # ── Phase 4: Fetch result ─────────────────────────────────────────────────
+    savon.expects(:get_async_result)
+         .with(message: { 'jobId' => job_id, 'pageIndex' => 1 })
+         .returns(File.read('spec/support/fixtures/get_async_result/get_async_result_customers.xml'))
+
+    result_response = NetSuite::Actions::GetAsyncResult.call([job_id])
+
+    expect(result_response).to be_a(NetSuite::Response)
+    expect(result_response).to be_success
+
+    write_responses = Array(result_response.body[:write_response_list][:write_response])
+    expect(write_responses).to be_an(Array)
+    expect(write_responses.length).to eq(2)
+
+    internal_ids = write_responses.map { |wr| wr[:base_ref][:@internal_id] }
+    expect(internal_ids).to contain_exactly('979', '980')
+
+    write_responses.each do |wr|
+      expect(wr[:status][:@is_success]).to be_a(String).and eq('true')
+      expect(wr[:base_ref][:@type]).to be_a(String).and eq('customer')
+    end
   end
 end

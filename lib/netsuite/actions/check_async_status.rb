@@ -3,7 +3,6 @@ module NetSuite
   module Actions
     class CheckAsyncStatus < AbstractAction
       include Support::Requests
-      include AsyncResponse
 
       def initialize(job_id)
         @job_id = job_id
@@ -11,14 +10,28 @@ module NetSuite
 
       private
 
+      # <soap:Body>
+      #   <checkAsyncStatus>
+      #     <jobId>WEBSERVICES_3392464_...</jobId>
+      #   </checkAsyncStatus>
+      # </soap:Body>
       def request_body
-        {
-          'platformMsgs:jobId' => @job_id
-        }
+        { 'jobId' => @job_id }
       end
 
-      def async_response_key
-        :check_async_status_response
+      def response_hash
+        @response_hash ||= @response.body[:check_async_status_response]&.fetch(:async_status_result, nil)
+      end
+
+      # Body exposes the full asyncStatusResult: job_id, status, percent_complete, est_remaining_duration
+      def response_body
+        @response_body ||= response_hash
+      end
+
+      # success? here means the SOAP call itself succeeded and we have a parseable result.
+      # The async job status is exposed via response.body[:status].
+      def success?
+        @success ||= !response_hash.nil?
       end
 
       def action_name

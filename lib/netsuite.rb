@@ -50,6 +50,9 @@ module NetSuite
 
   module Actions
     autoload :AbstractAction,    'netsuite/actions/abstract_action'
+    autoload :AsyncAddList,      'netsuite/actions/async_add_list'
+    autoload :CheckAsyncStatus,  'netsuite/actions/check_async_status'
+    autoload :GetAsyncResult,    'netsuite/actions/get_async_result'
     autoload :Add,              'netsuite/actions/add'
     autoload :AsyncAddList,     'netsuite/actions/async_add_list'
     autoload :AsyncDeleteList,  'netsuite/actions/async_delete_list'

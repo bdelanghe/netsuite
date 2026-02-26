@@ -2,17 +2,17 @@
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <soapenv:Header>
     <platformMsgs:documentInfo xmlns:platformMsgs="urn:messages_2014_1.platform.webservices.netsuite.com">
-      <platformMsgs:nsId>WEBSERVICES_3392464_ASYNC_HDR_002</platformMsgs:nsId>
+      <platformMsgs:nsId>WEBSERVICES_3392464_ASYNC_HDR_001</platformMsgs:nsId>
     </platformMsgs:documentInfo>
   </soapenv:Header>
   <soapenv:Body>
-    <checkAsyncStatusResponse xmlns="urn:messages_2011_2.platform.webservices.netsuite.com">
+    <asyncAddListResponse xmlns="urn:messages_2011_2.platform.webservices.netsuite.com">
       <asyncStatusResult>
         <jobId xmlns="urn:core_2011_2.platform.webservices.netsuite.com">WEBSERVICES_3392464_ASYNC_JOB_001</jobId>
         <status xmlns="urn:core_2011_2.platform.webservices.netsuite.com">pending</status>
         <percentComplete xmlns="urn:core_2011_2.platform.webservices.netsuite.com">0</percentComplete>
         <estRemainingDuration xmlns="urn:core_2011_2.platform.webservices.netsuite.com">0</estRemainingDuration>
       </asyncStatusResult>
-    </checkAsyncStatusResponse>
+    </asyncAddListResponse>
   </soapenv:Body>
 </soapenv:Envelope>

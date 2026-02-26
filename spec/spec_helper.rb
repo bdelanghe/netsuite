@@ -25,6 +25,13 @@ end
 
 Bundler.require
 
+# Rack 3.0 removed Rack::Utils::HeaderHash in favour of Rack::Headers.
+# httpi ~> 3.0 still references the old constant, so shim it back in.
+if defined?(Rack) && !defined?(Rack::Utils::HeaderHash)
+  require 'rack'
+  Rack::Utils::HeaderHash = Rack::Headers
+end
+
 if ENV['CI'] || ENV['COVERAGE']
   require 'simplecov'
   SimpleCov.start do

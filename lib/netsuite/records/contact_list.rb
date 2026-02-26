@@ -34,7 +34,7 @@ module NetSuite
       end
 
       def <<(contact)
-        @contacts << contact
+        contacts << contact
       end
 
       def contacts

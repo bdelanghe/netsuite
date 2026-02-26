@@ -3,28 +3,35 @@ module NetSuite
   module Actions
     class GetAsyncResult < AbstractAction
       include Support::Requests
-      include AsyncResponse
 
-      def initialize(job_id, page_index)
-        @job_id = job_id
+      def initialize(job_id, page_index = 1)
+        @job_id     = job_id
         @page_index = page_index
       end
 
       private
 
+      # <soap:Body>
+      #   <getAsyncResult>
+      #     <jobId>WEBSERVICES_3392464_...</jobId>
+      #     <pageIndex>1</pageIndex>
+      #   </getAsyncResult>
+      # </soap:Body>
       def request_body
-        {
-          'platformMsgs:jobId'    => @job_id,
-          'platformMsgs:pageIndex' => @page_index
-        }
+        { 'jobId' => @job_id, 'pageIndex' => @page_index }
       end
 
-      def async_response_key
-        :get_async_result_response
+      def response_hash
+        @response_hash ||= @response.body[:get_async_result_response]&.fetch(:async_result, nil)
       end
 
-      def async_result_key
-        :async_result
+      # Body is the full asyncResult: status, totalRecords, writeResponseList (or searchResult, etc.)
+      def response_body
+        @response_body ||= response_hash
+      end
+
+      def success?
+        @success ||= response_hash&.dig(:status, :@is_success) == 'true'
       end
 
       def action_name

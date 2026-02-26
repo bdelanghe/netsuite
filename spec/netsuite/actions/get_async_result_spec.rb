@@ -4,75 +4,88 @@ describe NetSuite::Actions::GetAsyncResult do
   before { savon.mock! }
   after  { savon.unmock! }
 
-  let(:job_id)     { 'ASYNCWEBSERVICES_123456_SB1_000000000000000000000000000_0000000' }
-  let(:page_index) { 1 }
+  let(:job_id) { 'WEBSERVICES_3392464_ASYNC_JOB_001' }
 
-  shared_examples 'a valid GetAsyncResult response' do
-    it 'makes a valid request to the NetSuite API' do
-      NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
+  context 'fetching result for a completed asyncAddList job' do
+    before do
+      savon.expects(:get_async_result)
+           .with(message: { 'jobId' => job_id, 'pageIndex' => 1 })
+           .returns(File.read('spec/support/fixtures/get_async_result/get_async_result_customers.xml'))
     end
 
-    it 'returns a successful Response' do
-      response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
-      expect(response).to be_kind_of(NetSuite::Response)
+    subject(:response) { NetSuite::Actions::GetAsyncResult.call([job_id]) }
+
+    it 'makes a valid request to the NetSuite API' do
+      NetSuite::Actions::GetAsyncResult.call([job_id])
+    end
+
+    it 'returns a NetSuite::Response' do
+      expect(response).to be_a(NetSuite::Response)
+    end
+
+    it 'is marked as successful' do
       expect(response).to be_success
     end
 
-    it 'returns the job_id and finished status' do
-      response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
-      expect(response.body[:job_id]).to eq(job_id)
-      expect(response.body[:status]).to eq('finished')
+    it 'exposes the top-level status with a String @is_success attribute' do
+      expect(response.body[:status]).to be_a(Hash)
+      expect(response.body[:status][:@is_success]).to be_a(String).and eq('true')
+    end
+
+    it 'returns total_records as a String with the expected count' do
+      expect(response.body[:total_records]).to be_a(String).and eq('2')
+    end
+
+    it 'returns write_response_list as a Hash' do
+      expect(response.body[:write_response_list]).to be_a(Hash)
+    end
+
+    describe 'write_response entries' do
+      subject(:write_responses) do
+        Array(response.body[:write_response_list][:write_response])
+      end
+
+      it 'returns an Array of write_response hashes' do
+        expect(write_responses).to be_an(Array)
+        expect(write_responses.length).to eq(2)
+      end
+
+      it 'each write_response has a String @is_success status attribute' do
+        write_responses.each do |wr|
+          expect(wr[:status]).to be_a(Hash)
+          expect(wr[:status][:@is_success]).to be_a(String).and eq('true')
+        end
+      end
+
+      it 'each write_response has a base_ref with a String internalId' do
+        write_responses.each do |wr|
+          expect(wr[:base_ref]).to be_a(Hash)
+          expect(wr[:base_ref][:@internal_id]).to be_a(String)
+        end
+      end
+
+      it 'returns the expected internal IDs' do
+        internal_ids = write_responses.map { |wr| wr[:base_ref][:@internal_id] }
+        expect(internal_ids).to contain_exactly('979', '980')
+      end
+
+      it 'each base_ref has a String type attribute' do
+        write_responses.each do |wr|
+          expect(wr[:base_ref][:@type]).to be_a(String).and eq('customer')
+        end
+      end
     end
   end
 
-  context 'with a single write response' do
+  context 'with an explicit page_index' do
     before do
-      savon.expects(:get_async_result).with(:message => {
-        'platformMsgs:jobId'     => job_id,
-        'platformMsgs:pageIndex' => page_index
-      }).returns(fixture('get_async_result/get_async_result_upsert_list_finished.xml'))
+      savon.expects(:get_async_result)
+           .with(message: { 'jobId' => job_id, 'pageIndex' => 2 })
+           .returns(File.read('spec/support/fixtures/get_async_result/get_async_result_customers.xml'))
     end
 
-    include_examples 'a valid GetAsyncResult response'
-
-    it 'returns a write_response_list with the record ref' do
-      response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
-      write_response = response.body[:write_response_list][:write_response]
-
-      expect(write_response[:status][:@is_success]).to eq('true')
-      expect(write_response[:status][:status_detail][:after_submit_failed]).to eq(false)
-
-      base_ref = write_response[:base_ref]
-      expect(base_ref[:@type]).to eq('cashSale')
-      expect(base_ref[:@external_id]).to eq('ext1')
-      expect(base_ref[:@internal_id]).to eq('100001')
-    end
-  end
-
-  context 'with multiple write responses' do
-    let(:job_id) { 'ASYNCWEBSERVICES_123456_SB1_000000000000000000000000000_0000001' }
-
-    before do
-      savon.expects(:get_async_result).with(:message => {
-        'platformMsgs:jobId'     => job_id,
-        'platformMsgs:pageIndex' => page_index
-      }).returns(fixture('get_async_result/get_async_result_write_list_multiple.xml'))
-    end
-
-    include_examples 'a valid GetAsyncResult response'
-
-    it 'returns a write_response_list with all record refs' do
-      response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
-      write_responses = response.body[:write_response_list][:write_response]
-
-      expect(write_responses).to be_an(Array)
-      expect(write_responses.length).to eq(2)
-
-      expect(write_responses[0][:base_ref][:@external_id]).to eq('ext1')
-      expect(write_responses[0][:base_ref][:@internal_id]).to eq('100001')
-
-      expect(write_responses[1][:base_ref][:@external_id]).to eq('ext2')
-      expect(write_responses[1][:base_ref][:@internal_id]).to eq('100002')
+    it 'sends the specified page index in the request' do
+      NetSuite::Actions::GetAsyncResult.call([job_id, 2])
     end
   end
 end
