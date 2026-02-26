@@ -1,4 +1,5 @@
 [![Ruby](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml/badge.svg)](https://github.com/bdelanghe/netsuite/actions/workflows/main.yml)
+[![Gem Version](https://badge.fury.io/rb/netsuite-soap.svg)](https://rubygems.org/gems/netsuite-soap)
 [![GitHub Package](https://img.shields.io/badge/github-packages-blue?logo=github)](https://github.com/bdelanghe/netsuite/packages)
 ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/bdelanghe/netsuite/badges/coverage.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -22,19 +23,32 @@ New integrations should use [SuiteTalk REST Web Services](https://docs.oracle.co
 
 ## Install
 
-Hosted on GitHub Packages, not RubyGems.org.
+### RubyGems.org (recommended)
+
+```ruby
+# Gemfile
+gem "netsuite-soap"
+```
+
+Or from the command line:
+
+```shell
+gem install netsuite-soap
+```
+
+### GitHub Packages
 
 ```ruby
 # Gemfile
 source "https://rubygems.pkg.github.com/bdelanghe" do
-  gem "netsuite", "2025.2.2"
+  gem "netsuite"
 end
 ```
 
 Or from the command line:
 
 ```shell
-gem install netsuite --version "2025.2.2" --source "https://rubygems.pkg.github.com/bdelanghe"
+gem install netsuite --source "https://rubygems.pkg.github.com/bdelanghe"
 ```
 
 Requires Ruby 3.4.
