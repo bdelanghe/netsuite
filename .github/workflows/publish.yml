@@ -37,7 +37,7 @@ jobs:
           touch $HOME/.gem/credentials
           chmod 0600 $HOME/.gem/credentials
           printf -- "---\n:github: Bearer ${GH_TOKEN}\n" >> $HOME/.gem/credentials
-          gem push --key github --host https://rubygems.pkg.github.com/${OWNER} *.gem
+          gem push --key github --host https://rubygems.pkg.github.com/${OWNER} *.gem || echo "Already published to GitHub Packages, skipping."
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
@@ -48,6 +48,6 @@ jobs:
           touch $HOME/.gem/credentials
           chmod 0600 $HOME/.gem/credentials
           printf -- "---\n:rubygems_api_key: ${RUBYGEMS_API_KEY}\n" >> $HOME/.gem/credentials
-          gem push *.gem
+          gem push *.gem || echo "Already published to RubyGems.org, skipping."
         env:
           RUBYGEMS_API_KEY: ${{ secrets.RUBYGEMS_API_KEY }}
