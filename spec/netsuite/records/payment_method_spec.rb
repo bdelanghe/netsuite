@@ -20,10 +20,6 @@ describe NetSuite::Records::PaymentMethod do
     end
   end
 
-  describe '#merchant_accounts_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RecordRefList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do

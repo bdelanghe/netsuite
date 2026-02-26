@@ -1,13 +1,67 @@
 ## Unreleased
 
+## v2025.2.5
+
+### Changed
+* `gem.files` no longer requires git; falls back to `Dir.glob` in source archive environments
+* Dropped deprecated `gem.test_files`
+* Savon dependency upper-bounded to `< 3` (3.x is a breaking rewrite); added inline comments explaining `!= 2.13.0`
+* Added `homepage_uri` gemspec metadata for RubyGems.org sidebar
+* Softened deprecation language in description and post-install message to "scheduled for removal" with Oracle source link
+* `gem.required_ruby_version` annotated with rationale (`~> 3.4` intentional)
+
+## v2025.2.4
+
+### Added
+* Keywords for RubyGems.org search discoverability (`netsuite`, `soap`, `suitetalk`, `erp`, `oracle`, `async`)
+* Post-install message surfacing the NetSuite SOAP deprecation timeline (2025.2 final endpoint, removed 2028.2)
+* Gemspec metadata: `bug_tracker_uri`, `source_code_uri`, `documentation_uri` for RubyGems.org sidebar links
+
+## v2025.2.3
+
+### Added
+* Publish to RubyGems.org as `netsuite-soap` (gem name changed from `netsuite`)
+* RubyGems.org is now the recommended install source; GitHub Packages remains available
+
+## v2025.2.2
+
+### Added
+* `GetAll` action spec with fixtures (`Currency` success/error + class method coverage)
+
+### Fixed
+* Search action no longer leaks `:preferences` key into criteria iteration when both `saved:` and `preferences:` options are passed together
+* Move `refresh_spec.rb` to `spec/netsuite/support/` (matches `Support::Records` mixin where `#refresh` lives)
+
+### Breaking Changes
+* **Ruby**: Requires Ruby 3.4.x (`~> 3.4`). CI matrix updated to Ruby 3.4 only.
+
+## v2025.2.0
+
+### Added
+* Asynchronous bulk SOAP operations: submit → poll → fetch pattern via `CheckAsyncStatus` and `GetAsyncResult`
+* `AsyncAddList` action (up to 400 records per job); record classes can declare `actions :async_add_list`
+* `AsyncUpdateList` (up to 200 records), `AsyncUpsertList` (up to 200), `AsyncDeleteList` (up to 400), `AsyncGetList` (up to 2000)
+* `AsyncSearch` and `AsyncInitializeList` actions
+* `AsyncResponse` mixin for async action response parsing (`asyncStatusResult` / `asyncResult` envelope shape)
+* README section "Async bulk operations" with submit/poll/fetch example and per-operation limits
+* SOAP 2025.2 WSDL/XSD fixtures under `spec/support/fixtures/soap/v2025_2_0/` for Savon specs
+
+### Fixed
+* README: correct `multi_tentant!` → `multi_tenant!` in Multi-Tenancy example
+
+### Breaking Changes
+* **API version**: Only `api_version '2025_2'` is supported (NetSuite SOAP 2025.2 is the final endpoint; SOAP removed 2028.2). Other versions raise `ConfigurationError`.
+* **Ruby**: Requires Ruby 3.1.0 or later (Gemfile `ruby '>= 3.1.0'`).
+* **Removed**: `NetSuite::Actions::Login` and `login` action (no longer used by the client).
+
+## v0.9.4
+
 ### Added
 * Add `get_deleted` action to `CustomerCategory` (#595)
 * Add `get_deleted` action to `Customer` (#605)
 
 ### Fixed
 * Revert recent proxy changes which breaks proxy usage by @andrewdicken-stripe in https://github.com/NetSweet/netsuite/pull/579
-
-### Breaking Changes
 
 ## v0.9.3
 

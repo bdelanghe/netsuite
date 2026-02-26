@@ -2,10 +2,6 @@ require 'spec_helper'
 
 describe NetSuite::Records::Subscription do
 
-  before do
-    NetSuite::Configuration.api_version = '2014_2'
-  end
-
   let(:attributes) do
     {
       :subscription => {

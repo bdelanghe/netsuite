@@ -51,10 +51,6 @@ describe NetSuite::Records::SalesOrder do
     end
   end
 
-  describe '#order_status' do
-    it 'can be set from attributes'
-    it 'can be set from a SalesOrderOrderStatus object'
-  end
 
   describe '#item_list' do
     it 'can be set from attributes' do
@@ -94,35 +90,11 @@ describe NetSuite::Records::SalesOrder do
     end
   end
 
-  describe '#transaction_bill_address' do
-    it 'can be set from attributes'
-    it 'can be set from a BillAddress object'
-  end
 
-  describe '#transaction_ship_address' do
-    it 'can be set from attributes'
-    it 'can be set from a ShipAddress object'
-  end
 
-  describe '#revenue_status' do
-    it 'can be set from attributes'
-    it 'can be set from a RevenueStatus object'
-  end
 
-  describe '#sales_team_list' do
-    it 'can be set from attributes'
-    it 'can be set from a SalesOrderSalesTeamList object'
-  end
 
-  describe '#partners_list' do
-    it 'can be set from attributes'
-    it 'can be set from a SalesOrderPartnersList object'
-  end
 
-  describe '#custom_field_list' do
-    it 'can be set from attributes'
-    it 'can be set from a CustomFieldList object'
-  end
 
   describe '.get' do
     context 'when the response is successful' do
@@ -159,7 +131,15 @@ describe NetSuite::Records::SalesOrder do
     end
 
     context 'when the response is unsuccessful' do
-      skip
+      let(:response) { NetSuite::Response.new(:success => false, :body => {}) }
+
+      it 'raises a InitializationError exception' do
+        expect(NetSuite::Actions::Initialize).to receive(:call).with([NetSuite::Records::SalesOrder, customer], {}).and_return(response)
+        expect {
+          NetSuite::Records::SalesOrder.initialize(customer)
+        }.to raise_error(NetSuite::InitializationError,
+                         /NetSuite::Records::SalesOrder.initialize with .+ failed./)
+      end
     end
   end
 
@@ -265,18 +245,6 @@ describe NetSuite::Records::SalesOrder do
   describe '#record_type' do
     it 'returns a string representation of the SOAP type' do
       expect(salesorder.record_type).to eql('tranSales:SalesOrder')
-    end
-  end
-
-  skip "closing a sales order" do
-    it "closes each line to close the sales order" do
-      attributes = sales_order.attributes
-      attributes[:item_list].items.each do |item|
-        item.is_closed = true
-        item.attributes = item.attributes.slice(:line, :is_closed)
-      end
-
-      sales_order.update({ item_list: attributes[:item_list] })
     end
   end
 end

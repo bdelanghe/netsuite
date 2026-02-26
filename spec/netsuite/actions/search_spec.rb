@@ -70,8 +70,6 @@ describe NetSuite::Actions::Search do
       end
     end
 
-    skip "should handle a ID search with basic params"
-    skip "should handle a search with joined params"
 
     it "should handle a search with joined params containing custom field search" do
       savon.expects(:search).with(:message => {
@@ -202,10 +200,6 @@ describe NetSuite::Actions::Search do
     end
   end
 
-  context "advanced search" do
-    skip "should handle search column definitions"
-    skip "should handle joined search results"
-  end
 
   context "basic search" do
     it "should handle a basic search matching on RecordRef using internalId" do
@@ -389,7 +383,5 @@ describe NetSuite::Actions::Search do
       expect(search.results.size).to eq(1)
     end
 
-    skip "should handle searching basic fields"
-    skip "should handle searching with joined fields"
   end
 end

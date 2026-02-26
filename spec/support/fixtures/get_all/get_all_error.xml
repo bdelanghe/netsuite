@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Body>
+    <getAllResponse xmlns="urn:messages_2025_2.platform.webservices.netsuite.com">
+      <getAllResult>
+        <platformCore:status isSuccess="false" xmlns:platformCore="urn:core_2025_2.platform.webservices.netsuite.com">
+          <platformCore:statusDetail type="ERROR">
+            <platformCore:code>INVALID_RECORD_TYPE</platformCore:code>
+            <platformCore:message>Invalid record type for getAll.</platformCore:message>
+          </platformCore:statusDetail>
+        </platformCore:status>
+      </getAllResult>
+    </getAllResponse>
+  </soapenv:Body>
+</soapenv:Envelope>

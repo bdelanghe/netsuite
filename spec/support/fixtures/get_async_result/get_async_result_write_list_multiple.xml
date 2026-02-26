@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Header>
+    <platformMsgs:documentInfo xmlns:platformMsgs="urn:messages_2021_1.platform.webservices.netsuite.com">
+      <platformMsgs:nsId>ASYNCWEBSERVICES_123456_SB1_000000000000000000000000000_0000001</platformMsgs:nsId>
+    </platformMsgs:documentInfo>
+  </soapenv:Header>
+  <soapenv:Body>
+    <getAsyncResultResponse xmlns="urn:messages_2021_1.platform.webservices.netsuite.com">
+      <asyncResult xmlns="urn:core_2021_1.platform.webservices.netsuite.com">
+        <jobId>ASYNCWEBSERVICES_123456_SB1_000000000000000000000000000_0000001</jobId>
+        <status>finished</status>
+        <writeResponseList>
+          <writeResponse>
+            <platformCore:status isSuccess="true" xmlns:platformCore="urn:core_2021_1.platform.webservices.netsuite.com">
+              <platformCore:statusDetail>
+                <platformCore:afterSubmitFailed>false</platformCore:afterSubmitFailed>
+              </platformCore:statusDetail>
+            </platformCore:status>
+            <baseRef xsi:type="platformCore:RecordRef" type="cashSale" externalId="ext1" internalId="100001" xmlns:platformCore="urn:core_2021_1.platform.webservices.netsuite.com"/>
+          </writeResponse>
+          <writeResponse>
+            <platformCore:status isSuccess="true" xmlns:platformCore="urn:core_2021_1.platform.webservices.netsuite.com">
+              <platformCore:statusDetail>
+                <platformCore:afterSubmitFailed>false</platformCore:afterSubmitFailed>
+              </platformCore:statusDetail>
+            </platformCore:status>
+            <baseRef xsi:type="platformCore:RecordRef" type="cashSale" externalId="ext2" internalId="100002" xmlns:platformCore="urn:core_2021_1.platform.webservices.netsuite.com"/>
+          </writeResponse>
+        </writeResponseList>
+      </asyncResult>
+    </getAsyncResultResponse>
+  </soapenv:Body>
+</soapenv:Envelope>

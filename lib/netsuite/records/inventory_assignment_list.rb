@@ -5,7 +5,8 @@ module NetSuite
       include Support::Fields
       include Namespaces::PlatformCommon
 
-      fields :replace_all, :inventory_assignment
+      fields :replace_all
+      fields << :inventory_assignment
 
       def initialize(attrs = {})
         initialize_from_attributes_hash(attrs)

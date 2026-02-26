@@ -5,8 +5,6 @@ describe 'NetSuite::Records::*#refresh' do
     shutter_fly_record = NetSuite::Records::Customer.new({ :internal_id => 123, :external_id => 'extid', :entity_id => 'Shutter Fly', :company_name => 'Shutter Fly, Inc.' })
     shutter_fly_record.errors = ['error 1', 'error 2']
 
-    current_record = shutter_fly_record
-
     allow(NetSuite::Records::Customer).to receive(:get).and_return(shutter_fly_record)
 
     customer = NetSuite::Records::Customer.get({:internal_id => 123})

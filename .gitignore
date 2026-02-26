@@ -2,11 +2,15 @@
 *.rbc
 .bundle
 .config
+.beads
+.devbox
+.env
 .yardoc
 Gemfile.lock
 InstalledFiles
 _yardoc
 coverage
+devbox.lock
 doc/
 lib/bundler/man
 pkg

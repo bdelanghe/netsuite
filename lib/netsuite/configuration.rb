@@ -99,15 +99,22 @@ module NetSuite
       wsdl_cache[wsdl] ||= client
     end
 
+    REQUIRED_API_VERSION = '2025_2'.freeze
+
     def api_version(version = nil)
       if version
         self.api_version = version
       else
-        attributes[:api_version] ||= '2016_2'
+        attributes[:api_version] or
+          raise ConfigurationError, "api_version is not set. Add `api_version '#{REQUIRED_API_VERSION}'` to your NetSuite.configure block."
       end
     end
 
     def api_version=(version)
+      unless version == REQUIRED_API_VERSION
+        raise ConfigurationError, "api_version must be '#{REQUIRED_API_VERSION}' — NetSuite SOAP 2025.2 is the final supported endpoint (removed 2028.2)."
+      end
+
       if attributes[:api_version] != version
         attributes[:wsdl] = nil
         attributes[:wsdl_domain] = nil
@@ -202,7 +209,7 @@ module NetSuite
     end
 
     def auth_header(credentials={})
-      if !credentials[:consumer_key].blank? || !consumer_key.blank?
+      if !credentials[:consumer_key].to_s.strip.empty? || !consumer_key.to_s.strip.empty?
         token_auth(credentials)
       else
         user_auth(credentials)

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Header>
+    <platformMsgs:documentInfo xmlns:platformMsgs="urn:messages_2017_1.platform.webservices.netsuite.com">
+      <platformMsgs:nsId>WEBSERVICES_1234_GET_LIST_SINGLE</platformMsgs:nsId>
+    </platformMsgs:documentInfo>
+  </soapenv:Header>
+  <soapenv:Body>
+    <getListResponse xmlns="urn:messages_2017_1.platform.webservices.netsuite.com">
+      <readResponseList>
+        <readResponse>
+          <platformCore:status isSuccess="true" xmlns:platformCore="urn:core_2017_1.platform.webservices.netsuite.com"/>
+          <record internalId="979" xsi:type="listRel:Customer" xmlns:listRel="urn:relationships_2017_1.lists.webservices.netsuite.com">
+            <listRel:entityId>Test Customer</listRel:entityId>
+            <listRel:companyName>Test Inc.</listRel:companyName>
+          </record>
+        </readResponse>
+      </readResponseList>
+    </getListResponse>
+  </soapenv:Body>
+</soapenv:Envelope>

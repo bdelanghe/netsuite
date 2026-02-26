@@ -89,76 +89,62 @@ describe NetSuite::Records::CustomFieldList do
     end
   end
 
-  context 'custom field internalId-to-scriptId transition at WSDL 2013_2:' do
-    before(:context) { @reset = NetSuite::Configuration.api_version }
-    after(:context)  { NetSuite::Configuration.api_version = @reset }
+  context 'custom field convenience methods (script_id based, WSDL >= 2013_2):' do
+    # Since only api_version '2025_2' is supported (>= '2013_2'), script_id is always used.
 
-    transition_version = '2013_2'
+    context 'convenience methods' do
+      it "should create a custom field entry when none exists" do
+        list.some_custom_field = 'a value'
 
-    ['2012_2', '2013_2', '2014_2'].each do |version|
+        expect(list.custom_fields.size).to eq(1)
+        expect(list.custom_fields.first.value).to eq('a value')
+        expect(list.custom_fields.first.type).to eq('platformCore:StringCustomFieldRef')
+      end
 
-      comparison = ['==', '>', '<'][version <=> transition_version]
+      it "should set script_id to method name when creating a custom field" do
+        list.some_custom_field = 'a value'
 
-      context "when WSDL version #{comparison} #{transition_version}," do
-        before { NetSuite::Configuration.api_version = version }
+        expect(list.some_custom_field.script_id).to eq('some_custom_field')
+      end
 
-        context 'convenience methods' do
-          reference_id_type = version < transition_version ? :internal_id : :script_id
+      it "should update a custom field's value when one exists" do
+        list.existing_custom_field = 'old value'
+        list.existing_custom_field = 'new value'
 
-          it "should create a custom field entry when none exists" do
-            list.some_custom_field = 'a value'
+        expect(list.existing_custom_field.value).to eq('new value')
+      end
 
-            expect(list.custom_fields.size).to eq(1)
-            expect(list.custom_fields.first.value).to eq('a value')
-            expect(list.custom_fields.first.type).to eq('platformCore:StringCustomFieldRef')
-          end
+      it "should handle date custom field creation" do
+        list.some_custom_field = Date.parse("12/12/2012")
 
-          it "should set #{reference_id_type} to method name when creating a custom field" do
-            list.some_custom_field = 'a value'
+        expect(list.custom_fields.first.value).to eq('2012-12-12T00:00:00+00:00')
+      end
 
-            expect(list.some_custom_field.send(reference_id_type)).to eq('some_custom_field')
-          end
+      it "should handle datetime custom field creation" do
+        list.some_custom_field = DateTime.parse("12/12/2012 10:05am")
 
-          it "should update a custom field's value when one exists" do
-            list.existing_custom_field = 'old value'
-            list.existing_custom_field = 'new value'
+        expect(list.custom_fields.first.value).to eq('2012-12-12T10:05:00+00:00')
+      end
 
-            expect(list.existing_custom_field.value).to eq('new value')
-          end
+      it "should convert a list of numbers into a list of custom field refs" do
+        list.some_custom_field = [1,2]
 
-          it "should handle date custom field creation" do
-            list.some_custom_field = Date.parse("12/12/2012")
+        expect(list.custom_fields.first.type).to eq('platformCore:MultiSelectCustomFieldRef')
+        expect(list.custom_fields.first.value.map(&:to_record)).to eql([
+          NetSuite::Records::CustomRecordRef.new(:internal_id => 1),
+          NetSuite::Records::CustomRecordRef.new(:internal_id => 2)
+        ].map(&:to_record))
+      end
 
-            expect(list.custom_fields.first.value).to eq('2012-12-12T00:00:00+00:00')
-          end
+      it "should return custom field record when entry exists" do
+        list.existing_custom_field = 'a value'
 
-          it "should handle datetime custom field creation" do
-            list.some_custom_field = DateTime.parse("12/12/2012 10:05am")
+        expect(list.existing_custom_field).to be_a(NetSuite::Records::CustomField)
+        expect(list.existing_custom_field.value).to eq('a value')
+      end
 
-            expect(list.custom_fields.first.value).to eq('2012-12-12T10:05:00+00:00')
-          end
-
-          it "should convert a list of numbers into a list of custom field refs" do
-            list.some_custom_field = [1,2]
-
-            expect(list.custom_fields.first.type).to eq('platformCore:MultiSelectCustomFieldRef')
-            expect(list.custom_fields.first.value.map(&:to_record)).to eql([
-              NetSuite::Records::CustomRecordRef.new(:internal_id => 1),
-              NetSuite::Records::CustomRecordRef.new(:internal_id => 2)
-            ].map(&:to_record))
-          end
-
-          it "should return custom field record when entry exists" do
-            list.existing_custom_field = 'a value'
-
-            expect(list.existing_custom_field).to be_a(NetSuite::Records::CustomField)
-            expect(list.existing_custom_field.value).to eq('a value')
-          end
-
-          it "should raise an error if custom field entry does not exist" do
-            expect{ list.nonexisting_custom_field }.to raise_error(NoMethodError)
-          end
-        end
+      it "should raise an error if custom field entry does not exist" do
+        expect{ list.nonexisting_custom_field }.to raise_error(NoMethodError)
       end
     end
   end
@@ -283,7 +269,7 @@ describe NetSuite::Records::CustomFieldList do
 
     # https://github.com/NetSweet/netsuite/issues/182
     it 'handles custom fields without an internalId or scriptId' do
-      custom_list = NetSuite::Records::CustomFieldList.new({custom_field: { '@xsi:type' => 'platformCore:StringCustomFieldRef' }})
+      NetSuite::Records::CustomFieldList.new({custom_field: { '@xsi:type' => 'platformCore:StringCustomFieldRef' }})
     end
   end
 

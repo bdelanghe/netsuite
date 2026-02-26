@@ -10,6 +10,7 @@ require 'netsuite/rest/utilities/roles'
 require 'netsuite/rest/utilities/request'
 
 module NetSuite
+  autoload :Client,        'netsuite/client'
   autoload :Configuration, 'netsuite/configuration'
   autoload :Response,      'netsuite/response'
 
@@ -53,9 +54,19 @@ module NetSuite
     autoload :CheckAsyncStatus,  'netsuite/actions/check_async_status'
     autoload :GetAsyncResult,    'netsuite/actions/get_async_result'
     autoload :Add,              'netsuite/actions/add'
+    autoload :AsyncAddList,     'netsuite/actions/async_add_list'
+    autoload :AsyncDeleteList,  'netsuite/actions/async_delete_list'
+    autoload :AsyncGetList,     'netsuite/actions/async_get_list'
+    autoload :AsyncInitializeList, 'netsuite/actions/async_initialize_list'
+    autoload :AsyncResponse,    'netsuite/actions/async_response'
+    autoload :AsyncSearch,      'netsuite/actions/async_search'
+    autoload :AsyncUpsertList,  'netsuite/actions/async_upsert_list'
+    autoload :AsyncUpdateList,  'netsuite/actions/async_update_list'
     autoload :AttachFile,       'netsuite/actions/attach_file'
+    autoload :CheckAsyncStatus, 'netsuite/actions/check_async_status'
     autoload :Delete,           'netsuite/actions/delete'
     autoload :DeleteList,       'netsuite/actions/delete_list'
+    autoload :GetAsyncResult,   'netsuite/actions/get_async_result'
     autoload :Get,              'netsuite/actions/get'
     autoload :GetDeleted,       'netsuite/actions/get_deleted'
     autoload :GetAll,           'netsuite/actions/get_all'
@@ -67,7 +78,6 @@ module NetSuite
     autoload :Upsert,           'netsuite/actions/upsert'
     autoload :UpsertList,       'netsuite/actions/upsert_list'
     autoload :Search,           'netsuite/actions/search'
-    autoload :Login,            'netsuite/actions/login'
   end
 
   module Records

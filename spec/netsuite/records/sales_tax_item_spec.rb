@@ -23,8 +23,4 @@ describe NetSuite::Records::SalesTaxItem do
     end
   end
 
-  describe '#subsidiary_list' do
-    it 'can be set from attributes'
-    it 'can be set from a RecordRefList object'
-  end
 end
