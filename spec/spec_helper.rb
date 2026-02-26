@@ -5,6 +5,13 @@ require "bundler/setup"
 
 Bundler.require
 
+# Rack 3.0 removed Rack::Utils::HeaderHash in favour of Rack::Headers.
+# httpi ~> 3.0 still references the old constant, so shim it back in.
+if defined?(Rack) && !defined?(Rack::Utils::HeaderHash)
+  require 'rack'
+  Rack::Utils::HeaderHash = Rack::Headers
+end
+
 # https://circleci.com/docs/code-coverage
 if ENV['CIRCLE_ARTIFACTS']
   require 'simplecov'

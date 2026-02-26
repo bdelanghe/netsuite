@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <soapenv:Header>
+    <platformMsgs:documentInfo xmlns:platformMsgs="urn:messages_2014_1.platform.webservices.netsuite.com">
+      <platformMsgs:nsId>WEBSERVICES_3392464_ASYNC_HDR_004</platformMsgs:nsId>
+    </platformMsgs:documentInfo>
+  </soapenv:Header>
+  <soapenv:Body>
+    <getAsyncResultResponse xmlns="urn:messages_2011_2.platform.webservices.netsuite.com">
+      <asyncResult xsi:type="platformCore:AsyncAddListResult" xmlns:platformCore="urn:core_2011_2.platform.webservices.netsuite.com">
+        <platformCore:status isSuccess="true"/>
+        <platformCore:totalRecords>2</platformCore:totalRecords>
+        <platformCore:writeResponseList>
+          <platformCore:writeResponse>
+            <platformCore:status isSuccess="true"/>
+            <platformCore:baseRef internalId="979" type="customer" xsi:type="platformCore:RecordRef"/>
+          </platformCore:writeResponse>
+          <platformCore:writeResponse>
+            <platformCore:status isSuccess="true"/>
+            <platformCore:baseRef internalId="980" type="customer" xsi:type="platformCore:RecordRef"/>
+          </platformCore:writeResponse>
+        </platformCore:writeResponseList>
+      </asyncResult>
+    </getAsyncResultResponse>
+  </soapenv:Body>
+</soapenv:Envelope>
