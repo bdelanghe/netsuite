@@ -1,5 +1,11 @@
 ## Unreleased
 
+## v2025.2.3
+
+### Added
+* Publish to RubyGems.org as `netsuite-soap` (gem name changed from `netsuite`)
+* RubyGems.org is now the recommended install source; GitHub Packages remains available
+
 ## v2025.2.2
 
 ### Added
