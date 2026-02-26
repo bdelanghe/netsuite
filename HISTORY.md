@@ -1,5 +1,12 @@
 ## Unreleased
 
+## v2025.2.4
+
+### Added
+* Keywords for RubyGems.org search discoverability (`netsuite`, `soap`, `suitetalk`, `erp`, `oracle`, `async`)
+* Post-install message surfacing the NetSuite SOAP deprecation timeline (2025.2 final endpoint, removed 2028.2)
+* Gemspec metadata: `bug_tracker_uri`, `source_code_uri`, `documentation_uri` for RubyGems.org sidebar links
+
 ## v2025.2.3
 
 ### Added

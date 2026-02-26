@@ -1,3 +1,3 @@
 module NetSuite
-  VERSION = '2025.2.3'
+  VERSION = '2025.2.4'
 end

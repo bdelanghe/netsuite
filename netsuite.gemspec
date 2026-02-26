@@ -8,6 +8,18 @@ Gem::Specification.new do |gem|
   gem.description   = %q{Ruby wrapper for the NetSuite SuiteTalk SOAP Web Services API (v2025.2). Targets the final supported SOAP endpoint (removed 2028.2). Includes async bulk operations (asyncAddList, asyncUpdateList, asyncUpsertList, asyncDeleteList, asyncGetList).}
   gem.summary       = %q{NetSuite SuiteTalk SOAP v2025.2 wrapper with async list operations}
   gem.homepage      = 'https://github.com/bdelanghe/netsuite'
+  gem.keywords      = %w[netsuite soap suitetalk erp oracle async]
+
+  gem.post_install_message = <<~MSG
+    Thank you for installing netsuite-soap.
+
+    NOTE: NetSuite is deprecating SOAP Web Services.
+      - 2025.2 is the final supported SOAP endpoint.
+      - SOAP is fully removed in NetSuite 2028.2.
+
+    New integrations should use SuiteTalk REST Web Services with OAuth 2.0.
+    https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/chapter_1540391670.html
+  MSG
 
   gem.executables   = `git ls-files -- bin/*`.split("\n").map{ |f| File.basename(f) }
   gem.files         = `git ls-files`.split("\n")
