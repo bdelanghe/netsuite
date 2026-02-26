@@ -1,5 +1,15 @@
 ## Unreleased
 
+## v2025.2.5
+
+### Changed
+* `gem.files` no longer requires git; falls back to `Dir.glob` in source archive environments
+* Dropped deprecated `gem.test_files`
+* Savon dependency upper-bounded to `< 3` (3.x is a breaking rewrite); added inline comments explaining `!= 2.13.0`
+* Added `homepage_uri` gemspec metadata for RubyGems.org sidebar
+* Softened deprecation language in description and post-install message to "scheduled for removal" with Oracle source link
+* `gem.required_ruby_version` annotated with rationale (`~> 3.4` intentional)
+
 ## v2025.2.4
 
 ### Added
