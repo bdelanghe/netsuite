@@ -56,6 +56,8 @@ Requires Ruby 3.4.
 ## Quick start
 
 ```ruby
+require 'netsuite'
+
 NetSuite.configure do
   reset!
   account       ENV['NETSUITE_ACCOUNT']
