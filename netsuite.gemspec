@@ -16,10 +16,11 @@ Gem::Specification.new do |gem|
   gem.require_paths = ['lib']
   gem.version       = NetSuite::VERSION
   gem.required_ruby_version = '~> 3.4'
-  gem.metadata['changelog_uri'] = 'https://github.com/bdelanghe/netsuite/blob/main/HISTORY.md'
-  gem.metadata['mailing_list_uri'] = 'https://github.com/bdelanghe/netsuite/issues'
+  gem.metadata['changelog_uri']     = 'https://github.com/bdelanghe/netsuite/blob/main/HISTORY.md'
+  gem.metadata['bug_tracker_uri']   = 'https://github.com/bdelanghe/netsuite/issues'
+  gem.metadata['source_code_uri']   = 'https://github.com/bdelanghe/netsuite'
+  gem.metadata['documentation_uri'] = 'https://github.com/bdelanghe/netsuite#readme'
   gem.metadata['rubygems_mfa_required'] = 'true'
-  gem.metadata['github_repo'] = 'https://github.com/bdelanghe/netsuite'
 
   gem.add_dependency 'savon', '>= 2.3.0', '!= 2.13.0'
   gem.add_dependency 'rack', '< 4'
