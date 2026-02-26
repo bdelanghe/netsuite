@@ -15,7 +15,7 @@ Gem::Specification.new do |gem|
   gem.name          = 'netsuite'
   gem.require_paths = ['lib']
   gem.version       = NetSuite::VERSION
-  gem.required_ruby_version = '>= 3.1'
+  gem.required_ruby_version = '~> 3.4'
   gem.metadata['changelog_uri'] = 'https://github.com/bdelanghe/netsuite/blob/main/HISTORY.md'
   gem.metadata['mailing_list_uri'] = 'https://github.com/bdelanghe/netsuite/issues'
   gem.metadata['rubygems_mfa_required'] = 'true'

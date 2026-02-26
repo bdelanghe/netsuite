@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ruby-version: [3.2, 3.1]
+        ruby-version: ['3.4']
     steps:
       - uses: actions/checkout@v6
       - name: Set up Ruby ${{ matrix.ruby-version }}
@@ -22,9 +22,9 @@ jobs:
       - name: Run tests
         run: bundle exec rspec
         env:
-          COVERAGE: ${{ matrix.ruby-version == 3.2 && 'true' || '' }}
+          COVERAGE: 'true'
       - name: Read coverage
-        if: matrix.ruby-version == 3.2 && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         id: coverage
         run: |
           if [ -f coverage/.last_run.json ]; then
@@ -32,7 +32,7 @@ jobs:
             echo "line=$LINE" >> $GITHUB_OUTPUT
           fi
       - name: Upload coverage badge
-        if: steps.coverage.outputs.line && matrix.ruby-version == 3.2 && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: steps.coverage.outputs.line && github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: |
           LINE=${{ steps.coverage.outputs.line }}
           if [ $(echo "$LINE >= 90" | bc) -eq 1 ]; then COLOR="brightgreen"
