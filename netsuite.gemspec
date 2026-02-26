@@ -40,6 +40,7 @@ Gem::Specification.new do |gem|
   gem.metadata['documentation_uri'] = 'https://github.com/bdelanghe/netsuite#readme'
   gem.metadata['homepage_uri']      = 'https://github.com/bdelanghe/netsuite'
   gem.metadata['rubygems_mfa_required'] = 'true'
+  gem.metadata['github_repo'] = 'ssh://github.com/bdelanghe/netsuite'
 
   # != 2.13.0: that release had regressions in SOAP header/namespace handling.
   # < 3: Savon 3.x is a rewrite with breaking API changes; pin to 2.x until

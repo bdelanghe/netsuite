@@ -20,8 +20,8 @@ describe NetSuite::Actions::GetAsyncResult do
 
     it 'returns the job_id and finished status' do
       response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
-      expect(response.body[:job_id]).to be_a(String).and eq(job_id)
-      expect(response.body[:status]).to be_a(String).and eq('finished')
+      expect(response.body[:job_id]).to eq(job_id)
+      expect(response.body[:status]).to eq('finished')
     end
   end
 
@@ -39,13 +39,13 @@ describe NetSuite::Actions::GetAsyncResult do
       response = NetSuite::Actions::GetAsyncResult.call([job_id, page_index])
       write_response = response.body[:write_response_list][:write_response]
 
-      expect(write_response[:status][:@is_success]).to be_a(String).and eq('true')
-      expect(write_response[:status][:status_detail][:after_submit_failed]).to be(false)
+      expect(write_response[:status][:@is_success]).to eq('true')
+      expect(write_response[:status][:status_detail][:after_submit_failed]).to eq(false)
 
       base_ref = write_response[:base_ref]
-      expect(base_ref[:@type]).to be_a(String).and eq('cashSale')
-      expect(base_ref[:@external_id]).to be_a(String).and eq('ext1')
-      expect(base_ref[:@internal_id]).to be_a(String).and eq('100001')
+      expect(base_ref[:@type]).to eq('cashSale')
+      expect(base_ref[:@external_id]).to eq('ext1')
+      expect(base_ref[:@internal_id]).to eq('100001')
     end
   end
 

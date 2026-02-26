@@ -20,9 +20,6 @@ bundle exec rspec spec/netsuite/actions/async_add_list_spec.rb
 # Run with coverage
 bundle exec rake coverage
 
-# Integration tests (makes live NetSuite calls)
-NETSUITE_INTEGRATION=true bundle exec rspec
-
 # Build the gem
 bundle exec rake build
 ```
@@ -99,7 +96,7 @@ Flow: `resp = connection.post(...); doc = Nokogiri::XML(resp.body); parse(doc)`.
 - `spec/support/fixtures/` — XML fixture files for Savon mock responses, one directory per action
 
 ### Test Setup
-Tests use RSpec 3 with Savon's `SpecHelper` to mock SOAP calls. Each action spec loads XML fixtures from `spec/support/fixtures/<action_name>/`. Integration tests are tagged `:integration` and skipped unless `NETSUITE_INTEGRATION=true`.
+Tests use RSpec 3 with Savon's `SpecHelper` to mock SOAP calls. Each action spec loads XML fixtures from `spec/support/fixtures/<action_name>/`.
 
 ## Adding a New Action
 

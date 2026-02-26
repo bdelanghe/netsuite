@@ -21,9 +21,9 @@ describe NetSuite::Actions::CheckAsyncStatus do
     response = NetSuite::Actions::CheckAsyncStatus.call([job_id])
     expect(response).to be_kind_of(NetSuite::Response)
     expect(response).to be_success
-    expect(response.body[:job_id]).to be_a(String).and eq(job_id)
-    expect(response.body[:status]).to be_a(String).and eq('pending')
-    expect(response.body[:percent_completed]).to be_a(String).and eq('0.0')
-    expect(response.body[:est_remaining_duration]).to be_a(String).and eq('0.0')
+    expect(response.body[:job_id]).to eq(job_id)
+    expect(response.body[:status]).to eq('pending')
+    expect(response.body[:percent_completed]).to eq('0.0')
+    expect(response.body[:est_remaining_duration]).to eq('0.0')
   end
 end
